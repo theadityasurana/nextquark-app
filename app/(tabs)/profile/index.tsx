@@ -1,0 +1,1898 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  Animated,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  Linking,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import {
+  ChevronRight,
+  Briefcase,
+  GraduationCap,
+  Star,
+  Eye,
+  FileText,
+  LogOut,
+  Zap,
+  Plus,
+  X,
+  Check,
+  Pencil,
+  Camera,
+  MapPin,
+  Award,
+  Link2,
+  ChevronDown,
+  Crown,
+  Phone,
+  Mail,
+  Github,
+  Linkedin,
+  Trophy,
+  ShieldCheck,
+  Settings,
+  Share2,
+  Lock,
+  Search,
+} from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
+import Colors from '@/constants/colors';
+import { mockUser } from '@/mocks/user';
+import { UserProfile, WorkExperience, Education, Certification, Achievement } from '@/types';
+import { CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
+import RangeSlider from '@/components/RangeSlider';
+import { useAuth } from '@/contexts/AuthContext';
+import { OnboardingData } from '@/types/onboarding';
+import TabTransitionWrapper from '@/components/TabTransitionWrapper';
+import { fetchUserApplications } from '@/lib/jobs';
+import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
+import { supabase } from '@/lib/supabase';
+
+type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | null;
+
+const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
+const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
+const EXP_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'];
+const EXP_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
+
+function buildProfileFromOnboarding(data: OnboardingData): UserProfile {
+  const hasData = Boolean(data.firstName || data.lastName);
+  if (!hasData) return { ...mockUser };
+  return {
+    id: 'local',
+    name: `${data.firstName} ${data.lastName}`.trim(),
+    email: '',
+    phone: data.phone || '',
+    headline: data.headline || '',
+    location: data.location || '',
+    avatar: data.profilePicture || mockUser.avatar,
+    bio: '',
+    profileCompletion: 0,
+    totalApplications: 0,
+    interviewsScheduled: 0,
+    matchRate: 0,
+    profileViews: 0,
+    skills: data.skills.map(s => s.name),
+    topSkills: [],
+    experience: data.workExperience.map(w => ({
+      id: w.id,
+      company: w.company,
+      title: w.title,
+      startDate: w.startMonth && w.startYear ? `${w.startMonth} ${w.startYear}` : '',
+      endDate: w.isCurrent ? null : (w.endMonth && w.endYear ? `${w.endMonth} ${w.endYear}` : ''),
+      isCurrent: w.isCurrent,
+      description: w.description,
+      employmentType: w.employmentType,
+      workMode: w.isRemote ? 'Remote' : 'Onsite',
+      jobLocation: w.location,
+    })),
+    education: data.education.map(e => ({
+      id: e.id,
+      institution: e.institution,
+      degree: e.degree,
+      field: e.field,
+      startDate: e.startYear,
+      endDate: e.endYear,
+    })),
+    certifications: [],
+    achievements: [],
+    jobPreferences: [],
+    workModePreferences: data.workPreferences,
+    salaryCurrency: data.salaryCurrency,
+    salaryMinPref: data.salaryMin,
+    salaryMaxPref: data.salaryMax,
+    linkedinUrl: data.linkedInUrl || undefined,
+    githubUrl: undefined,
+    isProfileVerified: false,
+    veteranStatus: data.veteranStatus || undefined,
+    disabilityStatus: data.disabilityStatus || undefined,
+    ethnicity: data.ethnicity || undefined,
+    gender: data.gender || undefined,
+  };
+}
+
+export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { logout, onboardingData, userProfile: supabaseProfile, saveProfile, refetchProfile, supabaseUserId } = useAuth();
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  const { data: applications = [] } = useQuery({
+    queryKey: ['user-applications', supabaseUserId],
+    queryFn: () => fetchUserApplications(supabaseUserId!),
+    enabled: !!supabaseUserId,
+  });
+
+  const { data: subscriptionData } = useQuery({
+    queryKey: ['subscription-status', supabaseUserId],
+    queryFn: () => getSubscriptionStatus(supabaseUserId!),
+    enabled: !!supabaseUserId,
+    refetchInterval: 60000, // Refetch every minute
+  });
+
+  const totalApplications = applications.length;
+  const interviewsScheduled = applications.filter((app: any) => 
+    app.status === 'interviewing' || app.status === 'interview_scheduled'
+  ).length;
+
+  const [user, setUser] = useState<UserProfile>(() => {
+    const profile = supabaseProfile || (onboardingData.firstName ? buildProfileFromOnboarding(onboardingData) : { ...mockUser });
+    return { ...profile, favoriteCompanies: profile.favoriteCompanies || [] };
+  });
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
+  const [editingEducation, setEditingEducation] = useState<Education | null>(null);
+  const [editingCertification, setEditingCertification] = useState<Certification | null>(null);
+  const [editingAchievement, setEditingAchievement] = useState<Achievement | null>(null);
+
+  const [newSkill, setNewSkill] = useState('');
+  const [bioText, setBioText] = useState(user.bio);
+  const [headlineText, setHeadlineText] = useState(user.headline);
+  const [locationText, setLocationText] = useState(user.location);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar);
+
+  const [expTitle, setExpTitle] = useState('');
+  const [expCompany, setExpCompany] = useState('');
+  const [expStartDate, setExpStartDate] = useState('');
+  const [expEndDate, setExpEndDate] = useState('');
+  const [expDescription, setExpDescription] = useState('');
+  const [expIsCurrent, setExpIsCurrent] = useState(false);
+  const [expSkills, setExpSkills] = useState('');
+  const [expType, setExpType] = useState('Full-time');
+  const [expMode, setExpMode] = useState('Onsite');
+  const [expLocation, setExpLocation] = useState('');
+
+  const handleExpDescriptionChange = (text: string) => {
+    if (text.endsWith('\n') && !text.endsWith('\n\n')) {
+      const lines = text.split('\n');
+      const lastLine = lines[lines.length - 2];
+      if (lastLine && !lastLine.trim().startsWith('•')) {
+        lines[lines.length - 2] = '• ' + lastLine;
+        setExpDescription(lines.join('\n') + '• ');
+      } else {
+        setExpDescription(text + '• ');
+      }
+    } else if (text === '' || text === '• ') {
+      setExpDescription('');
+    } else if (expDescription === '' && text.length > 0 && !text.startsWith('•')) {
+      setExpDescription('• ' + text);
+    } else {
+      setExpDescription(text);
+    }
+  };
+
+  const [eduInstitution, setEduInstitution] = useState('');
+  const [eduDegree, setEduDegree] = useState('');
+  const [eduField, setEduField] = useState('');
+  const [eduStartDate, setEduStartDate] = useState('');
+  const [eduEndDate, setEduEndDate] = useState('');
+  const [eduDescription, setEduDescription] = useState('');
+  const [eduAchievements, setEduAchievements] = useState('');
+  const [eduExtracurriculars, setEduExtracurriculars] = useState('');
+
+  const handleEduDescriptionChange = (text: string) => {
+    if (text.endsWith('\n') && !text.endsWith('\n\n')) {
+      const lines = text.split('\n');
+      const lastLine = lines[lines.length - 2];
+      if (lastLine && !lastLine.trim().startsWith('•')) {
+        lines[lines.length - 2] = '• ' + lastLine;
+        setEduDescription(lines.join('\n') + '• ');
+      } else {
+        setEduDescription(text + '• ');
+      }
+    } else if (text === '' || text === '• ') {
+      setEduDescription('');
+    } else if (eduDescription === '' && text.length > 0 && !text.startsWith('•')) {
+      setEduDescription('• ' + text);
+    } else {
+      setEduDescription(text);
+    }
+  };
+
+  const handleEduAchievementsChange = (text: string) => {
+    if (text.endsWith('\n') && !text.endsWith('\n\n')) {
+      const lines = text.split('\n');
+      const lastLine = lines[lines.length - 2];
+      if (lastLine && !lastLine.trim().startsWith('•')) {
+        lines[lines.length - 2] = '• ' + lastLine;
+        setEduAchievements(lines.join('\n') + '• ');
+      } else {
+        setEduAchievements(text + '• ');
+      }
+    } else if (text === '' || text === '• ') {
+      setEduAchievements('');
+    } else if (eduAchievements === '' && text.length > 0 && !text.startsWith('•')) {
+      setEduAchievements('• ' + text);
+    } else {
+      setEduAchievements(text);
+    }
+  };
+
+  const handleEduExtracurricularsChange = (text: string) => {
+    if (text.endsWith('\n') && !text.endsWith('\n\n')) {
+      const lines = text.split('\n');
+      const lastLine = lines[lines.length - 2];
+      if (lastLine && !lastLine.trim().startsWith('•')) {
+        lines[lines.length - 2] = '• ' + lastLine;
+        setEduExtracurriculars(lines.join('\n') + '• ');
+      } else {
+        setEduExtracurriculars(text + '• ');
+      }
+    } else if (text === '' || text === '• ') {
+      setEduExtracurriculars('');
+    } else if (eduExtracurriculars === '' && text.length > 0 && !text.startsWith('•')) {
+      setEduExtracurriculars('• ' + text);
+    } else {
+      setEduExtracurriculars(text);
+    }
+  };
+
+  const [certName, setCertName] = useState('');
+  const [certOrg, setCertOrg] = useState('');
+  const [certUrl, setCertUrl] = useState('');
+  const [certSkills, setCertSkills] = useState('');
+
+  const [achTitle, setAchTitle] = useState('');
+  const [achIssuer, setAchIssuer] = useState('');
+  const [achDate, setAchDate] = useState('');
+  const [achDescription, setAchDescription] = useState('');
+
+  const [coverLetter, setCoverLetter] = useState(user.coverLetter || '');
+
+  const [workAuthStatus, setWorkAuthStatus] = useState(user.workAuthorizationStatus || '');
+  const [jobReqs, setJobReqs] = useState(user.jobRequirements?.join(', ') || '');
+
+  const [contactPhone, setContactPhone] = useState(user.phone);
+  const [contactEmail, setContactEmail] = useState(user.email);
+  const [contactLinkedin, setContactLinkedin] = useState(user.linkedinUrl ?? '');
+  const [contactGithub, setContactGithub] = useState(user.githubUrl ?? '');
+
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [companySearch, setCompanySearch] = useState('');
+
+  const { data: allCompaniesData = [], isLoading: isLoadingCompanies, error: companiesError } = useQuery({
+    queryKey: ['all-companies-data'],
+    queryFn: async () => {
+      console.log('Fetching companies from Supabase...');
+      const { data, error } = await supabase
+        .from('companies')
+        .select('name, logo_url')
+        .order('name');
+      
+      if (error) {
+        console.error('❌ Error fetching companies:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+      
+      console.log('✅ Successfully fetched companies:', data?.length || 0);
+      if (data && data.length > 0) {
+        console.log('First 3 companies:', data.slice(0, 3).map(c => c.name));
+      } else {
+        console.log('⚠️ Query succeeded but returned empty array');
+      }
+      return data || [];
+    },
+    staleTime: 1000 * 60 * 10,
+    enabled: true,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (companiesError) {
+      console.error('Companies query error:', companiesError);
+    }
+  }, [companiesError]);
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: user.profileCompletion / 100,
+      duration: 1200,
+      useNativeDriver: false,
+    }).start();
+  }, [progressAnim, user.profileCompletion]);
+
+  useEffect(() => {
+    if (supabaseProfile) {
+      setUser(prev => ({ ...prev, ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] }));
+    }
+  }, [supabaseProfile]);
+
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      console.log('Auto-syncing profile to Supabase');
+      saveProfile(user);
+    }, 3000);
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [user, saveProfile]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
+  const salaryConfig = getSalaryConfig(user.salaryCurrency);
+  const currencyObj = CURRENCIES.find((c) => c.code === user.salaryCurrency);
+  const currencySymbol = currencyObj?.symbol ?? '$';
+
+  const formatSalary = useCallback((v: number) => {
+    return formatSalaryForCurrency(v, user.salaryCurrency, currencySymbol);
+  }, [user.salaryCurrency, currencySymbol]);
+
+  const openAddSkillModal = useCallback(() => {
+    setNewSkill('');
+    setActiveModal('skill');
+  }, []);
+
+  const openBioModal = useCallback(() => {
+    setBioText(user.bio);
+    setActiveModal('bio');
+  }, [user.bio]);
+
+  const openHeadlineModal = useCallback(() => {
+    setHeadlineText(user.headline);
+    setActiveModal('headline');
+  }, [user.headline]);
+
+  const openLocationModal = useCallback(() => {
+    setLocationText(user.location);
+    setActiveModal('location');
+  }, [user.location]);
+
+  const openAvatarModal = useCallback(() => {
+    setAvatarUrl(user.avatar);
+    setActiveModal('avatar');
+  }, [user.avatar]);
+
+  const openContactModal = useCallback(() => {
+    setContactPhone(user.phone);
+    setContactEmail(user.email);
+    setContactLinkedin(user.linkedinUrl ?? '');
+    setContactGithub(user.githubUrl ?? '');
+    setActiveModal('contact');
+  }, [user.phone, user.email, user.linkedinUrl, user.githubUrl]);
+
+  const openAddExperienceModal = useCallback(() => {
+    setEditingExperience(null);
+    setExpTitle('');
+    setExpCompany('');
+    setExpStartDate('');
+    setExpEndDate('');
+    setExpDescription('• ');
+    setExpIsCurrent(false);
+    setExpSkills('');
+    setExpType('Full-time');
+    setExpMode('Onsite');
+    setExpLocation('');
+    setActiveModal('experience');
+  }, []);
+
+  const openEditExperienceModal = useCallback((exp: WorkExperience) => {
+    setEditingExperience(exp);
+    setExpTitle(exp.title);
+    setExpCompany(exp.company);
+    setExpStartDate(exp.startDate);
+    setExpEndDate(exp.endDate ?? '');
+    setExpDescription(exp.description);
+    setExpIsCurrent(exp.isCurrent);
+    setExpSkills(exp.skills?.join(', ') ?? '');
+    setExpType(exp.employmentType ?? 'Full-time');
+    setExpMode(exp.workMode ?? 'Onsite');
+    setExpLocation(exp.jobLocation ?? '');
+    setActiveModal('experience');
+  }, []);
+
+  const openAddEducationModal = useCallback(() => {
+    setEditingEducation(null);
+    setEduInstitution('');
+    setEduDegree('');
+    setEduField('');
+    setEduStartDate('');
+    setEduEndDate('');
+    setEduDescription('• ');
+    setEduAchievements('• ');
+    setEduExtracurriculars('• ');
+    setActiveModal('education');
+  }, []);
+
+  const openEditEducationModal = useCallback((edu: Education) => {
+    setEditingEducation(edu);
+    setEduInstitution(edu.institution);
+    setEduDegree(edu.degree);
+    setEduField(edu.field);
+    setEduStartDate(edu.startDate);
+    setEduEndDate(edu.endDate);
+    setEduDescription(edu.description ?? '');
+    setEduAchievements(edu.achievements ?? '');
+    setEduExtracurriculars(edu.extracurriculars ?? '');
+    setActiveModal('education');
+  }, []);
+
+  const openAddCertificationModal = useCallback(() => {
+    setEditingCertification(null);
+    setCertName('');
+    setCertOrg('');
+    setCertUrl('');
+    setCertSkills('');
+    setActiveModal('certification');
+  }, []);
+
+  const openEditCertificationModal = useCallback((cert: Certification) => {
+    setEditingCertification(cert);
+    setCertName(cert.name);
+    setCertOrg(cert.issuingOrganization);
+    setCertUrl(cert.credentialUrl);
+    setCertSkills(cert.skills.join(', '));
+    setActiveModal('certification');
+  }, []);
+
+  const openAddAchievementModal = useCallback(() => {
+    setEditingAchievement(null);
+    setAchTitle('');
+    setAchIssuer('');
+    setAchDate('');
+    setAchDescription('');
+    setActiveModal('achievement');
+  }, []);
+
+  const openEditAchievementModal = useCallback((ach: Achievement) => {
+    setEditingAchievement(ach);
+    setAchTitle(ach.title);
+    setAchIssuer(ach.issuer);
+    setAchDate(ach.date);
+    setAchDescription(ach.description ?? '');
+    setActiveModal('achievement');
+  }, []);
+
+  const openCoverLetterModal = useCallback(() => {
+    setCoverLetter(user.coverLetter || '');
+    setActiveModal('coverletter');
+  }, [user.coverLetter]);
+
+  const openJobRequirementsModal = useCallback(() => {
+    setWorkAuthStatus(user.workAuthorizationStatus || '');
+    setJobReqs(user.jobRequirements?.join(', ') || '');
+    setActiveModal('jobrequirements');
+  }, [user.workAuthorizationStatus, user.jobRequirements]);
+
+  const handleSaveSkill = useCallback(() => {
+    if (!newSkill.trim()) return;
+    if (user.skills.length >= 30) {
+      Alert.alert('Limit Reached', 'You can add up to 30 skills.');
+      return;
+    }
+    setUser((prev) => ({
+      ...prev,
+      skills: [...prev.skills, newSkill.trim()],
+    }));
+    setActiveModal(null);
+  }, [newSkill, user.skills.length]);
+
+  const handleRemoveSkill = useCallback((idx: number) => {
+    setUser((prev) => {
+      const skillToRemove = prev.skills[idx];
+      return {
+        ...prev,
+        skills: prev.skills.filter((_, i) => i !== idx),
+        topSkills: prev.topSkills.filter((s) => s !== skillToRemove),
+      };
+    });
+  }, []);
+
+  const handleToggleTopSkill = useCallback((skill: string) => {
+    setUser((prev) => {
+      if (prev.topSkills.includes(skill)) {
+        return { ...prev, topSkills: prev.topSkills.filter((s) => s !== skill) };
+      }
+      if (prev.topSkills.length >= 5) {
+        Alert.alert('Limit Reached', 'You can select up to 5 top skills. Remove one first.');
+        return prev;
+      }
+      return { ...prev, topSkills: [...prev.topSkills, skill] };
+    });
+  }, []);
+
+  const handleSaveBio = useCallback(() => {
+    setUser((prev) => ({ ...prev, bio: bioText }));
+    setActiveModal(null);
+  }, [bioText]);
+
+  const handleSaveHeadline = useCallback(() => {
+    if (!headlineText.trim()) return;
+    setUser((prev) => ({ ...prev, headline: headlineText.trim() }));
+    setActiveModal(null);
+  }, [headlineText]);
+
+  const handleSaveLocation = useCallback(() => {
+    if (!locationText.trim()) return;
+    setUser((prev) => ({ ...prev, location: locationText.trim() }));
+    setActiveModal(null);
+  }, [locationText]);
+
+  const handleSaveAvatar = useCallback(() => {
+    if (!avatarUrl.trim()) return;
+    setUser((prev) => ({ ...prev, avatar: avatarUrl.trim() }));
+    setActiveModal(null);
+  }, [avatarUrl]);
+
+  const handleSaveContact = useCallback(() => {
+    setUser((prev) => ({
+      ...prev,
+      phone: contactPhone.trim(),
+      email: contactEmail.trim(),
+      linkedinUrl: contactLinkedin.trim() || undefined,
+      githubUrl: contactGithub.trim() || undefined,
+    }));
+    setActiveModal(null);
+  }, [contactPhone, contactEmail, contactLinkedin, contactGithub]);
+
+  const handleSaveExperience = useCallback(() => {
+    if (!expTitle.trim() || !expCompany.trim()) {
+      Alert.alert('Required', 'Please fill in title and company');
+      return;
+    }
+    const exp: WorkExperience = {
+      id: editingExperience?.id ?? `e${Date.now()}`,
+      title: expTitle.trim(),
+      company: expCompany.trim(),
+      startDate: expStartDate.trim(),
+      endDate: expIsCurrent ? null : expEndDate.trim(),
+      isCurrent: expIsCurrent,
+      description: expDescription.trim(),
+      skills: expSkills.split(',').map((s) => s.trim()).filter(Boolean),
+      employmentType: expType,
+      workMode: expMode,
+      jobLocation: expMode === 'Remote' ? 'Remote' : expLocation.trim(),
+    };
+    setUser((prev) => {
+      if (editingExperience) {
+        return {
+          ...prev,
+          experience: prev.experience.map((e) => (e.id === editingExperience.id ? exp : e)),
+        };
+      }
+      return { ...prev, experience: [...prev.experience, exp] };
+    });
+    setActiveModal(null);
+  }, [expTitle, expCompany, expStartDate, expEndDate, expDescription, expIsCurrent, editingExperience, expSkills, expType, expMode, expLocation]);
+
+  const handleSaveEducation = useCallback(() => {
+    if (!eduInstitution.trim() || !eduDegree.trim()) {
+      Alert.alert('Required', 'Please fill in institution and degree');
+      return;
+    }
+    const edu: Education = {
+      id: editingEducation?.id ?? `ed${Date.now()}`,
+      institution: eduInstitution.trim(),
+      degree: eduDegree.trim(),
+      field: eduField.trim(),
+      startDate: eduStartDate.trim(),
+      endDate: eduEndDate.trim(),
+      description: eduDescription.trim() || undefined,
+      achievements: eduAchievements.trim() || undefined,
+      extracurriculars: eduExtracurriculars.trim() || undefined,
+    };
+    setUser((prev) => {
+      if (editingEducation) {
+        return {
+          ...prev,
+          education: prev.education.map((e) => (e.id === editingEducation.id ? edu : e)),
+        };
+      }
+      return { ...prev, education: [...prev.education, edu] };
+    });
+    setActiveModal(null);
+  }, [eduInstitution, eduDegree, eduField, eduStartDate, eduEndDate, eduDescription, eduAchievements, eduExtracurriculars, editingEducation]);
+
+  const handleSaveCertification = useCallback(() => {
+    if (!certName.trim() || !certOrg.trim()) {
+      Alert.alert('Required', 'Please fill in the certification name and organization');
+      return;
+    }
+    const cert: Certification = {
+      id: editingCertification?.id ?? `c${Date.now()}`,
+      name: certName.trim(),
+      issuingOrganization: certOrg.trim(),
+      credentialUrl: certUrl.trim(),
+      skills: certSkills.split(',').map((s) => s.trim()).filter(Boolean),
+    };
+    setUser((prev) => {
+      if (editingCertification) {
+        return {
+          ...prev,
+          certifications: prev.certifications.map((c) => (c.id === editingCertification.id ? cert : c)),
+        };
+      }
+      return { ...prev, certifications: [...prev.certifications, cert] };
+    });
+    setActiveModal(null);
+  }, [certName, certOrg, certUrl, certSkills, editingCertification]);
+
+  const handleSaveAchievement = useCallback(() => {
+    if (!achTitle.trim() || !achIssuer.trim()) {
+      Alert.alert('Required', 'Please fill in the title and issuer');
+      return;
+    }
+    const ach: Achievement = {
+      id: editingAchievement?.id ?? `ach${Date.now()}`,
+      title: achTitle.trim(),
+      issuer: achIssuer.trim(),
+      date: achDate.trim(),
+      description: achDescription.trim() || undefined,
+    };
+    setUser((prev) => {
+      if (editingAchievement) {
+        return {
+          ...prev,
+          achievements: prev.achievements.map((a) => (a.id === editingAchievement.id ? ach : a)),
+        };
+      }
+      return { ...prev, achievements: [...prev.achievements, ach] };
+    });
+    setActiveModal(null);
+  }, [achTitle, achIssuer, achDate, achDescription, editingAchievement]);
+
+  const handleSaveCoverLetter = useCallback(() => {
+    setUser((prev) => ({ ...prev, coverLetter: coverLetter }));
+    setActiveModal(null);
+  }, [coverLetter]);
+
+  const handleSaveJobRequirements = useCallback(() => {
+    setUser((prev) => ({
+      ...prev,
+      workAuthorizationStatus: workAuthStatus.trim() || undefined,
+      jobRequirements: jobReqs.split(',').map(r => r.trim()).filter(Boolean),
+    }));
+    setActiveModal(null);
+  }, [workAuthStatus, jobReqs]);
+
+  const handleToggleJobPref = useCallback((pref: string) => {
+    setUser((prev) => {
+      if (prev.jobPreferences.includes(pref)) {
+        return { ...prev, jobPreferences: prev.jobPreferences.filter((p) => p !== pref) };
+      }
+      return { ...prev, jobPreferences: [...prev.jobPreferences, pref] };
+    });
+  }, []);
+
+  const handleToggleWorkMode = useCallback((mode: string) => {
+    setUser((prev) => {
+      if (prev.workModePreferences.includes(mode)) {
+        return { ...prev, workModePreferences: prev.workModePreferences.filter((m) => m !== mode) };
+      }
+      return { ...prev, workModePreferences: [...prev.workModePreferences, mode] };
+    });
+  }, []);
+
+  const handleSalaryChange = useCallback((low: number, high: number) => {
+    setUser((prev) => ({ ...prev, salaryMinPref: low, salaryMaxPref: high }));
+  }, []);
+
+  const handleCurrencyChange = useCallback((code: string) => {
+    const config = getSalaryConfig(code);
+    setUser((prev) => ({
+      ...prev,
+      salaryCurrency: code,
+      salaryMinPref: config.min,
+      salaryMaxPref: config.max,
+    }));
+    setShowCurrencyPicker(false);
+  }, []);
+
+  const handleToggleFavoriteCompany = useCallback((companyName: string) => {
+    setUser((prev) => {
+      const favs = prev.favoriteCompanies || [];
+      if (favs.includes(companyName)) {
+        return { ...prev, favoriteCompanies: favs.filter(c => c !== companyName) };
+      }
+      return { ...prev, favoriteCompanies: [...favs, companyName] };
+    });
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          console.log('User signed out, redirecting to welcome');
+        },
+      },
+    ]);
+  }, [logout]);
+
+  const closeModal = useCallback(() => {
+    setActiveModal(null);
+    setEditingExperience(null);
+    setEditingEducation(null);
+    setEditingCertification(null);
+    setEditingAchievement(null);
+  }, []);
+
+  return (
+    <TabTransitionWrapper routeName="profile">
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.brandHeader}>
+        <Image source={require('@/assets/images/header.png')} style={styles.brandLogo} resizeMode="contain" />
+      </View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={styles.settingsButton}
+            onPress={() => router.push('/profile-preview' as any)}
+            testID="profile-preview-btn"
+          >
+            <Eye size={22} color={Colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            style={styles.settingsButton}
+            onPress={() => router.push('/settings' as any)}
+            testID="settings-btn"
+          >
+            <Settings size={22} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={false} onRefresh={refetchProfile} tintColor={Colors.primary} />}>
+        <View style={styles.profileCard}>
+          <View style={styles.profileTop}>
+            <Pressable onPress={openAvatarModal} style={styles.avatarWrapper}>
+              <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              <View style={styles.cameraOverlay}>
+                <Camera size={14} color="#111111" />
+              </View>
+            </Pressable>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{user.name}</Text>
+              <Pressable onPress={openHeadlineModal} style={styles.editableRow}>
+                <Text style={styles.profileHeadline} numberOfLines={1}>{user.headline}</Text>
+                <Pencil size={12} color="rgba(255,255,255,0.4)" />
+              </Pressable>
+              <Pressable onPress={openLocationModal} style={styles.editableRow}>
+                <MapPin size={12} color="rgba(255,255,255,0.4)" />
+                <Text style={styles.profileLocation}>{user.location}</Text>
+                <Pencil size={12} color="rgba(255,255,255,0.4)" />
+              </Pressable>
+            </View>
+          </View>
+
+          <Pressable style={styles.bioSection} onPress={(e) => { e.stopPropagation(); openBioModal(); }}>
+            {user.bio ? (
+              <Text style={styles.bioText} numberOfLines={2}>{user.bio}</Text>
+            ) : (
+              <Text style={styles.bioPlaceholder}>Add a bio or one-liner...</Text>
+            )}
+            <Pencil size={14} color="rgba(255,255,255,0.4)" />
+          </Pressable>
+
+          <View style={styles.completionSection}>
+            <View style={styles.completionHeader}>
+              <Text style={styles.completionLabel}>Profile Strength</Text>
+              <Text style={styles.completionPercent}>{user.profileCompletion}%</Text>
+            </View>
+            <View style={styles.progressBar}>
+              <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+            </View>
+            <Text style={styles.completionHint}>Add a portfolio to reach 100%</Text>
+          </View>
+        </View>
+
+        {(user.topSkills.length === 0 || user.education.length === 0 || user.experience.length === 0 || user.achievements.length === 0 || user.certifications.length === 0) && (
+          <View style={styles.completionPromptCard}>
+            <View style={styles.completionPromptHeader}>
+              <Zap size={18} color="#111111" />
+              <Text style={styles.completionPromptTitle}>Complete Your Profile</Text>
+            </View>
+            <Text style={styles.completionPromptText}>Add these sections to boost your visibility:</Text>
+            <View style={styles.missingFieldsList}>
+              {user.topSkills.length === 0 && <Text style={styles.missingFieldItem}>• Select top skills</Text>}
+              {user.education.length === 0 && <Text style={styles.missingFieldItem}>• Add education</Text>}
+              {user.experience.length === 0 && <Text style={styles.missingFieldItem}>• Add work experience</Text>}
+              {user.achievements.length === 0 && <Text style={styles.missingFieldItem}>• Add achievements</Text>}
+              {user.certifications.length === 0 && <Text style={styles.missingFieldItem}>• Add certifications</Text>}
+            </View>
+          </View>
+        )}
+
+        {subscriptionData?.subscription_type === 'free' ? (
+          <Pressable
+            style={styles.premiumCard}
+            onPress={() => router.push('/premium' as any)}
+          >
+            <View style={styles.premiumIcon}>
+              <Crown size={22} color="#FFD700" />
+            </View>
+            <View style={styles.premiumContent}>
+              <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
+              <Text style={styles.premiumSubtext}>Get more matches and priority visibility</Text>
+            </View>
+            <ChevronRight size={18} color="#FFD700" />
+          </Pressable>
+        ) : (
+          <Pressable 
+            style={[
+              styles.subscriptionBadge,
+              { backgroundColor: getSubscriptionBadgeColor(subscriptionData?.subscription_type || 'free') }
+            ]}
+            onPress={() => router.push('/premium' as any)}
+          >
+            <Crown size={20} color="#FFFFFF" />
+            <View style={styles.subscriptionBadgeContent}>
+              <Text style={styles.subscriptionBadgeTitle}>
+                You are a {getSubscriptionDisplayName(subscriptionData?.subscription_type || 'free')}
+              </Text>
+              <Text style={styles.subscriptionBadgeSubtext}>
+                {subscriptionData?.applications_remaining || 0} applications remaining this month
+              </Text>
+            </View>
+            <ChevronRight size={18} color="#FFFFFF" />
+          </Pressable>
+        )}
+
+        <Pressable
+          style={styles.shareCard}
+          onPress={() => Alert.alert('Share NextQuark', 'Share your referral link with friends to earn premium credits!')}
+        >
+          <View style={styles.shareGradient}>
+            <Share2 size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.shareContent}>
+            <Text style={styles.shareTitle}>Share & Earn Free Swipes</Text>
+            <Text style={styles.shareSubtext}>Invite friends and get 5 free swipes per registration</Text>
+          </View>
+          <View style={styles.shareBadge}>
+            <Text style={styles.shareBadgeText}>FREE</Text>
+          </View>
+        </Pressable>
+
+        <View style={styles.statsGrid}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{totalApplications}</Text>
+            <Text style={styles.statTitle}>Applied</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{interviewsScheduled}</Text>
+            <Text style={styles.statTitle}>Interviews</Text>
+          </View>
+        </View>
+
+
+
+        <Pressable style={styles.contactCard} onPress={openContactModal}>
+          <View style={styles.contactCardHeader}>
+            <Text style={styles.sectionTitle}>Contact Information</Text>
+            <Pencil size={14} color={Colors.textTertiary} />
+          </View>
+          <View style={styles.contactItem}>
+            <View style={styles.contactIconBox}>
+              <Phone size={16} color="#111111" />
+            </View>
+            <Text style={styles.contactText}>{user.phone}</Text>
+          </View>
+          <View style={styles.contactItem}>
+            <View style={styles.contactIconBox}>
+              <Mail size={16} color="#111111" />
+            </View>
+            <Text style={styles.contactText}>{user.email}</Text>
+          </View>
+          {user.linkedinUrl ? (
+            <View style={styles.contactItem}>
+              <View style={styles.contactIconBox}>
+                <Linkedin size={16} color="#111111" />
+              </View>
+              <Text style={styles.contactText} numberOfLines={1}>{user.linkedinUrl}</Text>
+            </View>
+          ) : null}
+          {user.githubUrl ? (
+            <View style={styles.contactItem}>
+              <View style={styles.contactIconBox}>
+                <Github size={16} color="#111111" />
+              </View>
+              <Text style={styles.contactText} numberOfLines={1}>{user.githubUrl}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Favourite Companies</Text>
+            <Pressable style={styles.addButton} onPress={() => setActiveModal('favoritecompanies')}>
+              <Plus size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+          {(user.favoriteCompanies && user.favoriteCompanies.length > 0) ? (
+            <View style={styles.favoriteCompaniesWrap}>
+              {user.favoriteCompanies.map((company, idx) => {
+                const companyData = allCompaniesData.find((c: any) => c.name === company);
+                const logoUrl = companyData?.logo_url 
+                  ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${companyData.logo_url}`
+                  : null;
+                return (
+                  <View key={idx} style={styles.favoriteCompanyChip}>
+                    {logoUrl && <Image source={{ uri: logoUrl }} style={styles.favoriteCompanyLogo} />}
+                    <Text style={styles.favoriteCompanyText}>{company}</Text>
+                    <Pressable onPress={() => handleToggleFavoriteCompany(company)}>
+                      <X size={14} color={Colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={styles.emptyFavoriteText}>No favorite companies added yet</Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Job Type Preferences</Text>
+          </View>
+          <View style={styles.chipGrid}>
+            {JOB_TYPE_OPTIONS.map((pref) => {
+              const selected = user.jobPreferences.includes(pref);
+              return (
+                <Pressable
+                  key={pref}
+                  style={[styles.prefChip, selected && styles.prefChipActive]}
+                  onPress={() => handleToggleJobPref(pref)}
+                >
+                  {selected && <Check size={14} color={Colors.surface} />}
+                  <Text style={[styles.prefChipText, selected && styles.prefChipTextActive]}>{pref}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Work Mode Preferences</Text>
+          </View>
+          <View style={styles.chipGrid}>
+            {WORK_MODE_OPTIONS.map((mode) => {
+              const selected = user.workModePreferences.includes(mode);
+              return (
+                <Pressable
+                  key={mode}
+                  style={[styles.prefChip, selected && styles.prefChipActive]}
+                  onPress={() => handleToggleWorkMode(mode)}
+                >
+                  {selected && <Check size={14} color={Colors.surface} />}
+                  <Text style={[styles.prefChipText, selected && styles.prefChipTextActive]}>{mode}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Salary Preferences</Text>
+            <Pressable style={styles.currencyBtn} onPress={() => setShowCurrencyPicker(true)}>
+              <Text style={styles.currencyBtnText}>{user.salaryCurrency}</Text>
+              <ChevronDown size={14} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
+          <View style={styles.salarySliderContainer}>
+            <RangeSlider
+              min={salaryConfig.min}
+              max={salaryConfig.max}
+              step={salaryConfig.step}
+              low={user.salaryMinPref}
+              high={user.salaryMaxPref}
+              onChange={handleSalaryChange}
+              formatLabel={formatSalary}
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Top Skills</Text>
+            <Text style={styles.topSkillHint}>{user.topSkills.length}/5</Text>
+          </View>
+          <Text style={styles.topSkillSubtext}>Tap to toggle top skill status</Text>
+          <View style={styles.skillsWrap}>
+            {user.skills.map((skill, idx) => {
+              const isTop = user.topSkills.includes(skill);
+              return (
+                <Pressable
+                  key={idx}
+                  style={[styles.skillTag, isTop && styles.skillTagTop]}
+                  onPress={() => handleToggleTopSkill(skill)}
+                  onLongPress={() => handleRemoveSkill(idx)}
+                >
+                  {isTop && <Star size={12} color="#D4A017" />}
+                  <Text style={[styles.skillTagText, isTop && styles.skillTagTextTop]}>{skill}</Text>
+                </Pressable>
+              );
+            })}
+            <Pressable style={styles.addSkillBtn} onPress={openAddSkillModal} testID="add-skill-btn">
+              <Plus size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={[styles.section, styles.darkSection]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.darkSectionTitle}>Experience</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: '#FFFFFF' }]} onPress={openAddExperienceModal} testID="add-experience-btn">
+              <Plus size={16} color="#111111" />
+            </Pressable>
+          </View>
+          {user.experience.map((exp) => (
+            <Pressable key={exp.id} style={styles.experienceItem} onPress={() => openEditExperienceModal(exp)}>
+              <View style={[styles.expIcon, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                <Briefcase size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.expContent}>
+                <Text style={[styles.expTitle, { color: '#FFFFFF' }]}>{exp.title}</Text>
+                <Text style={[styles.expCompany, { color: 'rgba(255,255,255,0.6)' }]}>{exp.company}</Text>
+                <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>
+                  {exp.startDate} — {exp.isCurrent ? 'Present' : exp.endDate}
+                </Text>
+                {exp.employmentType || exp.workMode ? (
+                  <View style={styles.expTagsRow}>
+                    {exp.employmentType ? (
+                      <View style={[styles.expTagChip, { backgroundColor: 'rgba(255,255,255,0.1)' }]}><Text style={[styles.expTagText, { color: 'rgba(255,255,255,0.7)' }]}>{exp.employmentType}</Text></View>
+                    ) : null}
+                    {exp.workMode ? (
+                      <View style={[styles.expTagChip, { backgroundColor: 'rgba(255,255,255,0.1)' }]}><Text style={[styles.expTagText, { color: 'rgba(255,255,255,0.7)' }]}>{exp.workMode}</Text></View>
+                    ) : null}
+                  </View>
+                ) : null}
+                {exp.jobLocation ? (
+                  <View style={styles.expLocationRow}>
+                    <MapPin size={12} color="rgba(255,255,255,0.5)" />
+                    <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.5)' }]}>{exp.jobLocation}</Text>
+                  </View>
+                ) : null}
+                {exp.description ? <Text style={[styles.expDesc, { color: 'rgba(255,255,255,0.6)' }]} numberOfLines={3}>{exp.description}</Text> : null}
+                {exp.skills && exp.skills.length > 0 ? (
+                  <View style={styles.expSkillsRow}>
+                    {exp.skills.map((skill, idx) => (
+                      <View key={idx} style={[styles.expTagChip, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                        <Text style={[styles.expTagText, { color: 'rgba(255,255,255,0.8)' }]}>{skill}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+              <Pencil size={14} color="rgba(255,255,255,0.4)" />
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={[styles.section, styles.borderedSection]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Education</Text>
+            <Pressable style={styles.addButton} onPress={openAddEducationModal} testID="add-education-btn">
+              <Plus size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+          {user.education.map((edu) => (
+            <Pressable key={edu.id} style={styles.experienceItem} onPress={() => openEditEducationModal(edu)}>
+              <View style={styles.expIcon}>
+                <GraduationCap size={18} color={Colors.accent} />
+              </View>
+              <View style={styles.expContent}>
+                <Text style={styles.expTitle}>{edu.degree} in {edu.field}</Text>
+                <Text style={styles.expCompany}>{edu.institution}</Text>
+                <Text style={styles.expDate}>{edu.startDate} — {edu.endDate}</Text>
+                {edu.description ? <Text style={styles.expDesc} numberOfLines={3}>{edu.description}</Text> : null}
+                {edu.achievements ? (
+                  <View style={styles.eduDetailRow}>
+                    <Text style={styles.eduDetailLabel}>Achievements: </Text>
+                    <Text style={styles.eduDetailText} numberOfLines={2}>{edu.achievements}</Text>
+                  </View>
+                ) : null}
+                {edu.extracurriculars ? (
+                  <View style={styles.eduDetailRow}>
+                    <Text style={styles.eduDetailLabel}>Extracurriculars: </Text>
+                    <Text style={styles.eduDetailText} numberOfLines={2}>{edu.extracurriculars}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Pencil size={14} color={Colors.textTertiary} />
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={[styles.section, styles.darkSection]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.darkSectionTitle}>Achievements & Honors</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: '#FFFFFF' }]} onPress={openAddAchievementModal} testID="add-achievement-btn">
+              <Plus size={16} color="#111111" />
+            </Pressable>
+          </View>
+          {user.achievements.map((ach) => (
+            <Pressable key={ach.id} style={styles.experienceItem} onPress={() => openEditAchievementModal(ach)}>
+              <View style={[styles.expIcon, { backgroundColor: 'rgba(255,215,0,0.15)' }]}>
+                <Trophy size={18} color="#FFD700" />
+              </View>
+              <View style={styles.expContent}>
+                <Text style={[styles.expTitle, { color: '#FFFFFF' }]}>{ach.title}</Text>
+                <Text style={[styles.expCompany, { color: 'rgba(255,255,255,0.6)' }]}>{ach.issuer}</Text>
+                <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>{ach.date}</Text>
+                {ach.description ? <Text style={[styles.expDesc, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={2}>{ach.description}</Text> : null}
+              </View>
+              <Pencil size={14} color="rgba(255,255,255,0.4)" />
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={[styles.section, styles.borderedSection]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Licenses & Certifications</Text>
+            <Pressable style={styles.addButton} onPress={openAddCertificationModal} testID="add-cert-btn">
+              <Plus size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+          {user.certifications.map((cert) => (
+            <Pressable key={cert.id} style={styles.experienceItem} onPress={() => openEditCertificationModal(cert)}>
+              <View style={[styles.expIcon, { backgroundColor: '#FFF3E0' }]}>
+                <Award size={18} color={Colors.warning} />
+              </View>
+              <View style={styles.expContent}>
+                <Text style={styles.expTitle}>{cert.name}</Text>
+                <Text style={styles.expCompany}>{cert.issuingOrganization}</Text>
+                {cert.credentialUrl ? (
+                  <View style={styles.credUrlRow}>
+                    <Link2 size={11} color={Colors.accent} />
+                    <Text style={styles.credUrlText} numberOfLines={1}>{cert.credentialUrl}</Text>
+                  </View>
+                ) : null}
+                {cert.skills.length > 0 && (
+                  <View style={styles.certSkillsRow}>
+                    {cert.skills.map((s, i) => (
+                      <View key={i} style={styles.certSkillChip}>
+                        <Text style={styles.certSkillChipText}>{s}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+              <Pencil size={14} color={Colors.textTertiary} />
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.menuSection}>
+          {[
+            { icon: Star, label: 'Saved Jobs', color: Colors.warning, onPress: () => router.push('/saved-jobs' as any) },
+            { icon: FileText, label: 'Resume', color: Colors.accent, onPress: () => router.push('/resume-management' as any) },
+          ].map((item, idx) => (
+            <Pressable key={idx} style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={item.onPress}>
+              <View style={[styles.menuIcon, { backgroundColor: `${item.color}15` }]}>
+                <item.icon size={20} color={item.color} />
+              </View>
+              <Text style={styles.menuLabel}>{item.label}</Text>
+              <ChevronRight size={18} color={Colors.textTertiary} />
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.demoSection}>
+          <View style={styles.demoHeader}>
+            <FileText size={16} color={Colors.textSecondary} />
+            <Text style={styles.demoHeaderTitle}>Cover Letter</Text>
+            <Pressable onPress={openCoverLetterModal} style={{ marginLeft: 'auto' }}>
+              <Pencil size={14} color={Colors.textTertiary} />
+            </Pressable>
+          </View>
+          {user.coverLetter ? (
+            <Text style={styles.coverLetterText} numberOfLines={4}>{user.coverLetter}</Text>
+          ) : (
+            <Text style={styles.coverLetterPlaceholder}>Add a cover letter to personalize your applications...</Text>
+          )}
+        </View>
+
+        <Pressable style={styles.demoSection} onPress={openJobRequirementsModal}>
+          <View style={styles.demoHeader}>
+            <ShieldCheck size={16} color={Colors.textSecondary} />
+            <Text style={styles.demoHeaderTitle}>Job Requirements</Text>
+            <Pressable onPress={openJobRequirementsModal} style={{ marginLeft: 'auto' }}>
+              <Pencil size={14} color={Colors.textTertiary} />
+            </Pressable>
+          </View>
+          <Text style={styles.demoNote}>Your work authorization and visa status</Text>
+          {user.workAuthorizationStatus ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Work Authorization</Text>
+              <Text style={styles.demoValue}>{user.workAuthorizationStatus}</Text>
+            </View>
+          ) : (
+            <Text style={styles.coverLetterPlaceholder}>Add work authorization status...</Text>
+          )}
+          {user.jobRequirements && user.jobRequirements.length > 0 ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Requirements</Text>
+              <View style={styles.chipGrid}>
+                {user.jobRequirements.map((req, idx) => (
+                  <View key={idx} style={[styles.prefChip, { backgroundColor: '#FFF9C4', borderColor: '#F57F17' }]}>
+                    <Text style={[styles.prefChipText, { color: '#F57F17' }]}>{req}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </Pressable>
+
+        <View style={styles.demoSection}>
+          <View style={styles.demoHeader}>
+            <Lock size={16} color={Colors.textTertiary} />
+            <Text style={styles.demoHeaderTitle}>Equal Opportunity Information</Text>
+          </View>
+          <Text style={styles.demoNote}>This information is confidential and non-editable</Text>
+          {user.veteranStatus ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Veteran Status</Text>
+              <Text style={styles.demoValue}>{user.veteranStatus}</Text>
+            </View>
+          ) : null}
+          {user.disabilityStatus ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Disability Status</Text>
+              <Text style={styles.demoValue}>{user.disabilityStatus}</Text>
+            </View>
+          ) : null}
+          {user.ethnicity ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Ethnicity</Text>
+              <Text style={styles.demoValue}>{user.ethnicity}</Text>
+            </View>
+          ) : null}
+          {user.race ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Race</Text>
+              <Text style={styles.demoValue}>{user.race}</Text>
+            </View>
+          ) : null}
+          {user.gender ? (
+            <View style={styles.demoItem}>
+              <Text style={styles.demoLabel}>Gender</Text>
+              <Text style={styles.demoValue}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+
+      <Modal visible={activeModal === 'skill'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Skill</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <TextInput style={styles.modalInput} placeholder="e.g. Docker, Kubernetes..." placeholderTextColor={Colors.textTertiary} value={newSkill} onChangeText={setNewSkill} autoFocus />
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveSkill}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Add Skill</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'bio'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Bio</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <TextInput
+              style={[styles.modalInput, styles.modalTextArea]}
+              placeholder="Write a short bio or one-liner..."
+              placeholderTextColor={Colors.textTertiary}
+              value={bioText}
+              onChangeText={(t) => { if (t.length <= 500) setBioText(t); }}
+              multiline
+              numberOfLines={4}
+              autoFocus
+            />
+            <Text style={styles.charCount}>{bioText.length}/500</Text>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveBio}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Bio</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'headline'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Headline</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. Senior Software Engineer"
+              placeholderTextColor={Colors.textTertiary}
+              value={headlineText}
+              onChangeText={(t) => { if (t.length <= 100) setHeadlineText(t); }}
+              autoFocus
+            />
+            <Text style={styles.charCount}>{headlineText.length}/100</Text>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveHeadline}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Headline</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'location'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Location</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <TextInput style={styles.modalInput} placeholder="e.g. New York, NY" placeholderTextColor={Colors.textTertiary} value={locationText} onChangeText={setLocationText} autoFocus />
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveLocation}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Location</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'avatar'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Change Photo</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <View style={styles.avatarPreviewRow}><Image source={{ uri: avatarUrl }} style={styles.avatarPreview} /></View>
+            <Text style={styles.fieldLabel}>Photo URL</Text>
+            <TextInput style={styles.modalInput} placeholder="https://..." placeholderTextColor={Colors.textTertiary} value={avatarUrl} onChangeText={setAvatarUrl} autoCapitalize="none" />
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveAvatar}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Photo</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'contact'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Contact Info</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.fieldLabel}>Phone Number</Text>
+              <TextInput style={styles.modalInput} placeholder="+1 (555) 123-4567" placeholderTextColor={Colors.textTertiary} value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
+              <Text style={styles.fieldLabel}>Email Address</Text>
+              <TextInput style={styles.modalInput} placeholder="your@email.com" placeholderTextColor={Colors.textTertiary} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Text style={styles.fieldLabel}>LinkedIn Profile</Text>
+              <TextInput style={styles.modalInput} placeholder="https://linkedin.com/in/..." placeholderTextColor={Colors.textTertiary} value={contactLinkedin} onChangeText={setContactLinkedin} autoCapitalize="none" />
+              <Text style={styles.fieldLabel}>GitHub Profile</Text>
+              <TextInput style={styles.modalInput} placeholder="https://github.com/..." placeholderTextColor={Colors.textTertiary} value={contactGithub} onChangeText={setContactGithub} autoCapitalize="none" />
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveContact}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Contact Info</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'experience'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingExperience ? 'Edit Experience' : 'Add Experience'}</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.fieldLabel}>Job Title *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. Software Engineer" placeholderTextColor={Colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />
+              <Text style={styles.fieldLabel}>Company *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. Google" placeholderTextColor={Colors.textTertiary} value={expCompany} onChangeText={setExpCompany} />
+              <Text style={styles.fieldLabel}>Employment Type</Text>
+              <View style={styles.chipGrid}>
+                {EXP_TYPE_OPTIONS.map((t) => (
+                  <Pressable key={t} style={[styles.prefChip, expType === t && styles.prefChipActive]} onPress={() => setExpType(t)}>
+                    {expType === t && <Check size={12} color={Colors.surface} />}
+                    <Text style={[styles.prefChipText, expType === t && styles.prefChipTextActive]}>{t}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.fieldLabel}>Work Mode</Text>
+              <View style={styles.chipGrid}>
+                {EXP_MODE_OPTIONS.map((m) => (
+                  <Pressable key={m} style={[styles.prefChip, expMode === m && styles.prefChipActive]} onPress={() => setExpMode(m)}>
+                    {expMode === m && <Check size={12} color={Colors.surface} />}
+                    <Text style={[styles.prefChipText, expMode === m && styles.prefChipTextActive]}>{m}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              {expMode !== 'Remote' && (
+                <>
+                  <Text style={styles.fieldLabel}>Job Location</Text>
+                  <TextInput style={styles.modalInput} placeholder="e.g. San Francisco, CA" placeholderTextColor={Colors.textTertiary} value={expLocation} onChangeText={setExpLocation} />
+                </>
+              )}
+              <View style={styles.dateRow}>
+                <View style={styles.dateField}>
+                  <Text style={styles.fieldLabel}>Start Date</Text>
+                  <TextInput style={styles.modalInput} placeholder="e.g. Jan 2023" placeholderTextColor={Colors.textTertiary} value={expStartDate} onChangeText={setExpStartDate} />
+                </View>
+                <View style={styles.dateField}>
+                  <Text style={styles.fieldLabel}>End Date</Text>
+                  <TextInput style={[styles.modalInput, expIsCurrent && styles.inputDisabled]} placeholder="e.g. Dec 2024" placeholderTextColor={Colors.textTertiary} value={expIsCurrent ? 'Present' : expEndDate} onChangeText={setExpEndDate} editable={!expIsCurrent} />
+                </View>
+              </View>
+              <Pressable style={styles.checkboxRow} onPress={() => setExpIsCurrent(!expIsCurrent)}>
+                <View style={[styles.checkbox, expIsCurrent && styles.checkboxActive]}>
+                  {expIsCurrent && <Check size={12} color={Colors.surface} />}
+                </View>
+                <Text style={styles.checkboxLabel}>I currently work here</Text>
+              </Pressable>
+              <Text style={styles.fieldLabel}>Skills (comma-separated)</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. React, TypeScript, GraphQL" placeholderTextColor={Colors.textTertiary} value={expSkills} onChangeText={setExpSkills} />
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe your role and achievements..." placeholderTextColor={Colors.textTertiary} value={expDescription} onChangeText={handleExpDescriptionChange} multiline numberOfLines={3} />
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveExperience}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingExperience ? 'Update' : 'Add Experience'}</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'education'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingEducation ? 'Edit Education' : 'Add Education'}</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.fieldLabel}>Institution *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. MIT" placeholderTextColor={Colors.textTertiary} value={eduInstitution} onChangeText={setEduInstitution} />
+              <Text style={styles.fieldLabel}>Degree *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. Bachelor's" placeholderTextColor={Colors.textTertiary} value={eduDegree} onChangeText={setEduDegree} />
+              <Text style={styles.fieldLabel}>Field of Study</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. Computer Science" placeholderTextColor={Colors.textTertiary} value={eduField} onChangeText={setEduField} />
+              <View style={styles.dateRow}>
+                <View style={styles.dateField}>
+                  <Text style={styles.fieldLabel}>Start Year</Text>
+                  <TextInput style={styles.modalInput} placeholder="e.g. 2016" placeholderTextColor={Colors.textTertiary} value={eduStartDate} onChangeText={setEduStartDate} />
+                </View>
+                <View style={styles.dateField}>
+                  <Text style={styles.fieldLabel}>End Year</Text>
+                  <TextInput style={styles.modalInput} placeholder="e.g. 2020" placeholderTextColor={Colors.textTertiary} value={eduEndDate} onChangeText={setEduEndDate} />
+                </View>
+              </View>
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe your time at this institution..." placeholderTextColor={Colors.textTertiary} value={eduDescription} onChangeText={handleEduDescriptionChange} multiline numberOfLines={3} />
+              <Text style={styles.fieldLabel}>Achievements</Text>
+              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Dean's List, Awards, Publications..." placeholderTextColor={Colors.textTertiary} value={eduAchievements} onChangeText={handleEduAchievementsChange} multiline numberOfLines={2} />
+              <Text style={styles.fieldLabel}>Extracurriculars</Text>
+              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Clubs, Sports, Volunteer work..." placeholderTextColor={Colors.textTertiary} value={eduExtracurriculars} onChangeText={handleEduExtracurricularsChange} multiline numberOfLines={2} />
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveEducation}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingEducation ? 'Update' : 'Add Education'}</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'certification'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingCertification ? 'Edit Certification' : 'Add Certification'}</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.fieldLabel}>Certification Name *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. AWS Solutions Architect" placeholderTextColor={Colors.textTertiary} value={certName} onChangeText={setCertName} />
+              <Text style={styles.fieldLabel}>Issuing Organization *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. Amazon Web Services" placeholderTextColor={Colors.textTertiary} value={certOrg} onChangeText={setCertOrg} />
+              <Text style={styles.fieldLabel}>Credential URL</Text>
+              <TextInput style={styles.modalInput} placeholder="https://..." placeholderTextColor={Colors.textTertiary} value={certUrl} onChangeText={setCertUrl} autoCapitalize="none" />
+              <Text style={styles.fieldLabel}>Skills (comma-separated)</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. AWS, Cloud Architecture" placeholderTextColor={Colors.textTertiary} value={certSkills} onChangeText={setCertSkills} />
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveCertification}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingCertification ? 'Update' : 'Add Certification'}</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'achievement'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingAchievement ? 'Edit Achievement' : 'Add Achievement'}</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.fieldLabel}>Title *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. Best Innovation Award" placeholderTextColor={Colors.textTertiary} value={achTitle} onChangeText={setAchTitle} />
+              <Text style={styles.fieldLabel}>Issuer/Organization *</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. TechCorp Hackathon" placeholderTextColor={Colors.textTertiary} value={achIssuer} onChangeText={setAchIssuer} />
+              <Text style={styles.fieldLabel}>Date</Text>
+              <TextInput style={styles.modalInput} placeholder="e.g. 2024" placeholderTextColor={Colors.textTertiary} value={achDate} onChangeText={setAchDate} />
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe this achievement..." placeholderTextColor={Colors.textTertiary} value={achDescription} onChangeText={setAchDescription} multiline numberOfLines={3} />
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveAchievement}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingAchievement ? 'Update' : 'Add Achievement'}</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'coverletter'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Cover Letter</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <TextInput
+              style={[styles.modalInput, styles.modalTextArea, { minHeight: 200 }]}
+              placeholder="Write your cover letter here (up to 1000 words)..."
+              placeholderTextColor={Colors.textTertiary}
+              value={coverLetter}
+              onChangeText={(t) => { if (t.split(/\s+/).length <= 1000) setCoverLetter(t); }}
+              multiline
+              numberOfLines={10}
+              autoFocus
+            />
+            <Text style={styles.charCount}>{coverLetter.split(/\s+/).filter(w => w).length}/1000 words</Text>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveCoverLetter}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Cover Letter</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'jobrequirements'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Job Requirements</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.fieldLabel}>Work Authorization Status</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. US Citizen, Green Card, H1B, etc."
+                placeholderTextColor={Colors.textTertiary}
+                value={workAuthStatus}
+                onChangeText={setWorkAuthStatus}
+              />
+              <Text style={styles.fieldLabel}>Job Requirements (comma-separated)</Text>
+              <TextInput
+                style={[styles.modalInput, styles.modalTextArea]}
+                placeholder="e.g. Security Clearance, Driver's License, etc."
+                placeholderTextColor={Colors.textTertiary}
+                value={jobReqs}
+                onChangeText={setJobReqs}
+                multiline
+                numberOfLines={3}
+              />
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveJobRequirements}>
+              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Requirements</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal visible={showCurrencyPicker} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Currency</Text>
+              <Pressable onPress={() => setShowCurrencyPicker(false)} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {CURRENCIES.map((c) => (
+                <Pressable key={c.code} style={[styles.currencyOption, user.salaryCurrency === c.code && styles.currencyOptionActive]} onPress={() => handleCurrencyChange(c.code)}>
+                  <Text style={[styles.currencyOptionText, user.salaryCurrency === c.code && styles.currencyOptionTextActive]}>{c.label}</Text>
+                  {user.salaryCurrency === c.code && <Check size={18} color={Colors.surface} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'favoritecompanies'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Favorite Companies</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.roleSearchContainer}>
+              <Search size={16} color={Colors.textTertiary} />
+              <TextInput
+                style={styles.roleSearchInput}
+                placeholder="Search companies..."
+                placeholderTextColor={Colors.textTertiary}
+                value={companySearch}
+                onChangeText={setCompanySearch}
+              />
+            </View>
+            {isLoadingCompanies ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={{ marginTop: 12, fontSize: 13, color: Colors.textSecondary }}>Loading companies...</Text>
+              </View>
+            ) : companiesError ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: Colors.error, marginBottom: 8 }}>Error loading companies</Text>
+                <Text style={{ fontSize: 12, color: Colors.textTertiary, textAlign: 'center' }}>Check console for details</Text>
+              </View>
+            ) : allCompaniesData.length === 0 ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: Colors.textSecondary, marginBottom: 8 }}>No companies found</Text>
+                <Text style={{ fontSize: 12, color: Colors.textTertiary, textAlign: 'center' }}>Check Supabase RLS policies</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+                <View style={styles.chipGrid}>
+                  {allCompaniesData
+                    .filter((c: any) => !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase()))
+                    .map((company: any) => {
+                      const selected = (user.favoriteCompanies || []).includes(company.name);
+                      const logoUrl = company.logo_url 
+                        ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${company.logo_url}`
+                        : null;
+                      return (
+                        <Pressable 
+                          key={company.name} 
+                          style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
+                          onPress={() => handleToggleFavoriteCompany(company.name)}
+                        >
+                          {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companySelectLogo} />}
+                          <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{company.name}</Text>
+                          {selected && <Check size={14} color={Colors.surface} />}
+                        </Pressable>
+                      );
+                    })}
+                </View>
+              </ScrollView>
+            )}
+            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
+              <Text style={styles.cityDoneBtnText}>Done ({(user.favoriteCompanies || []).length} selected)</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+    </TabTransitionWrapper>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  brandHeader: { alignItems: 'center' as const, paddingTop: 4, paddingBottom: 2 },
+  brandLogo: { height: 32, width: 240 },
+  brandName: { fontSize: 12, fontWeight: '800' as const, color: Colors.textTertiary, letterSpacing: 2, textTransform: 'uppercase' as const },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
+  headerTitle: { fontSize: 28, fontWeight: '800' as const, color: Colors.secondary },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  settingsButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { paddingHorizontal: 16 },
+  profileCard: { backgroundColor: '#111111', borderRadius: 20, padding: 20, shadowColor: Colors.cardShadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 3 },
+  profileTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatarWrapper: { position: 'relative' as const },
+  avatar: { width: 68, height: 68, borderRadius: 22, backgroundColor: Colors.borderLight },
+  cameraOverlay: { position: 'absolute' as const, bottom: -2, right: -2, width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#111111' },
+  profileInfo: { flex: 1, marginLeft: 16 },
+  profileName: { fontSize: 20, fontWeight: '800' as const, color: '#FFFFFF' },
+  editableRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  contactItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  contactIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  profileHeadline: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: '600' as const, flex: 1 },
+  profileLocation: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
+  bioSection: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, marginBottom: 14, gap: 8 },
+  bioText: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 19 },
+  bioPlaceholder: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' as const },
+  completionSection: { marginTop: 2 },
+  completionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  completionLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' as const },
+  completionPercent: { fontSize: 14, color: '#10B981', fontWeight: '800' as const },
+  progressBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 4, overflow: 'hidden' as const },
+  progressFill: { height: '100%', backgroundColor: '#10B981', borderRadius: 4 },
+  completionHint: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 6 },
+  verifyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1, borderColor: Colors.borderLight },
+  verifyIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF8E1', justifyContent: 'center', alignItems: 'center' },
+  verifyContent: { flex: 1, marginLeft: 12 },
+  verifyTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
+  verifySubtext: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  statsGrid: { flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12, shadowColor: Colors.cardShadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2 },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary },
+  statTitle: { fontSize: 11, color: Colors.textTertiary, marginTop: 2, fontWeight: '500' as const },
+  statDivider: { width: 1, backgroundColor: Colors.borderLight, marginVertical: 4 },
+  aiCard: { backgroundColor: Colors.accentSoft, borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: `${Colors.accent}20` },
+  aiCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  aiCardTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
+  aiCardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
+  aiOptimizeButton: { marginTop: 12, paddingVertical: 10, backgroundColor: Colors.secondary, borderRadius: 10, alignItems: 'center' },
+  aiOptimizeText: { fontSize: 14, fontWeight: '700' as const, color: Colors.textInverse },
+  contactCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12 },
+  contactCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  contactText: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const, flex: 1 },
+  section: { marginTop: 20 },
+  borderedSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
+  darkSection: { backgroundColor: '#111111', borderRadius: 16, padding: 16, borderWidth: 0, borderColor: 'transparent' },
+  darkSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary },
+  addButton: { width: 30, height: 30, borderRadius: 10, backgroundColor: Colors.secondary, justifyContent: 'center', alignItems: 'center' },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  prefChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight },
+  prefChipActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+  prefChipText: { fontSize: 12, fontWeight: '500' as const, color: Colors.textPrimary },
+  prefChipTextActive: { color: Colors.surface },
+  currencyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight },
+  currencyBtnText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textPrimary },
+  salarySliderContainer: { backgroundColor: Colors.surface, borderRadius: 14, padding: 16 },
+  topSkillHint: { fontSize: 13, fontWeight: '600' as const, color: Colors.textTertiary },
+  topSkillSubtext: { fontSize: 12, color: Colors.textTertiary, marginBottom: 10, marginTop: -4 },
+  skillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  skillTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.secondary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  skillTagTop: { backgroundColor: '#FFF8E1', borderWidth: 2, borderColor: '#D4A017' },
+  skillTagText: { fontSize: 12, color: Colors.textInverse, fontWeight: '500' as const },
+  skillTagTextTop: { color: '#8B6914' },
+  addSkillBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.secondary, justifyContent: 'center', alignItems: 'center' },
+  experienceItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  expIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EEEEEE', justifyContent: 'center', alignItems: 'center' },
+  expContent: { flex: 1, marginLeft: 14 },
+  expTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
+  expCompany: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  expDate: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  expDesc: { fontSize: 12, color: Colors.textTertiary, marginTop: 4, lineHeight: 17 },
+  expLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  expSkillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  expTagsRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  expTagChip: { backgroundColor: Colors.primarySoft, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  expTagText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' as const },
+  credUrlRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  credUrlText: { fontSize: 12, color: Colors.accent, flex: 1 },
+  certSkillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  certSkillChip: { backgroundColor: Colors.accentSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  certSkillChipText: { fontSize: 11, color: Colors.accent, fontWeight: '600' as const },
+  eduDetailRow: { marginTop: 4 },
+  eduDetailLabel: { fontSize: 11, fontWeight: '700' as const, color: Colors.textSecondary },
+  eduDetailText: { fontSize: 12, color: Colors.textSecondary, lineHeight: 17, marginTop: 2 },
+  menuSection: { marginTop: 16, backgroundColor: Colors.surface, borderRadius: 16, overflow: 'hidden' as const },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  menuItemPressed: { backgroundColor: Colors.background },
+  menuIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  menuLabel: { flex: 1, fontSize: 15, fontWeight: '600' as const, color: Colors.textPrimary, marginLeft: 12 },
+  premiumCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A2E', borderRadius: 16, padding: 18, marginTop: 16 },
+  premiumIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,215,0,0.15)', justifyContent: 'center', alignItems: 'center' },
+  premiumContent: { flex: 1, marginLeft: 14 },
+  premiumTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFD700' },
+  premiumSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  subscriptionBadge: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 18, marginTop: 16 },
+  subscriptionBadgeContent: { flex: 1, marginLeft: 14 },
+  subscriptionBadgeTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  subscriptionBadgeSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24, paddingVertical: 14, backgroundColor: Colors.errorSoft, borderRadius: 14 },
+  logoutText: { fontSize: 15, fontWeight: '700' as const, color: Colors.error },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '85%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary },
+  modalCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+  modalScroll: { maxHeight: 400, marginBottom: 12 },
+  modalInput: { backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: Colors.textPrimary, marginBottom: 12, borderWidth: 1, borderColor: Colors.borderLight },
+  modalTextArea: { minHeight: 80, textAlignVertical: 'top' as const },
+  modalSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.secondary, borderRadius: 14, paddingVertical: 14, marginTop: 8 },
+  modalSaveBtnText: { fontSize: 16, fontWeight: '700' as const, color: Colors.textInverse },
+  fieldLabel: { fontSize: 13, fontWeight: '600' as const, color: Colors.textSecondary, marginBottom: 6, marginTop: 4 },
+  dateRow: { flexDirection: 'row', gap: 12 },
+  dateField: { flex: 1 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.borderLight, justifyContent: 'center', alignItems: 'center' },
+  checkboxActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  checkboxLabel: { fontSize: 14, color: Colors.textSecondary },
+  inputDisabled: { opacity: 0.5 },
+  avatarPreviewRow: { alignItems: 'center', marginBottom: 16 },
+  avatarPreview: { width: 80, height: 80, borderRadius: 26, backgroundColor: Colors.borderLight },
+  charCount: { fontSize: 12, color: Colors.textTertiary, textAlign: 'right' as const, marginTop: -8, marginBottom: 8 },
+  currencyOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, marginBottom: 6, backgroundColor: Colors.background },
+  currencyOptionActive: { backgroundColor: Colors.secondary },
+  currencyOptionText: { fontSize: 15, fontWeight: '600' as const, color: Colors.textPrimary },
+  currencyOptionTextActive: { color: Colors.surface },
+  shareCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1.5, borderColor: '#81C784', borderStyle: 'dashed' as const },
+  shareGradient: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#43A047', justifyContent: 'center', alignItems: 'center' },
+  shareContent: { flex: 1, marginLeft: 14 },
+  shareTitle: { fontSize: 15, fontWeight: '700' as const, color: '#2E7D32' },
+  shareSubtext: { fontSize: 12, color: '#558B2F', marginTop: 2 },
+  shareBadge: { backgroundColor: '#43A047', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  shareBadgeText: { fontSize: 11, fontWeight: '800' as const, color: '#FFFFFF' },
+  demoSection: { marginTop: 20, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
+  demoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  demoHeaderTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
+  demoNote: { fontSize: 11, color: Colors.textTertiary, marginBottom: 12 },
+  demoItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  demoLabel: { fontSize: 11, fontWeight: '600' as const, color: Colors.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 2 },
+  demoValue: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const },
+  coverLetterText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20, marginTop: 8 },
+  coverLetterPlaceholder: { fontSize: 13, color: Colors.textTertiary, fontStyle: 'italic' as const, marginTop: 8 },
+  completionPromptCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1, borderColor: Colors.borderLight },
+  completionPromptHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  completionPromptTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.textPrimary },
+  completionPromptText: { fontSize: 13, color: Colors.textSecondary, marginBottom: 8 },
+  missingFieldsList: { gap: 4 },
+  missingFieldItem: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' as const },
+  favoriteCompaniesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  favoriteCompanyChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.borderLight },
+  favoriteCompanyLogo: { width: 20, height: 20, borderRadius: 4 },
+  favoriteCompanyText: { fontSize: 13, color: Colors.textPrimary, fontWeight: '600' as const },
+  emptyFavoriteText: { fontSize: 13, color: Colors.textTertiary, fontStyle: 'italic' as const },
+  companySelectChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.borderLight },
+  companySelectChipActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+  companySelectLogo: { width: 18, height: 18, borderRadius: 4 },
+  companySelectText: { fontSize: 13, color: Colors.textPrimary, fontWeight: '600' as const },
+  companySelectTextActive: { color: Colors.surface },
+  roleSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, borderWidth: 1, borderColor: Colors.borderLight },
+  roleSearchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
+  cityDoneBtn: { backgroundColor: Colors.secondary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
+  cityDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: Colors.surface },
+});

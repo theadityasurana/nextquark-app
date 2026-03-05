@@ -1,0 +1,35 @@
+import { View, Text, StyleSheet, TouchableOpacity, Image, ImageBackground } from 'react-native';
+import { useRouter } from 'expo-router';
+
+export default function Welcome() {
+  const router = useRouter();
+
+  return (
+    <ImageBackground 
+      source={require('@/assets/images/icon.png')} 
+      style={styles.container}
+      blurRadius={20}
+    >
+      <View style={styles.overlay} />
+      <View style={styles.content}>
+        <Image source={require('@/assets/images/header.png')} style={styles.logo} resizeMode="contain" />
+        <TouchableOpacity style={styles.button} onPress={() => router.push('/sign-up')}>
+          <Text style={styles.buttonText}>Sign up for free</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/sign-in')}>
+          <Text style={styles.linkText}>Already a user? Sign in</Text>
+        </TouchableOpacity>
+      </View>
+    </ImageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  content: { flex: 1, justifyContent: 'flex-end', padding: 20, paddingBottom: 40 },
+  logo: { width: '91%', height: 65, alignSelf: 'center', marginBottom: 10 },
+  button: { backgroundColor: '#fff', padding: 18, borderRadius: 12, width: '100%', marginBottom: 16 },
+  buttonText: { color: '#000', textAlign: 'center', fontSize: 16, fontWeight: '600' },
+  linkText: { color: '#fff', textAlign: 'center', fontSize: 14 },
+});

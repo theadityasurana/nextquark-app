@@ -1,0 +1,220 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import TutorialModal from '@/components/TutorialModal';
+
+SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient();
+
+const TUTORIAL_COMPLETED_KEY = 'nextquark_tutorial_completed';
+
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isOnboardingComplete, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialChecked, setTutorialChecked] = useState(false);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const seg = segments[0] as string;
+    const inAuthGroup = seg === 'welcome' || seg === 'sign-up' || seg === 'sign-in' || seg === 'email-verification' || seg === 'mobile-signup';
+    const inOnboarding = seg === 'onboarding';
+    const inTabs = seg === '(tabs)';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      console.log('Redirecting to welcome - not authenticated');
+      router.replace('/welcome' as any);
+    } else if (isAuthenticated && !isOnboardingComplete && !inOnboarding) {
+      console.log('Redirecting to onboarding - not completed');
+      router.replace('/onboarding' as any);
+    } else if (isAuthenticated && isOnboardingComplete && (inAuthGroup || inOnboarding)) {
+      console.log('Redirecting to home - fully authenticated');
+      router.replace('/(tabs)/(home)' as any);
+    } else if (isAuthenticated && isOnboardingComplete && inTabs) {
+      checkAndShowTutorial();
+    }
+  }, [isAuthenticated, isOnboardingComplete, isLoading, segments]);
+
+  const checkAndShowTutorial = async () => {
+    if (tutorialChecked) return;
+    try {
+      const completed = await AsyncStorage.getItem(TUTORIAL_COMPLETED_KEY);
+      if (!completed) {
+        setShowTutorial(true);
+      }
+      setTutorialChecked(true);
+    } catch (e) {
+      console.log('Error checking tutorial status:', e);
+      setTutorialChecked(true);
+    }
+  };
+
+  const handleCloseTutorial = async () => {
+    try {
+      await AsyncStorage.setItem(TUTORIAL_COMPLETED_KEY, 'true');
+      setShowTutorial(false);
+    } catch (e) {
+      console.log('Error saving tutorial status:', e);
+      setShowTutorial(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={loadingStyles.container}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {children}
+      <TutorialModal visible={showTutorial} onClose={handleCloseTutorial} />
+    </>
+  );
+}
+
+const loadingStyles = StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+});
+
+function RootLayoutNav() {
+  return (
+    <AuthGuard>
+      <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+        <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="sign-up" options={{ headerShown: false }} />
+        <Stack.Screen name="mobile-signup" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        <Stack.Screen name="email-verification" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="job-details"
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="chat"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="profile-preview"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="application-details"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="privacy-policy"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="notification-settings"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="resume-management"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
+        <Stack.Screen
+          name="saved-jobs"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
+        <Stack.Screen
+          name="premium"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
+        <Stack.Screen
+          name="quick-tips"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="help-support"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="about-us"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="faq"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="report-ticket"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="settings"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="company-profile"
+          options={{
+            headerShown: false,
+          }}
+        />
+      </Stack>
+    </AuthGuard>
+  );
+}
+
+export default function RootLayout() {
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView>
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
+  );
+}

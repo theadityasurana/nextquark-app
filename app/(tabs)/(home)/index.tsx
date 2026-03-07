@@ -36,7 +36,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 
-const CARD_COLORS = ['mistyrose'];
+const CARD_COLORS = ['Colors.surface'];
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;

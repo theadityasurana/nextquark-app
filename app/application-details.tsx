@@ -6,12 +6,12 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  Linking,
   Platform,
   TextInput,
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -217,6 +217,7 @@ export default function ApplicationDetailsScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showAdditionalQuestions, setShowAdditionalQuestions] = useState(false);
   const [additionalAnswers, setAdditionalAnswers] = useState<Record<string, string>>({});
+  const [showVideoModal, setShowVideoModal] = useState(false);
 
   const needsAction = application?.status === 'applied' || application?.status === 'under_review';
   const hasActionNeeded = needsAction && Object.keys(additionalAnswers).length === 0;
@@ -347,20 +348,15 @@ export default function ApplicationDetailsScreen() {
           </Pressable>
         )}
 
-        <View style={styles.aiSection}>
-          <View style={styles.aiSectionHeader}>
-            <Bot size={18} color="#1565C0" />
-            <Text style={styles.aiSectionTitle}>Watch the AI Apply Live</Text>
-          </View>
-          <View style={styles.aiVideoPlaceholder}>
-            <View style={styles.aiVideoInner}>
-              <Bot size={32} color="#90CAF9" />
-              <Text style={styles.aiVideoText}>AI is filling out your application on {job.companyName}'s portal</Text>
-              <View style={styles.aiStatusDot} />
-              <Text style={styles.aiStatusText}>{hasActionNeeded ? 'Waiting for your input' : 'Agent active'}</Text>
-            </View>
-          </View>
-        </View>
+        {appData?.live_url && (
+          <Pressable 
+            style={styles.watchVideoBtn} 
+            onPress={() => setShowVideoModal(true)}
+          >
+            <Video size={18} color="#FFFFFF" />
+            <Text style={styles.watchVideoBtnText}>Watch the AI Apply Live</Text>
+          </Pressable>
+        )}
 
         <View style={styles.infoCards}>
           <View style={styles.infoCard}>
@@ -510,6 +506,20 @@ export default function ApplicationDetailsScreen() {
         </View>
       </Modal>
 
+      <Modal visible={showVideoModal} animationType="slide" presentationStyle="fullScreen">
+        <View style={styles.videoModalOverlay}>
+          <Pressable onPress={() => setShowVideoModal(false)} style={styles.videoCloseBtn}>
+            <X size={28} color="#FFFFFF" />
+          </Pressable>
+          <WebView
+            source={{ uri: appData?.live_url || '' }}
+            style={styles.webView}
+            allowsFullscreenVideo
+            mediaPlaybackRequiresUserAction={false}
+          />
+        </View>
+      </Modal>
+
       <Modal visible={showCredentials} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -592,14 +602,11 @@ const styles = StyleSheet.create({
   flowLabelActive: { color: '#FFFFFF', fontWeight: '700' as const },
   flowDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 8 },
   flowDesc: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, lineHeight: 17 },
-  aiSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E3F2FD' },
-  aiSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  aiSectionTitle: { fontSize: 15, fontWeight: '700' as const, color: '#1565C0' },
-  aiVideoPlaceholder: { borderRadius: 12, overflow: 'hidden' as const, backgroundColor: '#0D1B2A', aspectRatio: 16 / 9 },
-  aiVideoInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  aiVideoText: { fontSize: 13, color: '#90CAF9', textAlign: 'center', marginTop: 10, lineHeight: 19 },
-  aiStatusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginTop: 12 },
-  aiStatusText: { fontSize: 11, color: '#10B981', fontWeight: '600' as const, marginTop: 4 },
+  watchVideoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1565C0', borderRadius: 12, paddingVertical: 14, marginBottom: 12 },
+  watchVideoBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
+  videoModalOverlay: { flex: 1, backgroundColor: '#000' },
+  videoCloseBtn: { position: 'absolute' as const, top: 50, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  webView: { flex: 1, backgroundColor: '#000' },
   infoCards: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   infoCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 14, padding: 14, alignItems: 'center', gap: 4 },
   infoLabel: { fontSize: 11, color: Colors.textTertiary, fontWeight: '500' as const },

@@ -570,7 +570,7 @@ export default function ProfileScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -593,24 +593,28 @@ export default function ProfileScreen() {
       const fileName = `avatar_${Date.now()}.${fileExt}`;
       const filePath = `${supabaseUserId}/${fileName}`;
 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
       const formData = new FormData();
-      formData.append('file', {
+      formData.append('', {
         uri,
         type: `image/${fileExt}`,
         name: fileName,
       } as any);
 
-      console.log('Uploading to:', filePath);
-      const { error: uploadError } = await supabase.storage
-        .from('profile-pictures')
-        .upload(filePath, formData, {
-          contentType: `image/${fileExt}`,
-          upsert: true,
-        });
+      const uploadUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/profile-pictures/${filePath}`;
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`Upload failed: ${errorText}`);
       }
 
       await supabase.from('profiles').upsert({
@@ -620,7 +624,6 @@ export default function ProfileScreen() {
       });
 
       const publicUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${filePath}`;
-      console.log('Upload successful, path:', filePath);
       setUser((prev) => ({ ...prev, avatar: publicUrl }));
       setAvatarUrl(publicUrl);
       await refetchProfile();
@@ -628,8 +631,7 @@ export default function ProfileScreen() {
       setActiveModal(null);
     } catch (error: any) {
       console.error('Avatar upload error:', error);
-      const errorMsg = error?.message || 'Unknown error';
-      Alert.alert('Upload Failed', `Could not upload profile picture: ${errorMsg}`);
+      Alert.alert('Upload Failed', `Could not upload profile picture: ${error?.message || 'Unknown error'}`);
     } finally {
       setIsUploadingAvatar(false);
     }

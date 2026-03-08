@@ -55,7 +55,11 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     phone: profile.phone || '',
     headline: profile.headline || '',
     location: profile.location || '',
-    avatar: profile.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+    avatar: profile.avatar_url 
+      ? (profile.avatar_url.startsWith('http') 
+          ? profile.avatar_url 
+          : `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`)
+      : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
     bio: profile.bio || '',
     profileCompletion: Math.round((completionScore / total) * 100),
     totalApplications: 0,
@@ -373,17 +377,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           try {
             const ext = data.profilePicture.split('.').pop()?.split('?')[0] || 'jpg';
             const path = `${supabaseUserId}/avatar_${Date.now()}.${ext}`;
-            const response = await fetch(data.profilePicture);
-            const blob = await response.blob();
-            const { error: uploadErr } = await supabase.storage.from('profile-pictures').upload(path, blob, {
-              contentType: `image/${ext}`,
-              upsert: true,
-            });
-            if (!uploadErr) {
-              avatarUrl = path;
-              console.log('Avatar uploaded to profile-pictures:', path);
-            } else {
-              console.log('Avatar upload error:', uploadErr.message);
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+              const formData = new FormData();
+              formData.append('', { uri: data.profilePicture, type: `image/${ext}`, name: `avatar.${ext}` } as any);
+              const uploadUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/profile-pictures/${path}`;
+              const res = await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${session.access_token}` }, body: formData });
+              if (res.ok) {
+                avatarUrl = path;
+                console.log('Avatar uploaded to profile-pictures:', path);
+              } else {
+                console.log('Avatar upload error:', await res.text());
+              }
             }
           } catch (uploadEx) {
             console.log('Avatar upload exception:', uploadEx);

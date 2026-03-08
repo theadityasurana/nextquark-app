@@ -1,46 +1,53 @@
 {
-    "expo": {
-      "name": "HireSwipe v3 Clone",
-      "slug": "hireswipe-v3-clone-ceuofke",
-      "version": "1.0.0",
-      "orientation": "portrait",
-      "icon": "./assets/images/icon.png",
-      "scheme": "rork-app",
-      "userInterfaceStyle": "automatic",
-      "newArchEnabled": true,
-      "owner": "rork",
-      "splash": {
-        "image": "./assets/images/splash-icon.png",
-        "resizeMode": "contain",
+  "expo": {
+    "name": "NextQuark",
+    "slug": "hireswipe-v3-clone-ceuofke",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "rork-app",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.rork.hireswipe-v3-clone-ceuofke"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "ios": {
-        "supportsTablet": false,
-        "bundleIdentifier": "app.rork.hireswipe-v3-clone-ceuofke"
-      },
-      "android": {
-        "adaptiveIcon": {
-          "foregroundImage": "./assets/images/adaptive-icon.png",
-          "backgroundColor": "#ffffff"
-        },
-        "package": "app.rork.hireswipe_v3_clone_ceuofke"
-      },
-      "web": {
-        "favicon": "./assets/images/favicon.png",
-        "bundler": "metro"
-      },
-      "plugins": [
-        [
-          "expo-router",
-          {
-            "origin": "https://rork.com/"
-          }
-        ],
-        "expo-font",
-        "expo-web-browser"
+      "package": "app.rork.hireswipe_v3_clone_ceuofke"
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://rork.com/"
+        }
       ],
-      "experiments": {
-        "typedRoutes": false
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "e12076d8-bcb8-48be-af09-72bfab77d937"
       }
     }
   }
+}

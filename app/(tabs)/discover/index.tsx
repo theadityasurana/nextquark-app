@@ -27,8 +27,8 @@ export default function DiscoverScreen() {
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
   const [friendSearch, setFriendSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
-  const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'24h' | '3d' | '7d' | '30d' | '365d' | 'all'>('7d');
-  const [recentJobsTimeRange, setRecentJobsTimeRange] = useState<'24h' | '48h' | '7d' | '30d'>('48h');
+  const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'24h' | '3d' | '7d' | '30d' | '365d' | 'all'>('30d');
+  const [recentJobsTimeRange, setRecentJobsTimeRange] = useState<'24h' | '48h' | '7d' | '30d'>('30d');
   const [showUniversityModal, setShowUniversityModal] = useState(false);
   const [universityFilter, setUniversityFilter] = useState<string[]>([]);
   const [universitySearch, setUniversitySearch] = useState('');

@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Plus, GraduationCap, X, ChevronDown } from 'lucide-react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { Plus, GraduationCap, X, ChevronDown, Search, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { degreeTypes, years } from '@/constants/onboarding';
+import { universities } from '@/constants/universities';
 import { StepProps, OnboardingEducation } from '@/types/onboarding';
 
 type SubStep = 'list' | 'school' | 'degree' | 'field' | 'dates' | 'summary';
@@ -17,6 +18,15 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [showStartYear, setShowStartYear] = useState(false);
   const [showEndYear, setShowEndYear] = useState(false);
+  const [showUniversityDropdown, setShowUniversityDropdown] = useState(false);
+  const [universitySearch, setUniversitySearch] = useState('');
+  const startYearScrollRef = useRef<ScrollView>(null);
+  const endYearScrollRef = useRef<ScrollView>(null);
+
+  const filteredUniversities = useMemo(() => {
+    if (!universitySearch) return universities;
+    return universities.filter(u => u.toLowerCase().includes(universitySearch.toLowerCase()));
+  }, [universitySearch]);
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -101,11 +111,55 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
           </View>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>SCHOOL / UNIVERSITY</Text>
-            <TextInput style={styles.input} placeholder="Stanford University" placeholderTextColor="#9E9E9E" value={current.institution} onChangeText={v => setCurrent({ ...current, institution: v })} autoFocus />
+            <View style={styles.dateSelect}>
+              <TextInput
+                style={styles.searchInputMain}
+                placeholder="Select or type university"
+                placeholderTextColor="#9E9E9E"
+                value={universitySearch}
+                onChangeText={(text) => {
+                  setUniversitySearch(text);
+                  setShowUniversityDropdown(true);
+                }}
+                onFocus={() => setShowUniversityDropdown(true)}
+              />
+              <ChevronDown size={14} color="#9E9E9E" />
+            </View>
           </View>
+          {showUniversityDropdown && filteredUniversities.length > 0 && (
+            <View style={styles.dropdownContainer}>
+              <ScrollView style={styles.dropdownList} keyboardShouldPersistTaps="handled">
+                {universitySearch && !filteredUniversities.some(u => u.toLowerCase() === universitySearch.toLowerCase()) && (
+                  <Pressable
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setCurrent({ ...current, institution: universitySearch });
+                      setShowUniversityDropdown(false);
+                    }}
+                  >
+                    <Plus size={16} color="#6366f1" />
+                    <Text style={styles.dropdownItemTextAdd}>Add "{universitySearch}"</Text>
+                  </Pressable>
+                )}
+                {filteredUniversities.map(uni => (
+                  <Pressable
+                    key={uni}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setCurrent({ ...current, institution: uni });
+                      setUniversitySearch(uni);
+                      setShowUniversityDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemText}>{uni}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </ScrollView>
         <View style={styles.subStepBottom}>
-          <Pressable style={[styles.primaryButton, !current.institution.trim() && styles.buttonDisabled]} onPress={() => setSubStep('degree')} disabled={!current.institution.trim()}>
+          <Pressable style={[styles.primaryButton, !current.institution.trim() && styles.buttonDisabled]} onPress={() => { setShowUniversityDropdown(false); setSubStep('degree'); }} disabled={!current.institution.trim()}>
             <Text style={styles.primaryButtonText}>Next →</Text>
           </Pressable>
         </View>
@@ -178,16 +232,27 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
               <ChevronDown size={14} color="#9E9E9E" />
             </Pressable>
           </View>
-          {showStartYear && (
-            <View style={styles.yearGrid}>
-              {years.map(y => (
-                <Pressable key={y} style={[styles.yearChip, current.startYear === y && styles.yearChipSelected]}
-                  onPress={() => { setCurrent({ ...current, startYear: y }); setShowStartYear(false); }}>
-                  <Text style={[styles.yearChipText, current.startYear === y && styles.yearChipTextSelected]}>{y}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
+          <Modal visible={showStartYear} transparent animationType="slide">
+            <Pressable style={styles.modalOverlay} onPress={() => setShowStartYear(false)}>
+              <View style={styles.pickerModal}>
+                <View style={styles.pickerHeader}>
+                  <Text style={styles.pickerTitle}>Select Year</Text>
+                  <Pressable onPress={() => setShowStartYear(false)}>
+                    <Text style={styles.pickerDone}>Done</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.pickerScroll} ref={startYearScrollRef}>
+                  {years.map(y => (
+                    <Pressable key={y} style={styles.pickerItem}
+                      onPress={() => { setCurrent({ ...current, startYear: y }); setShowStartYear(false); }}>
+                      <Text style={[styles.pickerItemText, current.startYear === y && styles.pickerItemSelected]}>{y}</Text>
+                      {current.startYear === y && <Check size={18} color="#111111" />}
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </Pressable>
+          </Modal>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>END YEAR</Text>
             <Pressable style={styles.dateSelect} onPress={() => setShowEndYear(!showEndYear)}>
@@ -197,16 +262,27 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
               <ChevronDown size={14} color="#9E9E9E" />
             </Pressable>
           </View>
-          {showEndYear && (
-            <View style={styles.yearGrid}>
-              {years.map(y => (
-                <Pressable key={y} style={[styles.yearChip, current.endYear === y && styles.yearChipSelected]}
-                  onPress={() => { setCurrent({ ...current, endYear: y }); setShowEndYear(false); }}>
-                  <Text style={[styles.yearChipText, current.endYear === y && styles.yearChipTextSelected]}>{y}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
+          <Modal visible={showEndYear} transparent animationType="slide">
+            <Pressable style={styles.modalOverlay} onPress={() => setShowEndYear(false)}>
+              <View style={styles.pickerModal}>
+                <View style={styles.pickerHeader}>
+                  <Text style={styles.pickerTitle}>Select Year</Text>
+                  <Pressable onPress={() => setShowEndYear(false)}>
+                    <Text style={styles.pickerDone}>Done</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.pickerScroll} ref={endYearScrollRef}>
+                  {years.map(y => (
+                    <Pressable key={y} style={styles.pickerItem}
+                      onPress={() => { setCurrent({ ...current, endYear: y }); setShowEndYear(false); }}>
+                      <Text style={[styles.pickerItemText, current.endYear === y && styles.pickerItemSelected]}>{y}</Text>
+                      {current.endYear === y && <Check size={18} color="#111111" />}
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </Pressable>
+          </Modal>
           <View style={styles.tipRow}>
             <Text style={styles.tipIcon}>💡</Text>
             <Text style={styles.tipText}>Adding education details improves recruiter trust by 25%</Text>
@@ -269,15 +345,22 @@ const styles = StyleSheet.create({
   },
   dateValue: { color: '#111111', fontSize: 16 },
   datePlaceholder: { color: '#9E9E9E', fontSize: 16 },
-  yearGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  yearChip: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
-    borderWidth: 1, borderColor: '#E0E0E0',
-  },
-  yearChipSelected: { borderColor: '#111111', backgroundColor: 'rgba(0,0,0,0.05)' },
-  yearChipText: { color: '#616161', fontSize: 14 },
-  yearChipTextSelected: { color: '#111111', fontWeight: '600' as const },
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   tipIcon: { fontSize: 14 },
   tipText: { color: '#9E9E9E', fontSize: 13, flex: 1 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  pickerModal: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60%' },
+  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
+  pickerTitle: { fontSize: 18, fontWeight: '700' as const, color: '#111111' },
+  pickerDone: { fontSize: 16, fontWeight: '600' as const, color: '#111111' },
+  pickerScroll: { maxHeight: 400 },
+  pickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  pickerItemText: { fontSize: 16, color: '#616161' },
+  pickerItemSelected: { color: '#111111', fontWeight: '600' as const },
+  dropdownContainer: { backgroundColor: '#F5F5F5', borderRadius: 14, borderWidth: 1.5, borderColor: '#E0E0E0', marginBottom: 16, maxHeight: 300 },
+  searchInputMain: { flex: 1, fontSize: 16, color: '#111111' },
+  dropdownList: { maxHeight: 250 },
+  dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
+  dropdownItemText: { fontSize: 15, color: '#111111' },
+  dropdownItemTextAdd: { fontSize: 15, color: '#6366f1', fontWeight: '600' as const },
 });

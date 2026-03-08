@@ -1,15 +1,20 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Video, ResizeMode } from 'expo-av';
 
 export default function Welcome() {
   const router = useRouter();
 
   return (
-    <ImageBackground 
-      source={require('@/assets/images/icon.png')} 
-      style={styles.container}
-      blurRadius={20}
-    >
+    <View style={styles.container}>
+      <Video
+        source={require('@/assets/videos/bgvid.mp4')}
+        style={StyleSheet.absoluteFill}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping
+        isMuted
+      />
       <View style={styles.overlay} />
       <View style={styles.content}>
         <Image source={require('@/assets/images/header.png')} style={styles.logo} resizeMode="contain" />
@@ -20,7 +25,7 @@ export default function Welcome() {
           <Text style={styles.linkText}>Already a user? Sign in</Text>
         </TouchableOpacity>
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { Plus, Briefcase, MapPin, ChevronDown, Check, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { employmentTypes, months, years } from '@/constants/onboarding';
@@ -22,6 +22,10 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
   const [showEndMonth, setShowEndMonth] = useState(false);
   const [showStartYear, setShowStartYear] = useState(false);
   const [showEndYear, setShowEndYear] = useState(false);
+  const startMonthScrollRef = useRef<ScrollView>(null);
+  const endMonthScrollRef = useRef<ScrollView>(null);
+  const startYearScrollRef = useRef<ScrollView>(null);
+  const endYearScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -75,11 +79,16 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
   }
 
   if (subStep === 'summary' || (subStep === 'list' && data.workExperience.length > 0)) {
-    const totalYears = data.workExperience.reduce((acc, e) => {
-      const start = parseInt(e.startYear) || 2024;
-      const end = e.isCurrent ? 2026 : (parseInt(e.endYear) || 2026);
-      return acc + (end - start);
+    const totalMonths = data.workExperience.reduce((acc, e) => {
+      const startYear = parseInt(e.startYear) || 2024;
+      const startMonth = months.indexOf(e.startMonth) + 1 || 1;
+      const endYear = e.isCurrent ? new Date().getFullYear() : (parseInt(e.endYear) || 2026);
+      const endMonth = e.isCurrent ? new Date().getMonth() + 1 : (months.indexOf(e.endMonth) + 1 || 12);
+      const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
+      return acc + monthsDiff;
     }, 0);
+    const totalYears = Math.floor(totalMonths / 12);
+    const remainingMonths = totalMonths % 12;
     return (
       <Animated.View style={[styles.container, { opacity: fadeAnim, backgroundColor: '#FFFFFF' }]}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -102,7 +111,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
               </View>
             </View>
           ))}
-          <Text style={styles.totalExp}>Total: {totalYears} years exp.</Text>
+          <Text style={styles.totalExp}>Total: {totalYears} {totalYears === 1 ? 'year' : 'years'}{remainingMonths > 0 ? `, ${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}` : ''}</Text>
         </ScrollView>
         <View style={styles.bottomButtons}>
           <Pressable style={styles.outlineButton} onPress={startNew}>
@@ -245,10 +254,17 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'dates') {
     const duration = (() => {
-      const s = parseInt(current.startYear);
-      const e = current.isCurrent ? 2026 : parseInt(current.endYear);
-      if (s && e) return `${e - s} year${e - s !== 1 ? 's' : ''}`;
-      return '';
+      if (!current.startYear || (!current.isCurrent && !current.endYear)) return '';
+      const startYear = parseInt(current.startYear);
+      const startMonth = months.indexOf(current.startMonth) + 1 || 1;
+      const endYear = current.isCurrent ? new Date().getFullYear() : parseInt(current.endYear);
+      const endMonth = current.isCurrent ? new Date().getMonth() + 1 : (months.indexOf(current.endMonth) + 1 || 12);
+      const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth);
+      const years = Math.floor(totalMonths / 12);
+      const remainingMonths = totalMonths % 12;
+      if (years === 0) return `${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}`;
+      if (remainingMonths === 0) return `${years} ${years === 1 ? 'year' : 'years'}`;
+      return `${years} ${years === 1 ? 'year' : 'years'}, ${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}`;
     })();
 
     return (
@@ -274,26 +290,48 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
             <ChevronDown size={14} color="#9E9E9E" />
           </Pressable>
         </View>
-        {showStartMonth && (
-          <View style={styles.monthGrid}>
-            {months.map(m => (
-              <Pressable key={m} style={[styles.monthChip, current.startMonth === m && styles.monthChipSelected]}
-                onPress={() => { setCurrent({ ...current, startMonth: m }); setShowStartMonth(false); }}>
-                <Text style={[styles.monthChipText, current.startMonth === m && styles.monthChipTextSelected]}>{m}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-        {showStartYear && (
-          <View style={styles.monthGrid}>
-            {years.map(y => (
-              <Pressable key={y} style={[styles.monthChip, current.startYear === y && styles.monthChipSelected]}
-                onPress={() => { setCurrent({ ...current, startYear: y }); setShowStartYear(false); }}>
-                <Text style={[styles.monthChipText, current.startYear === y && styles.monthChipTextSelected]}>{y}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <Modal visible={showStartMonth} transparent animationType="slide">
+          <Pressable style={styles.modalOverlay} onPress={() => setShowStartMonth(false)}>
+            <View style={styles.pickerModal}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select Month</Text>
+                <Pressable onPress={() => setShowStartMonth(false)}>
+                  <Text style={styles.pickerDone}>Done</Text>
+                </Pressable>
+              </View>
+              <ScrollView style={styles.pickerScroll} ref={startMonthScrollRef}>
+                {months.map(m => (
+                  <Pressable key={m} style={styles.pickerItem}
+                    onPress={() => { setCurrent({ ...current, startMonth: m }); setShowStartMonth(false); }}>
+                    <Text style={[styles.pickerItemText, current.startMonth === m && styles.pickerItemSelected]}>{m}</Text>
+                    {current.startMonth === m && <Check size={18} color="#111111" />}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Modal>
+        <Modal visible={showStartYear} transparent animationType="slide">
+          <Pressable style={styles.modalOverlay} onPress={() => setShowStartYear(false)}>
+            <View style={styles.pickerModal}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select Year</Text>
+                <Pressable onPress={() => setShowStartYear(false)}>
+                  <Text style={styles.pickerDone}>Done</Text>
+                </Pressable>
+              </View>
+              <ScrollView style={styles.pickerScroll} ref={startYearScrollRef}>
+                {years.map(y => (
+                  <Pressable key={y} style={styles.pickerItem}
+                    onPress={() => { setCurrent({ ...current, startYear: y }); setShowStartYear(false); }}>
+                    <Text style={[styles.pickerItemText, current.startYear === y && styles.pickerItemSelected]}>{y}</Text>
+                    {current.startYear === y && <Check size={18} color="#111111" />}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Modal>
 
         {!current.isCurrent && (
           <>
@@ -312,26 +350,48 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
                 <ChevronDown size={14} color="#9E9E9E" />
               </Pressable>
             </View>
-            {showEndMonth && (
-              <View style={styles.monthGrid}>
-                {months.map(m => (
-                  <Pressable key={m} style={[styles.monthChip, current.endMonth === m && styles.monthChipSelected]}
-                    onPress={() => { setCurrent({ ...current, endMonth: m }); setShowEndMonth(false); }}>
-                    <Text style={[styles.monthChipText, current.endMonth === m && styles.monthChipTextSelected]}>{m}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            {showEndYear && (
-              <View style={styles.monthGrid}>
-                {years.map(y => (
-                  <Pressable key={y} style={[styles.monthChip, current.endYear === y && styles.monthChipSelected]}
-                    onPress={() => { setCurrent({ ...current, endYear: y }); setShowEndYear(false); }}>
-                    <Text style={[styles.monthChipText, current.endYear === y && styles.monthChipTextSelected]}>{y}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
+            <Modal visible={showEndMonth} transparent animationType="slide">
+              <Pressable style={styles.modalOverlay} onPress={() => setShowEndMonth(false)}>
+                <View style={styles.pickerModal}>
+                  <View style={styles.pickerHeader}>
+                    <Text style={styles.pickerTitle}>Select Month</Text>
+                    <Pressable onPress={() => setShowEndMonth(false)}>
+                      <Text style={styles.pickerDone}>Done</Text>
+                    </Pressable>
+                  </View>
+                  <ScrollView style={styles.pickerScroll} ref={endMonthScrollRef}>
+                    {months.map(m => (
+                      <Pressable key={m} style={styles.pickerItem}
+                        onPress={() => { setCurrent({ ...current, endMonth: m }); setShowEndMonth(false); }}>
+                        <Text style={[styles.pickerItemText, current.endMonth === m && styles.pickerItemSelected]}>{m}</Text>
+                        {current.endMonth === m && <Check size={18} color="#111111" />}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              </Pressable>
+            </Modal>
+            <Modal visible={showEndYear} transparent animationType="slide">
+              <Pressable style={styles.modalOverlay} onPress={() => setShowEndYear(false)}>
+                <View style={styles.pickerModal}>
+                  <View style={styles.pickerHeader}>
+                    <Text style={styles.pickerTitle}>Select Year</Text>
+                    <Pressable onPress={() => setShowEndYear(false)}>
+                      <Text style={styles.pickerDone}>Done</Text>
+                    </Pressable>
+                  </View>
+                  <ScrollView style={styles.pickerScroll} ref={endYearScrollRef}>
+                    {years.map(y => (
+                      <Pressable key={y} style={styles.pickerItem}
+                        onPress={() => { setCurrent({ ...current, endYear: y }); setShowEndYear(false); }}>
+                        <Text style={[styles.pickerItemText, current.endYear === y && styles.pickerItemSelected]}>{y}</Text>
+                        {current.endYear === y && <Check size={18} color="#111111" />}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              </Pressable>
+            </Modal>
           </>
         )}
 
@@ -488,15 +548,16 @@ const styles = StyleSheet.create({
   dateValue: { color: '#111111', fontSize: 15 },
   datePlaceholder: { color: '#9E9E9E', fontSize: 15 },
   yearInput: { flex: 1, color: '#111111', fontSize: 15 },
-  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  monthChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    borderWidth: 1, borderColor: '#E0E0E0',
-  },
-  monthChipSelected: { borderColor: '#111111', backgroundColor: 'rgba(0,0,0,0.05)' },
-  monthChipText: { color: '#616161', fontSize: 13 },
-  monthChipTextSelected: { color: '#111111' },
   durationText: { color: '#10B981', fontSize: 14, fontWeight: '600' as const, marginTop: 12 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  pickerModal: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60%' },
+  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
+  pickerTitle: { fontSize: 18, fontWeight: '700' as const, color: '#111111' },
+  pickerDone: { fontSize: 16, fontWeight: '600' as const, color: '#111111' },
+  pickerScroll: { maxHeight: 400 },
+  pickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  pickerItemText: { fontSize: 16, color: '#616161' },
+  pickerItemSelected: { color: '#111111', fontWeight: '600' as const },
   textArea: {
     minHeight: 140, borderRadius: 14, padding: 16,
     backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',

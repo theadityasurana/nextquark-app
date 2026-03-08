@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import {
   ChevronRight,
   Briefcase,
@@ -60,8 +61,10 @@ import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { fetchUserApplications } from '@/lib/jobs';
 import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
+import { getReferralStats, createReferralCode } from '@/lib/referral';
+import { Share, Clipboard } from 'react-native';
 
-type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | null;
+type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | null;
 
 const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
@@ -69,16 +72,14 @@ const EXP_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Contract', 'Internship', 'F
 const EXP_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
 
 function buildProfileFromOnboarding(data: OnboardingData): UserProfile {
-  const hasData = Boolean(data.firstName || data.lastName);
-  if (!hasData) return { ...mockUser };
   return {
     id: 'local',
-    name: `${data.firstName} ${data.lastName}`.trim(),
+    name: `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'User',
     email: '',
     phone: data.phone || '',
     headline: data.headline || '',
     location: data.location || '',
-    avatar: data.profilePicture || mockUser.avatar,
+    avatar: data.profilePicture || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
     bio: '',
     profileCompletion: 0,
     totalApplications: 0,
@@ -121,6 +122,7 @@ function buildProfileFromOnboarding(data: OnboardingData): UserProfile {
     disabilityStatus: data.disabilityStatus || undefined,
     ethnicity: data.ethnicity || undefined,
     gender: data.gender || undefined,
+    favoriteCompanies: [],
   };
 }
 
@@ -143,14 +145,22 @@ export default function ProfileScreen() {
     refetchInterval: 60000, // Refetch every minute
   });
 
+  const { data: referralStats, refetch: refetchReferralStats } = useQuery({
+    queryKey: ['referral-stats', supabaseUserId],
+    queryFn: () => getReferralStats(supabaseUserId!),
+    enabled: !!supabaseUserId,
+  });
+
   const totalApplications = applications.length;
   const interviewsScheduled = applications.filter((app: any) => 
     app.status === 'interviewing' || app.status === 'interview_scheduled'
   ).length;
 
   const [user, setUser] = useState<UserProfile>(() => {
-    const profile = supabaseProfile || (onboardingData.firstName ? buildProfileFromOnboarding(onboardingData) : { ...mockUser });
-    return { ...profile, favoriteCompanies: profile.favoriteCompanies || [] };
+    if (supabaseProfile) {
+      return { ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] };
+    }
+    return buildProfileFromOnboarding(onboardingData);
   });
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
@@ -163,6 +173,7 @@ export default function ProfileScreen() {
   const [headlineText, setHeadlineText] = useState(user.headline);
   const [locationText, setLocationText] = useState(user.location);
   const [avatarUrl, setAvatarUrl] = useState(user.avatar);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const [expTitle, setExpTitle] = useState('');
   const [expCompany, setExpCompany] = useState('');
@@ -551,6 +562,79 @@ export default function ProfileScreen() {
     setActiveModal(null);
   }, [locationText]);
 
+  const handlePickImage = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please grant photo library access to change your profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaType.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  }, []);
+
+  const uploadAvatar = async (uri: string) => {
+    if (!supabaseUserId) {
+      Alert.alert('Error', 'You must be logged in to upload a profile picture.');
+      return;
+    }
+    
+    setIsUploadingAvatar(true);
+    try {
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `avatar_${Date.now()}.${fileExt}`;
+      const filePath = `${supabaseUserId}/${fileName}`;
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        type: `image/${fileExt}`,
+        name: fileName,
+      } as any);
+
+      console.log('Uploading to:', filePath);
+      const { error: uploadError } = await supabase.storage
+        .from('profile-pictures')
+        .upload(filePath, formData, {
+          contentType: `image/${fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      await supabase.from('profiles').upsert({
+        id: supabaseUserId,
+        avatar_url: filePath,
+        updated_at: new Date().toISOString(),
+      });
+
+      const publicUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${filePath}`;
+      console.log('Upload successful, path:', filePath);
+      setUser((prev) => ({ ...prev, avatar: publicUrl }));
+      setAvatarUrl(publicUrl);
+      await refetchProfile();
+      Alert.alert('Success', 'Profile picture updated!');
+      setActiveModal(null);
+    } catch (error: any) {
+      console.error('Avatar upload error:', error);
+      const errorMsg = error?.message || 'Unknown error';
+      Alert.alert('Upload Failed', `Could not upload profile picture: ${errorMsg}`);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleSaveAvatar = useCallback(() => {
     if (!avatarUrl.trim()) return;
     setUser((prev) => ({ ...prev, avatar: avatarUrl.trim() }));
@@ -877,7 +961,17 @@ export default function ProfileScreen() {
 
         <Pressable
           style={styles.shareCard}
-          onPress={() => Alert.alert('Share NextQuark', 'Share your referral link with friends to earn premium credits!')}
+          onPress={async () => {
+            if (!referralStats?.referralCode && supabaseUserId) {
+              const code = await createReferralCode(supabaseUserId, user.name);
+              if (code) {
+                await refetchReferralStats();
+                setActiveModal('referral');
+              }
+            } else {
+              setActiveModal('referral');
+            }
+          }}
         >
           <View style={styles.shareGradient}>
             <Share2 size={20} color="#FFFFFF" />
@@ -1392,7 +1486,17 @@ export default function ProfileScreen() {
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
             </View>
             <View style={styles.avatarPreviewRow}><Image source={{ uri: avatarUrl }} style={styles.avatarPreview} /></View>
-            <Text style={styles.fieldLabel}>Photo URL</Text>
+            <Pressable 
+              style={[styles.modalSaveBtn, { backgroundColor: Colors.accent, marginBottom: 12 }]} 
+              onPress={handlePickImage}
+              disabled={isUploadingAvatar}
+            >
+              <Camera size={18} color={Colors.surface} />
+              <Text style={styles.modalSaveBtnText}>
+                {isUploadingAvatar ? 'Uploading...' : 'Choose from Gallery'}
+              </Text>
+            </Pressable>
+            <Text style={styles.fieldLabel}>Or enter Photo URL</Text>
             <TextInput style={styles.modalInput} placeholder="https://..." placeholderTextColor={Colors.textTertiary} value={avatarUrl} onChangeText={setAvatarUrl} autoCapitalize="none" />
             <Pressable style={styles.modalSaveBtn} onPress={handleSaveAvatar}>
               <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Photo</Text>
@@ -1653,6 +1757,68 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      <Modal visible={activeModal === 'referral'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Share & Earn</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.referralCodeBox}>
+              <Text style={styles.referralCodeLabel}>Your Referral Code</Text>
+              <Text style={styles.referralCodeText}>{referralStats?.referralCode || 'Loading...'}</Text>
+              <Pressable
+                style={styles.copyCodeBtn}
+                onPress={() => {
+                  if (referralStats?.referralCode) {
+                    Clipboard.setString(referralStats.referralCode);
+                    Alert.alert('Copied!', 'Referral code copied to clipboard');
+                  }
+                }}
+              >
+                <Text style={styles.copyCodeBtnText}>Copy Code</Text>
+              </Pressable>
+            </View>
+            <View style={styles.referralStatsBox}>
+              <View style={styles.referralStatItem}>
+                <Text style={styles.referralStatValue}>{referralStats?.totalReferrals || 0}</Text>
+                <Text style={styles.referralStatLabel}>Friends Joined</Text>
+              </View>
+              <View style={styles.referralStatDivider} />
+              <View style={styles.referralStatItem}>
+                <Text style={styles.referralStatValue}>{referralStats?.totalSwipesEarned || 0}</Text>
+                <Text style={styles.referralStatLabel}>Swipes Earned</Text>
+              </View>
+            </View>
+            <View style={styles.referralInfoBox}>
+              <Text style={styles.referralInfoTitle}>How it works:</Text>
+              <Text style={styles.referralInfoText}>• Share your code with friends</Text>
+              <Text style={styles.referralInfoText}>• They enter it during sign-up</Text>
+              <Text style={styles.referralInfoText}>• You both get 5 free swipes!</Text>
+            </View>
+            <Pressable
+              style={styles.shareNowBtn}
+              onPress={async () => {
+                if (referralStats?.referralCode) {
+                  try {
+                    await Share.share({
+                      message: `Join NextQuark with my referral code ${referralStats.referralCode} and get 5 free job application swipes! Download the app now.`,
+                    });
+                  } catch (error) {
+                    console.error('Error sharing:', error);
+                  }
+                }
+              }}
+            >
+              <Share2 size={18} color="#FFFFFF" />
+              <Text style={styles.shareNowBtnText}>Share Now</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={activeModal === 'favoritecompanies'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1895,4 +2061,19 @@ const styles = StyleSheet.create({
   roleSearchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
   cityDoneBtn: { backgroundColor: Colors.secondary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
   cityDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: Colors.surface },
+  referralCodeBox: { backgroundColor: '#F5F5F5', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 16 },
+  referralCodeLabel: { fontSize: 13, color: Colors.textSecondary, marginBottom: 8, fontWeight: '600' as const },
+  referralCodeText: { fontSize: 32, fontWeight: '800' as const, color: Colors.secondary, letterSpacing: 4, marginBottom: 12 },
+  copyCodeBtn: { backgroundColor: Colors.secondary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 10 },
+  copyCodeBtnText: { fontSize: 14, fontWeight: '700' as const, color: Colors.surface },
+  referralStatsBox: { flexDirection: 'row', backgroundColor: Colors.background, borderRadius: 14, padding: 16, marginBottom: 16 },
+  referralStatItem: { flex: 1, alignItems: 'center' },
+  referralStatValue: { fontSize: 24, fontWeight: '800' as const, color: Colors.secondary },
+  referralStatLabel: { fontSize: 12, color: Colors.textTertiary, marginTop: 4 },
+  referralStatDivider: { width: 1, backgroundColor: Colors.borderLight, marginHorizontal: 16 },
+  referralInfoBox: { backgroundColor: '#E8F5E9', borderRadius: 12, padding: 16, marginBottom: 16 },
+  referralInfoTitle: { fontSize: 14, fontWeight: '700' as const, color: '#2E7D32', marginBottom: 8 },
+  referralInfoText: { fontSize: 13, color: '#558B2F', marginBottom: 4 },
+  shareNowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#43A047', borderRadius: 14, paddingVertical: 14 },
+  shareNowBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
 });

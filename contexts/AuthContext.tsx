@@ -33,6 +33,7 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
   const education = Array.isArray(profile.education) ? profile.education : [];
   const certifications = Array.isArray(profile.certifications) ? profile.certifications : [];
   const achievements = Array.isArray(profile.achievements) ? profile.achievements : [];
+  const favoriteCompanies = Array.isArray(profile.favorite_companies) ? profile.favorite_companies : [];
 
   let completionScore = 0;
   const total = 10;
@@ -83,7 +84,7 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     workAuthorizationStatus: profile.work_authorization_status || undefined,
     jobRequirements: Array.isArray(profile.job_requirements) ? profile.job_requirements : undefined,
     resumeUrl: profile.resume_url || undefined,
-    favoriteCompanies: Array.isArray(profile.favorite_companies) ? profile.favorite_companies : [],
+    favoriteCompanies,
   };
 }
 
@@ -263,7 +264,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     return () => subscription.unsubscribe();
   }, [fetchAndSetProfile]);
 
-  const signUpWithEmail = useCallback(async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
+  const signUpWithEmail = useCallback(async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; userId?: string }> => {
     try {
       console.log('signUpWithEmail called:', email, name);
 
@@ -325,7 +326,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         lastName,
       });
 
-      return { success: true };
+      return { success: true, userId: data.user.id };
     } catch (e: any) {
       console.log('signUpWithEmail exception:', e);
       return { success: false, error: e?.message || 'An unexpected error occurred' };
@@ -371,17 +372,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         if (data.profilePicture && !data.profilePicture.startsWith('http')) {
           try {
             const ext = data.profilePicture.split('.').pop()?.split('?')[0] || 'jpg';
-            const path = `${supabaseUserId}/avatar.${ext}`;
+            const path = `${supabaseUserId}/avatar_${Date.now()}.${ext}`;
             const response = await fetch(data.profilePicture);
             const blob = await response.blob();
-            const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, blob, {
+            const { error: uploadErr } = await supabase.storage.from('profile-pictures').upload(path, blob, {
               contentType: `image/${ext}`,
               upsert: true,
             });
             if (!uploadErr) {
-              const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-              avatarUrl = urlData.publicUrl;
-              console.log('Avatar uploaded:', avatarUrl);
+              avatarUrl = path;
+              console.log('Avatar uploaded to profile-pictures:', path);
             } else {
               console.log('Avatar upload error:', uploadErr.message);
             }
@@ -413,8 +413,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           }
         }
 
+        const { data: { session } } = await supabase.auth.getSession();
+        const userEmail = session?.user?.email || authState.userEmail;
+
         const profileData = {
           id: supabaseUserId,
+          email: userEmail,
           first_name: data.firstName,
           last_name: data.lastName,
           full_name: `${data.firstName} ${data.lastName}`.trim(),
@@ -536,7 +540,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const response = await fetch(uri);
       const blob = await response.blob();
 
-      const { error } = await supabase.storage.from('avatars').upload(path, blob, {
+      const { error } = await supabase.storage.from('profile-pictures').upload(path, blob, {
         contentType: `image/${ext}`,
         upsert: true,
       });
@@ -546,17 +550,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         return null;
       }
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-      const publicUrl = data.publicUrl;
-
       await supabase.from('profiles').upsert({
         id: supabaseUserId,
-        avatar_url: publicUrl,
+        avatar_url: path,
         updated_at: new Date().toISOString(),
       });
 
-      console.log('Avatar uploaded and profile updated:', publicUrl);
-      return publicUrl;
+      console.log('Avatar uploaded to profile-pictures:', path);
+      return path;
     } catch (e) {
       console.log('Avatar upload exception:', e);
       return null;

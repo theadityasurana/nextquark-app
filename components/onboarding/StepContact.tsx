@@ -13,6 +13,13 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const phoneRef = useRef<TextInput>(null);
 
+  // Set default country code to +91 (India) if not already set
+  useEffect(() => {
+    if (!data.countryCode) {
+      onUpdate({ countryCode: '+91' });
+    }
+  }, []);
+
   const isValid = data.phone.trim().length >= 6 && data.location.trim().length > 0;
 
   useEffect(() => {
@@ -27,7 +34,7 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
     c.toLowerCase().includes(locationQuery.toLowerCase())
   );
 
-  const selectedCountry = countryCodes.find(c => c.code === data.countryCode) || countryCodes[0];
+  const selectedCountry = countryCodes.find(c => c.code === data.countryCode) || countryCodes.find(c => c.code === '+91') || countryCodes[0];
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>

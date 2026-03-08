@@ -171,5 +171,6 @@ export interface Job {
     workAuthorizationStatus?: string;
     jobRequirements?: string[];
     favoriteCompanies?: string[];
+    preferredWorkLocations?: string[];
   }
   

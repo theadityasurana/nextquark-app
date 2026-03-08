@@ -5,6 +5,7 @@ import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import { UserProfile } from '@/types';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
+import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
 
 const AUTH_KEY = 'nextquark_auth';
 const ONBOARDING_KEY = 'nextquark_onboarding';
@@ -88,6 +89,8 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     workAuthorizationStatus: profile.work_authorization_status || undefined,
     jobRequirements: Array.isArray(profile.job_requirements) ? profile.job_requirements : undefined,
     resumeUrl: profile.resume_url || undefined,
+    desiredRoles: Array.isArray(profile.desired_roles) ? profile.desired_roles : undefined,
+    preferredCities: Array.isArray(profile.preferred_cities) ? profile.preferred_cities : undefined,
     favoriteCompanies,
   };
 }
@@ -103,6 +106,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const fetchAndSetProfile = useCallback(async (userId: string, session: Session) => {
     try {
+      // Register for push notifications
+      registerForPushNotifications().then(token => {
+        if (token) {
+          savePushToken(userId, token);
+        }
+      }).catch(err => console.log('Push notification registration error:', err));
+
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -377,18 +387,22 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           try {
             const ext = data.profilePicture.split('.').pop()?.split('?')[0] || 'jpg';
             const path = `${supabaseUserId}/avatar_${Date.now()}.${ext}`;
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-              const formData = new FormData();
-              formData.append('', { uri: data.profilePicture, type: `image/${ext}`, name: `avatar.${ext}` } as any);
-              const uploadUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/profile-pictures/${path}`;
-              const res = await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${session.access_token}` }, body: formData });
-              if (res.ok) {
-                avatarUrl = path;
-                console.log('Avatar uploaded to profile-pictures:', path);
-              } else {
-                console.log('Avatar upload error:', await res.text());
-              }
+            
+            const response = await fetch(data.profilePicture);
+            const blob = await response.blob();
+            
+            const { error: uploadError } = await supabase.storage
+              .from('profile-pictures')
+              .upload(path, blob, {
+                contentType: `image/${ext}`,
+                upsert: true,
+              });
+            
+            if (!uploadError) {
+              avatarUrl = path;
+              console.log('Avatar uploaded to profile-pictures:', path);
+            } else {
+              console.log('Avatar upload error:', uploadError.message);
             }
           } catch (uploadEx) {
             console.log('Avatar upload exception:', uploadEx);
@@ -518,6 +532,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (profileData.jobRequirements !== undefined) dbData.job_requirements = profileData.jobRequirements || null;
       if (profileData.resumeUrl !== undefined) dbData.resume_url = profileData.resumeUrl || null;
       if (profileData.favoriteCompanies !== undefined) dbData.favorite_companies = profileData.favoriteCompanies;
+      if (profileData.desiredRoles !== undefined) dbData.desired_roles = profileData.desiredRoles;
+      if (profileData.preferredCities !== undefined) dbData.preferred_cities = profileData.preferredCities;
 
       const { error } = await supabase.from('profiles').upsert({
         id: supabaseUserId,

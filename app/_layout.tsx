@@ -1,12 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import TutorialModal from '@/components/TutorialModal';
+
+let Notifications: any;
+try {
+  Notifications = require('expo-notifications');
+} catch (e) {
+  console.log('Notifications not available in Expo Go on Android');
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +27,37 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
+  const notificationListener = useRef<any>();
+  const responseListener = useRef<any>();
+
+  // Handle notification responses (when user taps notification)
+  useEffect(() => {
+    if (!Notifications) return;
+
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+    });
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      console.log('Notification tapped:', data);
+      
+      // Handle navigation based on notification data
+      if (data.screen) {
+        router.push(data.screen as any);
+      }
+      if (data.job_id) {
+        router.push(`/job-details?id=${data.job_id}` as any);
+      }
+    });
+
+    return () => {
+      if (Notifications?.removeNotificationSubscription) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, [router]);
 
   useEffect(() => {
     if (isLoading) return;

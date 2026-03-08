@@ -295,7 +295,20 @@ export default function DiscoverScreen() {
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendsRow}>
                 {filteredProfiles.map((profile: any) => {
-                  const avatarUrl = profile.avatar_url ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}` : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.full_name || 'User') + '&background=6366f1&color=fff&size=200';
+                  let avatarUrl;
+                  if (profile.avatar_url) {
+                    // Check if it's already a full URL
+                    if (profile.avatar_url.startsWith('http')) {
+                      avatarUrl = profile.avatar_url;
+                    } else {
+                      // It's a storage path, construct the full URL
+                      avatarUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`;
+                    }
+                  } else {
+                    // Fallback to UI Avatars
+                    avatarUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.full_name || 'User') + '&background=6366f1&color=fff&size=200';
+                  }
+                  
                   const isPremium = profile.subscription_type === 'premium' || profile.subscription_type === 'pro';
                   const badgeColor = profile.subscription_type === 'pro' ? '#FFD700' : '#9C27B0';
                   return (

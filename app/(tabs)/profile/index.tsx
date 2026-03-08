@@ -56,15 +56,16 @@ import { UserProfile, WorkExperience, Education, Certification, Achievement } fr
 import { CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
 import RangeSlider from '@/components/RangeSlider';
 import { useAuth } from '@/contexts/AuthContext';
-import { OnboardingData } from '@/types/onboarding';
+import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { fetchUserApplications } from '@/lib/jobs';
 import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share, Clipboard } from 'react-native';
+import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboarding';
 
-type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | null;
+type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | null;
 
 const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
@@ -160,7 +161,13 @@ export default function ProfileScreen() {
     if (supabaseProfile) {
       return { ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] };
     }
-    return buildProfileFromOnboarding(onboardingData);
+    // Only build from onboarding if we have a valid supabaseUserId
+    // This prevents showing cached data from other users
+    if (supabaseUserId) {
+      return buildProfileFromOnboarding(onboardingData);
+    }
+    // Return empty profile if no user is authenticated
+    return buildProfileFromOnboarding(defaultOnboardingData);
   });
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
@@ -293,6 +300,73 @@ export default function ProfileScreen() {
 
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [companySearch, setCompanySearch] = useState('');
+  const [selectedVeteranStatus, setSelectedVeteranStatus] = useState(user.veteranStatus || '');
+  const [selectedDisabilityStatus, setSelectedDisabilityStatus] = useState(user.disabilityStatus || '');
+  const [selectedEthnicity, setSelectedEthnicity] = useState(user.ethnicity || '');
+  const [selectedRace, setSelectedRace] = useState(user.race || '');
+  const [cityQuery, setCityQuery] = useState('');
+  const [roleQuery, setRoleQuery] = useState('');
+  const [skillQuery, setSkillQuery] = useState('');
+
+const WORK_AUTH_OPTIONS = [
+  'Yes, I am a U.S. Citizen',
+  'Yes, I am a Permanent Resident (Green Card)',
+  'Yes, I have H1B visa',
+  'Yes, I have L1 visa',
+  'Yes, I have OPT/CPT (F1 visa)',
+  'Yes, I have TN visa',
+  'Yes, I have O1 visa',
+  'Yes, I have other work authorization',
+  'No, I need sponsorship',
+  'Prefer not to disclose',
+];
+
+const VETERAN_OPTIONS = [
+  'I am not a protected veteran',
+  'I am a veteran',
+  'I am a disabled veteran',
+  'I am a recently separated veteran',
+  'I am an active duty wartime or campaign badge veteran',
+  'I am an Armed Forces service medal veteran',
+  'Prefer not to disclose',
+];
+
+const DISABILITY_OPTIONS = [
+  'Yes, I have a disability (or previously had a disability)',
+  'No, I do not have a disability',
+  'Prefer not to disclose',
+];
+
+const ETHNICITY_OPTIONS = [
+  'White',
+  'Hispanic or Latino',
+  'Black or African American',
+  'Asian',
+  'Southeast Asian',
+  'Native Hawaiian or Other Pacific Islander',
+  'American Indian or Alaska Native',
+  'Prefer not to disclose',
+];
+
+const RACE_OPTIONS = [
+  'American Indian or Alaska Native',
+  'Asian',
+  'Black or African American',
+  'Native Hawaiian or Other Pacific Islander',
+  'White',
+  'Hispanic or Latino',
+  'Two or More Races',
+  'Prefer not to disclose',
+];
+
+const MAJOR_CITIES = [
+  'San Francisco, CA, USA', 'New York, NY, USA', 'Seattle, WA, USA', 'Austin, TX, USA',
+  'Los Angeles, CA, USA', 'Chicago, IL, USA', 'Boston, MA, USA', 'Denver, CO, USA',
+  'Portland, OR, USA', 'Miami, FL, USA', 'Atlanta, GA, USA', 'Dallas, TX, USA',
+  'Toronto, Canada', 'Vancouver, Canada', 'London, UK', 'Berlin, Germany',
+  'Amsterdam, Netherlands', 'Paris, France', 'Barcelona, Spain', 'Dubai, UAE',
+  'Bangalore, India', 'Mumbai, India', 'Singapore', 'Tokyo, Japan', 'Sydney, Australia',
+];
 
   const { data: allCompaniesData = [], isLoading: isLoadingCompanies, error: companiesError } = useQuery({
     queryKey: ['all-companies-data'],
@@ -337,10 +411,12 @@ export default function ProfileScreen() {
   }, [progressAnim, user.profileCompletion]);
 
   useEffect(() => {
-    if (supabaseProfile) {
+    if (supabaseProfile && supabaseUserId) {
+      // Only update user state if we have both profile and userId
+      // This ensures we're showing the correct user's data
       setUser(prev => ({ ...prev, ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] }));
     }
-  }, [supabaseProfile]);
+  }, [supabaseProfile, supabaseUserId]);
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(false);
@@ -508,6 +584,36 @@ export default function ProfileScreen() {
     setActiveModal('jobrequirements');
   }, [user.workAuthorizationStatus, user.jobRequirements]);
 
+  const openDesiredRolesModal = useCallback(() => {
+    setRoleQuery('');
+    setActiveModal('desiredroles');
+  }, []);
+
+  const openPreferredCitiesModal = useCallback(() => {
+    setCityQuery('');
+    setActiveModal('preferredcities');
+  }, []);
+
+  const openVeteranStatusModal = useCallback(() => {
+    setSelectedVeteranStatus(user.veteranStatus || '');
+    setActiveModal('veteranstatus');
+  }, [user.veteranStatus]);
+
+  const openDisabilityStatusModal = useCallback(() => {
+    setSelectedDisabilityStatus(user.disabilityStatus || '');
+    setActiveModal('disabilitystatus');
+  }, [user.disabilityStatus]);
+
+  const openEthnicityModal = useCallback(() => {
+    setSelectedEthnicity(user.ethnicity || '');
+    setActiveModal('ethnicity');
+  }, [user.ethnicity]);
+
+  const openRaceModal = useCallback(() => {
+    setSelectedRace(user.race || '');
+    setActiveModal('race');
+  }, [user.race]);
+
   const handleSaveSkill = useCallback(() => {
     if (!newSkill.trim()) return;
     if (user.skills.length >= 30) {
@@ -518,6 +624,8 @@ export default function ProfileScreen() {
       ...prev,
       skills: [...prev.skills, newSkill.trim()],
     }));
+    setNewSkill('');
+    setSkillQuery('');
     setActiveModal(null);
   }, [newSkill, user.skills.length]);
 
@@ -773,6 +881,46 @@ export default function ProfileScreen() {
     }));
     setActiveModal(null);
   }, [workAuthStatus, jobReqs]);
+
+  const handleSaveVeteranStatus = useCallback(() => {
+    setUser((prev) => ({ ...prev, veteranStatus: selectedVeteranStatus || undefined }));
+    setActiveModal(null);
+  }, [selectedVeteranStatus]);
+
+  const handleSaveDisabilityStatus = useCallback(() => {
+    setUser((prev) => ({ ...prev, disabilityStatus: selectedDisabilityStatus || undefined }));
+    setActiveModal(null);
+  }, [selectedDisabilityStatus]);
+
+  const handleSaveEthnicity = useCallback(() => {
+    setUser((prev) => ({ ...prev, ethnicity: selectedEthnicity || undefined }));
+    setActiveModal(null);
+  }, [selectedEthnicity]);
+
+  const handleSaveRace = useCallback(() => {
+    setUser((prev) => ({ ...prev, race: selectedRace || undefined }));
+    setActiveModal(null);
+  }, [selectedRace]);
+
+  const handleToggleDesiredRole = useCallback((role: string) => {
+    setUser((prev) => {
+      const roles = prev.desiredRoles || [];
+      if (roles.includes(role)) {
+        return { ...prev, desiredRoles: roles.filter(r => r !== role) };
+      }
+      return { ...prev, desiredRoles: [...roles, role] };
+    });
+  }, []);
+
+  const handleTogglePreferredCity = useCallback((city: string) => {
+    setUser((prev) => {
+      const cities = prev.preferredCities || [];
+      if (cities.includes(city)) {
+        return { ...prev, preferredCities: cities.filter(c => c !== city) };
+      }
+      return { ...prev, preferredCities: [...cities, city] };
+    });
+  }, []);
 
   const handleToggleJobPref = useCallback((pref: string) => {
     setUser((prev) => {
@@ -1063,6 +1211,53 @@ export default function ProfileScreen() {
             </View>
           ) : (
             <Text style={styles.emptyFavoriteText}>No favorite companies added yet</Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Desired Roles</Text>
+            <Pressable style={styles.addButton} onPress={openDesiredRolesModal}>
+              <Plus size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+          {(user.desiredRoles && user.desiredRoles.length > 0) ? (
+            <View style={styles.chipGrid}>
+              {user.desiredRoles.map((role, idx) => (
+                <View key={idx} style={[styles.prefChip, styles.prefChipActive]}>
+                  <Text style={[styles.prefChipText, styles.prefChipTextActive]}>{role}</Text>
+                  <Pressable onPress={() => handleToggleDesiredRole(role)}>
+                    <X size={12} color={Colors.surface} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyFavoriteText}>No desired roles added yet</Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Preferred Cities to Work</Text>
+            <Pressable style={styles.addButton} onPress={openPreferredCitiesModal}>
+              <Plus size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+          {(user.preferredCities && user.preferredCities.length > 0) ? (
+            <View style={styles.chipGrid}>
+              {user.preferredCities.map((city, idx) => (
+                <View key={idx} style={[styles.prefChip, styles.prefChipActive]}>
+                  <MapPin size={12} color={Colors.surface} />
+                  <Text style={[styles.prefChipText, styles.prefChipTextActive]}>{city}</Text>
+                  <Pressable onPress={() => handleTogglePreferredCity(city)}>
+                    <X size={12} color={Colors.surface} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyFavoriteText}>No preferred cities added yet</Text>
           )}
         </View>
 
@@ -1366,31 +1561,40 @@ export default function ProfileScreen() {
             <Lock size={16} color={Colors.textTertiary} />
             <Text style={styles.demoHeaderTitle}>Equal Opportunity Information</Text>
           </View>
-          <Text style={styles.demoNote}>This information is confidential and non-editable</Text>
-          {user.veteranStatus ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Veteran Status</Text>
-              <Text style={styles.demoValue}>{user.veteranStatus}</Text>
+          <Text style={styles.demoNote}>This information is confidential and voluntary</Text>
+          
+          <Pressable style={styles.demoItem} onPress={openVeteranStatusModal}>
+            <Text style={styles.demoLabel}>Veteran Status</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={styles.demoValue}>{user.veteranStatus || 'Not specified'}</Text>
+              <Pencil size={14} color={Colors.textTertiary} />
             </View>
-          ) : null}
-          {user.disabilityStatus ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Disability Status</Text>
-              <Text style={styles.demoValue}>{user.disabilityStatus}</Text>
+          </Pressable>
+
+          <Pressable style={styles.demoItem} onPress={openDisabilityStatusModal}>
+            <Text style={styles.demoLabel}>Disability Status</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={styles.demoValue}>{user.disabilityStatus || 'Not specified'}</Text>
+              <Pencil size={14} color={Colors.textTertiary} />
             </View>
-          ) : null}
-          {user.ethnicity ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Ethnicity</Text>
-              <Text style={styles.demoValue}>{user.ethnicity}</Text>
+          </Pressable>
+
+          <Pressable style={styles.demoItem} onPress={openEthnicityModal}>
+            <Text style={styles.demoLabel}>Ethnicity</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={styles.demoValue}>{user.ethnicity || 'Not specified'}</Text>
+              <Pencil size={14} color={Colors.textTertiary} />
             </View>
-          ) : null}
-          {user.race ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Race</Text>
-              <Text style={styles.demoValue}>{user.race}</Text>
+          </Pressable>
+
+          <Pressable style={styles.demoItem} onPress={openRaceModal}>
+            <Text style={styles.demoLabel}>Race</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={styles.demoValue}>{user.race || 'Not specified'}</Text>
+              <Pencil size={14} color={Colors.textTertiary} />
             </View>
-          ) : null}
+          </Pressable>
+
           {user.gender ? (
             <View style={styles.demoItem}>
               <Text style={styles.demoLabel}>Gender</Text>
@@ -1409,9 +1613,52 @@ export default function ProfileScreen() {
               <Text style={styles.modalTitle}>Add Skill</Text>
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
             </View>
-            <TextInput style={styles.modalInput} placeholder="e.g. Docker, Kubernetes..." placeholderTextColor={Colors.textTertiary} value={newSkill} onChangeText={setNewSkill} autoFocus />
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveSkill}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Add Skill</Text>
+            <View style={styles.roleSearchContainer}>
+              <Search size={16} color={Colors.textTertiary} />
+              <TextInput
+                style={styles.roleSearchInput}
+                placeholder="Search skills..."
+                placeholderTextColor={Colors.textTertiary}
+                value={skillQuery}
+                onChangeText={setSkillQuery}
+                autoFocus
+              />
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <View style={styles.chipGrid}>
+                {suggestedSkills
+                  .filter((s) => !skillQuery || s.toLowerCase().includes(skillQuery.toLowerCase()))
+                  .filter((s) => !user.skills.includes(s))
+                  .slice(0, 20)
+                  .map((skill) => (
+                    <Pressable 
+                      key={skill} 
+                      style={styles.companySelectChip}
+                      onPress={() => {
+                        setUser((prev) => ({ ...prev, skills: [...prev.skills, skill] }));
+                        setSkillQuery('');
+                      }}
+                    >
+                      <Text style={styles.companySelectText}>{skill}</Text>
+                      <Plus size={14} color={Colors.textPrimary} />
+                    </Pressable>
+                  ))}
+              </View>
+              {skillQuery && !suggestedSkills.some(s => s.toLowerCase() === skillQuery.toLowerCase()) && (
+                <Pressable 
+                  style={[styles.companySelectChip, { marginTop: 12 }]}
+                  onPress={() => {
+                    setNewSkill(skillQuery);
+                    handleSaveSkill();
+                  }}
+                >
+                  <Plus size={14} color={Colors.textPrimary} />
+                  <Text style={styles.companySelectText}>Add "{skillQuery}"</Text>
+                </Pressable>
+              )}
+            </ScrollView>
+            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
+              <Text style={styles.cityDoneBtnText}>Done</Text>
             </Pressable>
           </KeyboardAvoidingView>
         </View>
@@ -1821,6 +2068,259 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      <Modal visible={activeModal === 'veteranstatus'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Veteran Status</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {VETERAN_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[styles.currencyOption, selectedVeteranStatus === option && styles.currencyOptionActive]}
+                  onPress={() => setSelectedVeteranStatus(option)}
+                >
+                  <Text style={[styles.currencyOptionText, selectedVeteranStatus === option && styles.currencyOptionTextActive]}>{option}</Text>
+                  {selectedVeteranStatus === option && <Check size={18} color={Colors.surface} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveVeteranStatus}>
+              <Check size={18} color={Colors.surface} />
+              <Text style={styles.modalSaveBtnText}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'disabilitystatus'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Disability Status</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {DISABILITY_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[styles.currencyOption, selectedDisabilityStatus === option && styles.currencyOptionActive]}
+                  onPress={() => setSelectedDisabilityStatus(option)}
+                >
+                  <Text style={[styles.currencyOptionText, selectedDisabilityStatus === option && styles.currencyOptionTextActive]}>{option}</Text>
+                  {selectedDisabilityStatus === option && <Check size={18} color={Colors.surface} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveDisabilityStatus}>
+              <Check size={18} color={Colors.surface} />
+              <Text style={styles.modalSaveBtnText}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'ethnicity'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ethnicity</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {ETHNICITY_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[styles.currencyOption, selectedEthnicity === option && styles.currencyOptionActive]}
+                  onPress={() => setSelectedEthnicity(option)}
+                >
+                  <Text style={[styles.currencyOptionText, selectedEthnicity === option && styles.currencyOptionTextActive]}>{option}</Text>
+                  {selectedEthnicity === option && <Check size={18} color={Colors.surface} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveEthnicity}>
+              <Check size={18} color={Colors.surface} />
+              <Text style={styles.modalSaveBtnText}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'race'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Race</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {RACE_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[styles.currencyOption, selectedRace === option && styles.currencyOptionActive]}
+                  onPress={() => setSelectedRace(option)}
+                >
+                  <Text style={[styles.currencyOptionText, selectedRace === option && styles.currencyOptionTextActive]}>{option}</Text>
+                  {selectedRace === option && <Check size={18} color={Colors.surface} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveRace}>
+              <Check size={18} color={Colors.surface} />
+              <Text style={styles.modalSaveBtnText}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'worklocations'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Preferred Work Locations</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.roleSearchContainer}>
+              <Search size={16} color={Colors.textTertiary} />
+              <TextInput
+                style={styles.roleSearchInput}
+                placeholder="Search cities..."
+                placeholderTextColor={Colors.textTertiary}
+                value={cityQuery}
+                onChangeText={setCityQuery}
+              />
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <View style={styles.chipGrid}>
+                {MAJOR_CITIES
+                  .filter((c) => !cityQuery || c.toLowerCase().includes(cityQuery.toLowerCase()))
+                  .map((city) => {
+                    const selected = (user.preferredWorkLocations || []).includes(city);
+                    return (
+                      <Pressable 
+                        key={city} 
+                        style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
+                        onPress={() => handleToggleWorkLocation(city)}
+                      >
+                        <MapPin size={14} color={selected ? Colors.surface : Colors.textPrimary} />
+                        <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{city}</Text>
+                        {selected && <Check size={14} color={Colors.surface} />}
+                      </Pressable>
+                    );
+                  })}
+              </View>
+            </ScrollView>
+            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
+              <Text style={styles.cityDoneBtnText}>Done ({(user.preferredWorkLocations || []).length} selected)</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'desiredroles'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Desired Roles</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.roleSearchContainer}>
+              <Search size={16} color={Colors.textTertiary} />
+              <TextInput
+                style={styles.roleSearchInput}
+                placeholder="Search roles..."
+                placeholderTextColor={Colors.textTertiary}
+                value={roleQuery}
+                onChangeText={setRoleQuery}
+              />
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <View style={styles.chipGrid}>
+                {suggestedRoles
+                  .filter((r) => !roleQuery || r.toLowerCase().includes(roleQuery.toLowerCase()))
+                  .map((role) => {
+                    const selected = (user.desiredRoles || []).includes(role);
+                    return (
+                      <Pressable 
+                        key={role} 
+                        style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
+                        onPress={() => handleToggleDesiredRole(role)}
+                      >
+                        <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{role}</Text>
+                        {selected && <Check size={14} color={Colors.surface} />}
+                      </Pressable>
+                    );
+                  })}
+              </View>
+            </ScrollView>
+            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
+              <Text style={styles.cityDoneBtnText}>Done ({(user.desiredRoles || []).length} selected)</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={activeModal === 'preferredcities'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Preferred Cities to Work</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.roleSearchContainer}>
+              <Search size={16} color={Colors.textTertiary} />
+              <TextInput
+                style={styles.roleSearchInput}
+                placeholder="Search cities..."
+                placeholderTextColor={Colors.textTertiary}
+                value={cityQuery}
+                onChangeText={setCityQuery}
+              />
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <View style={styles.chipGrid}>
+                {majorCities
+                  .filter((c) => !cityQuery || c.toLowerCase().includes(cityQuery.toLowerCase()))
+                  .map((city) => {
+                    const selected = (user.preferredCities || []).includes(city);
+                    return (
+                      <Pressable 
+                        key={city} 
+                        style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
+                        onPress={() => handleTogglePreferredCity(city)}
+                      >
+                        <MapPin size={14} color={selected ? Colors.surface : Colors.textPrimary} />
+                        <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{city}</Text>
+                        {selected && <Check size={14} color={Colors.surface} />}
+                      </Pressable>
+                    );
+                  })}
+              </View>
+            </ScrollView>
+            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
+              <Text style={styles.cityDoneBtnText}>Done ({(user.preferredCities || []).length} selected)</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={activeModal === 'favoritecompanies'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -2041,6 +2541,7 @@ const styles = StyleSheet.create({
   demoItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   demoLabel: { fontSize: 11, fontWeight: '600' as const, color: Colors.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 2 },
   demoValue: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const },
+  demoValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   coverLetterText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20, marginTop: 8 },
   coverLetterPlaceholder: { fontSize: 13, color: Colors.textTertiary, fontStyle: 'italic' as const, marginTop: 8 },
   completionPromptCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1, borderColor: Colors.borderLight },

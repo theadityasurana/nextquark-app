@@ -7,56 +7,22 @@ import { ArrowLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
-import StepName from '@/components/onboarding/StepName';
-import StepPhoto from '@/components/onboarding/StepPhoto';
-import StepContact from '@/components/onboarding/StepContact';
-import StepTitle from '@/components/onboarding/StepTitle';
-import StepLinkedIn from '@/components/onboarding/StepLinkedIn';
-import StepExperience from '@/components/onboarding/StepExperience';
-import StepEducation from '@/components/onboarding/StepEducation';
-import StepSkills from '@/components/onboarding/StepSkills';
-import StepPreferences from '@/components/onboarding/StepPreferences';
+import StepBasicInfo from '@/components/onboarding/StepBasicInfo';
 import StepResume from '@/components/onboarding/StepResume';
 import StepComplete from '@/components/onboarding/StepComplete';
-import StepDemographics from '@/components/onboarding/StepDemographics';
 
-import StepWorkAuthorization from '@/components/onboarding/StepWorkAuthorization';
-
-const TOTAL_PROGRESS_STEPS = 14;
+const TOTAL_PROGRESS_STEPS = 2;
 
 const STEP_BACKGROUNDS: Record<number, string> = {
   1: '#F5F5F5',
   2: '#FFFFF0',
-  3: '#EDF5FF',
-  4: '#F8F8FF',
-  5: '#FAFAD2',
-  6: '#FFFFFF',
-  7: '#D8BFD8',
-  8: '#FFFFF0',
-  9: '#EDF5FF',
-  10: '#F0FFF0',
-  11: '#F8F8FF',
-  12: '#FFFFF0',
-  13: '#F5F5F5',
-  14: '#FFFFFF',
+  3: '#FFFFFF',
 };
 
 const STEP_LABELS: Record<number, string> = {
-  1: 'Step 1/14',
-  2: 'Step 2/14',
-  3: 'Step 3/14',
-  4: 'Step 4/14',
-  5: 'Step 5/14',
-  6: 'Step 6/14',
-  7: 'Step 7/14',
-  8: 'Step 8/14',
-  9: 'Step 9/14',
-  10: 'Step 10/14',
-  11: 'Step 11/14',
-  12: 'Step 12/14',
-  13: 'Step 13/14',
-  14: 'Step 14/14',
-  15: 'Almost there!',
+  1: 'Step 1/2',
+  2: 'Step 2/2',
+  3: 'Almost there!',
 };
 
 export default function OnboardingScreen() {
@@ -94,7 +60,7 @@ export default function OnboardingScreen() {
 
   const handleNext = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (currentStep === 15) {
+    if (currentStep === 3) {
       completeOnboarding(data).then(() => {
         router.replace('/quick-tips' as any);
       });
@@ -121,28 +87,16 @@ export default function OnboardingScreen() {
   }, [currentStep, animateTransition, deleteAccount]);
 
   const progressStep = Math.min(currentStep, TOTAL_PROGRESS_STEPS);
-  const showProgress = currentStep <= 15;
-  const showBackButton = currentStep >= 1 && currentStep <= 15;
+  const showProgress = currentStep <= 3;
+  const showBackButton = currentStep >= 1 && currentStep <= 3;
 
   const stepProps = { data, onUpdate: handleUpdate, onNext: handleNext, onBack: handleBack };
 
   const renderStep = () => {
     switch (currentStep) {
       case 1: return <StepResume {...stepProps} />;
-      case 2: return <StepName {...stepProps} />;
-      case 3: return <StepPhoto {...stepProps} />;
-      case 4: return <StepContact {...stepProps} />;
-      case 5: return <StepTitle {...stepProps} />;
-      case 6: return <StepLinkedIn {...stepProps} />;
-      case 7: return <StepExperience {...stepProps} />;
-      case 8: return <StepEducation {...stepProps} />;
-      case 9: return <StepSkills {...stepProps} />;
-      case 10: return <StepPreferences {...stepProps} />;
-      case 11: return <StepDemographics {...stepProps} type="veteran" />;
-      case 12: return <StepDemographics {...stepProps} type="disability" />;
-      case 13: return <StepDemographics {...stepProps} type="ethnicity" />;
-      case 14: return <StepWorkAuthorization {...stepProps} />;
-      case 15: return <StepComplete {...stepProps} />;
+      case 2: return <StepBasicInfo {...stepProps} />;
+      case 3: return <StepComplete {...stepProps} />;
       default: return null;
     }
   };

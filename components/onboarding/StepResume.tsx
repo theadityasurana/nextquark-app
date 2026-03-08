@@ -8,7 +8,6 @@ import * as FileSystem from 'expo-file-system';
 import { StepProps } from '@/types/onboarding';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { parseResumeText } from '@/utils/resumeParser';
 
 export default function StepResume({ data, onUpdate, onNext }: StepProps) {
   const { supabaseUserId } = useAuth();
@@ -71,15 +70,6 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
           setUploadProgress(prev => Math.min(prev + 10, 90));
         }, 200);
 
-        // Parse resume text
-        let parsedData = {};
-        try {
-          const fileContent = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
-          parsedData = parseResumeText(fileContent);
-        } catch (parseError) {
-          console.log('Parse error:', parseError);
-        }
-
         const fileExt = asset.name.split('.').pop();
         const uploadFileName = `${Date.now()}.${fileExt}`;
         const filePath = `${supabaseUserId}/${uploadFileName}`;
@@ -111,14 +101,57 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
           body: formData,
         });
 
-        clearInterval(interval);
-
         if (!response.ok) {
+          clearInterval(interval);
           setUploading(false);
           Alert.alert('Upload Failed', 'Could not upload resume. Please try again.');
           return;
         }
 
+        // Parse resume with Gemini directly
+        let parsedData = {};
+        try {
+          const fileResponse = await fetch(asset.uri);
+          const fileBlob = await fileResponse.blob();
+          const reader = new FileReader();
+          
+          const base64Promise = new Promise((resolve) => {
+            reader.onloadend = () => {
+              const base64 = (reader.result as string).split(',')[1];
+              resolve(base64);
+            };
+            reader.readAsDataURL(fileBlob);
+          });
+
+          const base64 = await base64Promise;
+          
+          const geminiResponse = await fetch(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyBPoWkh6Y-WHAqXq__TTOlPyk23dMpNsx4',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    { text: 'Extract resume data as JSON: {"firstName":"","lastName":"","phone":"","location":"","headline":"","linkedInUrl":"","workExperience":[{"id":"1","title":"","company":"","employmentType":"Full-time","location":"","isRemote":false,"startMonth":"","startYear":"","endMonth":"","endYear":"","isCurrent":false,"description":""}],"education":[{"id":"1","institution":"","degree":"","field":"","startYear":"","endYear":""}],"skills":[{"name":"","level":"intermediate","yearsOfExperience":2}]}. Return only JSON.' },
+                    { inline_data: { mime_type: asset.mimeType || 'application/pdf', data: base64 } }
+                  ]
+                }]
+              })
+            }
+          );
+
+          const geminiData = await geminiResponse.json();
+          const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsedData = JSON.parse(jsonMatch[0]);
+          }
+        } catch (parseError) {
+          console.log('Parse error:', parseError);
+        }
+
+        clearInterval(interval);
         setUploadProgress(100);
         Animated.timing(progressAnim, { toValue: 1, duration: 300, useNativeDriver: false }).start();
         setTimeout(() => {

@@ -46,18 +46,6 @@ export default function StepComplete({ data, onNext }: StepProps) {
   const buttonAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(1)).current;
 
-  const profileStrength = Math.min(100, 40
-    + (data.firstName ? 5 : 0)
-    + (data.profilePicture ? 10 : 0)
-    + (data.phone ? 5 : 0)
-    + (data.headline ? 5 : 0)
-    + (data.workExperience.length > 0 ? 10 : 0)
-    + (data.education.length > 0 ? 10 : 0)
-    + (data.skills.length >= 5 ? 10 : 0)
-    + (data.workPreferences.length > 0 ? 5 : 0)
-    + (data.resumeUri ? 10 : 0)
-  );
-
   useEffect(() => {
     Animated.sequence([
       Animated.spring(scaleAnim, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
@@ -73,9 +61,6 @@ export default function StepComplete({ data, onNext }: StepProps) {
       ]),
     ]).start();
   }, []);
-
-  const strengthLabel = profileStrength >= 80 ? 'STRONG' : profileStrength >= 60 ? 'GOOD' : 'FAIR';
-  const strengthColor = profileStrength >= 80 ? '#10B981' : profileStrength >= 60 ? '#F59E0B' : '#111111';
 
   const confettiPieces = Array.from({ length: 24 }, (_, i) => ({
     id: i,
@@ -98,16 +83,6 @@ export default function StepComplete({ data, onNext }: StepProps) {
           <Text style={styles.title}>You're All Set,{'\n'}{data.firstName || 'there'}!</Text>
           <Text style={styles.subtitle}>Your profile is ready to start matching with amazing opportunities</Text>
         </Animated.View>
-
-        <View style={styles.strengthContainer}>
-          <Text style={styles.strengthTitle}>Profile Strength</Text>
-          <View style={styles.strengthCircle}>
-            <View style={[styles.strengthRing, { borderColor: strengthColor }]}>
-              <Text style={[styles.strengthNumber, { color: strengthColor }]}>{profileStrength}</Text>
-              <Text style={[styles.strengthLabel, { color: strengthColor }]}>{strengthLabel}</Text>
-            </View>
-          </View>
-        </View>
       </Animated.View>
 
       <Animated.View style={[styles.bottomSection, { opacity: buttonAnim, transform: [{ scale: bounceAnim }] }]}>
@@ -126,16 +101,6 @@ const styles = StyleSheet.create({
   celebration: { fontSize: 48, marginBottom: 24, textAlign: 'center' },
   title: { fontSize: 32, fontWeight: '900' as const, color: '#111111', textAlign: 'center', marginBottom: 12 },
   subtitle: { fontSize: 15, color: '#616161', textAlign: 'center', lineHeight: 22, paddingHorizontal: 16 },
-  strengthContainer: { alignItems: 'center', marginTop: 36 },
-  strengthTitle: { fontSize: 13, fontWeight: '700' as const, color: '#9E9E9E', letterSpacing: 1, marginBottom: 16 },
-  strengthCircle: { alignItems: 'center', justifyContent: 'center' },
-  strengthRing: {
-    width: 120, height: 120, borderRadius: 60,
-    borderWidth: 4, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
-  },
-  strengthNumber: { fontSize: 36, fontWeight: '900' as const },
-  strengthLabel: { fontSize: 12, fontWeight: '800' as const, letterSpacing: 1, marginTop: 2 },
   bottomSection: { paddingTop: 16 },
   startButton: {
     height: 60, borderRadius: 18, backgroundColor: '#111111',

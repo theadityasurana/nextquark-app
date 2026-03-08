@@ -339,11 +339,17 @@ export async function addToLiveApplicationQueue(
       .eq('id', job.id)
       .single();
 
+    // Split name safely with fallbacks
+    const nameParts = (profile.name || '').trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Build entry with safe defaults for all optional fields
     const entry = {
       user_id: userId,
       job_id: job.id,
-      first_name: profile.name?.split(' ')[0] || '',
-      last_name: profile.name?.split(' ').slice(1).join(' ') || '',
+      first_name: firstName,
+      last_name: lastName,
       gender: profile.gender || null,
       phone: profile.phone || null,
       country_code: profile.countryCode || null,
@@ -356,24 +362,24 @@ export async function addToLiveApplicationQueue(
       veteran_status: profile.veteranStatus || null,
       disability_status: profile.disabilityStatus || null,
       ethnicity: profile.ethnicity || null,
-      skills: profile.skills || [],
-      top_skills: profile.topSkills || [],
-      experience: profile.experience || [],
-      education: profile.education || [],
-      certifications: profile.certifications || [],
-      achievements: profile.achievements || [],
-      job_preferences: profile.jobPreferences || {},
-      work_mode_preferences: profile.workModePreferences || [],
+      skills: Array.isArray(profile.skills) ? profile.skills : [],
+      top_skills: Array.isArray(profile.topSkills) ? profile.topSkills : [],
+      experience: Array.isArray(profile.experience) ? profile.experience : [],
+      education: Array.isArray(profile.education) ? profile.education : [],
+      certifications: Array.isArray(profile.certifications) ? profile.certifications : [],
+      achievements: Array.isArray(profile.achievements) ? profile.achievements : [],
+      job_preferences: Array.isArray(profile.jobPreferences) ? profile.jobPreferences : [],
+      work_mode_preferences: Array.isArray(profile.workModePreferences) ? profile.workModePreferences : [],
       salary_currency: profile.salaryCurrency || null,
       salary_min: profile.salaryMinPref || null,
       salary_max: profile.salaryMaxPref || null,
-      desired_roles: profile.desiredRoles || [],
-      preferred_cities: profile.preferredCities || [],
-      work_professions: profile.workProfessions || [],
+      desired_roles: Array.isArray(profile.desiredRoles) ? profile.desiredRoles : [],
+      preferred_cities: Array.isArray(profile.preferredCities) ? profile.preferredCities : [],
+      work_professions: Array.isArray(profile.workProfessions) ? profile.workProfessions : [],
       onboarding_data: profile.onboardingData || {},
       company_name: job.companyName,
       job_title: job.jobTitle,
-      job_url: jobData?.job_url || '',
+      job_url: jobData?.job_url || null,
       status: 'pending',
     };
 
@@ -382,7 +388,7 @@ export async function addToLiveApplicationQueue(
       .insert(entry);
 
     if (error) {
-      console.log('Error adding to live_application_queue:', error.message);
+      console.log('Error adding to live_application_queue:', error.message, error);
       return false;
     }
 

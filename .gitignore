@@ -45,3 +45,11 @@ rork-eslint.config.js
 core
 node_modules
 .expo
+
+# Backup files
+*.bak
+*.bak[0-9]
+*-old.*
+
+# Cache
+.expo/web/cache/

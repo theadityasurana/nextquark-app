@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, PanResponder, Text, StyleSheet } from 'react-native';
+import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 
 interface RangeSliderProps {
@@ -15,6 +16,7 @@ interface RangeSliderProps {
 const THUMB_SIZE = 26;
 
 export default function RangeSlider({ min, max, step, low, high, onChange, formatLabel }: RangeSliderProps) {
+  const colors = useColors();
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
   const lowRef = useRef(low);
@@ -72,8 +74,8 @@ export default function RangeSlider({ min, max, step, low, high, onChange, forma
   return (
     <View>
       <View style={sliderStyles.labels}>
-        <Text style={sliderStyles.labelText}>{fmt(low)}</Text>
-        <Text style={sliderStyles.labelText}>{fmt(high)}</Text>
+        <Text style={[sliderStyles.labelText, { color: colors.textPrimary }]}>{fmt(low)}</Text>
+        <Text style={[sliderStyles.labelText, { color: colors.textPrimary }]}>{fmt(high)}</Text>
       </View>
       <View
         style={sliderStyles.trackContainer}
@@ -125,7 +127,6 @@ const sliderStyles = StyleSheet.create({
   labelText: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: Colors.secondary,
   },
   trackContainer: {
     height: 40,

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Calendar, Clock, AlertTriangle } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import { useColors } from '@/contexts/useColors';
 import { Application } from '@/types';
 
 function getTimeAgo(dateStr: string): string {
@@ -38,6 +38,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 export default function ApplicationItem({ application }: ApplicationItemProps) {
   const router = useRouter();
+  const colors = useColors();
   const status = statusConfig[application.status] || statusConfig.applied;
   const timeAgo = useMemo(() => getTimeAgo(application.appliedDate), [application.appliedDate]);
 
@@ -46,17 +47,17 @@ export default function ApplicationItem({ application }: ApplicationItemProps) {
   };
 
   return (
-    <Pressable style={({ pressed }) => [styles.container, pressed && styles.pressed]} onPress={handlePress}>
+    <Pressable style={({ pressed }) => [styles.container, { backgroundColor: colors.surface }, pressed && { opacity: 0.8 }]} onPress={handlePress}>
       <View style={styles.cardContent}>
         <Image source={{ uri: application.job.companyLogo }} style={styles.logo} />
         <View style={styles.content}>
-          <Text style={styles.jobTitle} numberOfLines={1}>{application.job.jobTitle}</Text>
-          <Text style={styles.companyName}>{application.job.companyName}</Text>
+          <Text style={[styles.jobTitle, { color: colors.textPrimary }]} numberOfLines={1}>{application.job.jobTitle}</Text>
+          <Text style={[styles.companyName, { color: colors.textSecondary }]}>{application.job.companyName}</Text>
           <View style={styles.bottomRow}>
             <View style={styles.timeAgoRow}>
-              <Clock size={10} color={Colors.textTertiary} />
-              <Text style={styles.timeAgoText}>{timeAgo}</Text>
-              <Text style={styles.statusDot}>•</Text>
+              <Clock size={10} color={colors.textTertiary} />
+              <Text style={[styles.timeAgoText, { color: colors.textTertiary }]}>{timeAgo}</Text>
+              <Text style={[styles.statusDot, { color: colors.textTertiary }]}>•</Text>
               <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
             </View>
             {(application.status === 'applied' || application.status === 'under_review') && (
@@ -67,13 +68,13 @@ export default function ApplicationItem({ application }: ApplicationItemProps) {
             )}
             {application.interviewDate && (
               <View style={styles.dateRow}>
-                <Calendar size={11} color={Colors.statusInterview} />
-                <Text style={styles.dateText}>{application.interviewDate}</Text>
+                <Calendar size={11} color={colors.statusInterview} />
+                <Text style={[styles.dateText, { color: colors.textSecondary }]}>{application.interviewDate}</Text>
               </View>
             )}
           </View>
         </View>
-        <ChevronRight size={18} color={Colors.textTertiary} />
+        <ChevronRight size={18} color={colors.textTertiary} />
       </View>
     </Pressable>
   );
@@ -81,13 +82,13 @@ export default function ApplicationItem({ application }: ApplicationItemProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#111111',
     marginBottom: 4,
   },
   pressed: {
-    backgroundColor: Colors.background,
+    opacity: 0.8,
   },
   cardContent: {
     flexDirection: 'row',
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: Colors.borderLight,
+    backgroundColor: '#EEEEEE',
   },
   content: {
     flex: 1,
@@ -109,11 +110,11 @@ const styles = StyleSheet.create({
   jobTitle: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: Colors.textPrimary,
+    color: '#111111',
   },
   companyName: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: '#616161',
     marginTop: 2,
   },
   bottomRow: {
@@ -130,11 +131,11 @@ const styles = StyleSheet.create({
   },
   timeAgoText: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: '#9E9E9E',
   },
   statusDot: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: '#9E9E9E',
   },
   statusText: {
     fontSize: 11,
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 11,
-    color: Colors.statusInterview,
+    color: '#1565C0',
     fontWeight: '600' as const,
   },
   alertRow: {

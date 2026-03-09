@@ -474,6 +474,27 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         } else {
           console.log('Onboarding data saved to Supabase');
         }
+
+        // Send welcome email
+        try {
+          const userName = `${data.firstName} ${data.lastName}`.trim();
+          console.log('Sending welcome email to:', userEmail, 'for user:', userName);
+          
+          const response = await fetch('/api/send-welcome-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userEmail, userName }),
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            console.log('Welcome email sent successfully');
+          } else {
+            console.log('Failed to send welcome email:', result.error);
+          }
+        } catch (emailError) {
+          console.log('Error sending welcome email (non-critical):', emailError);
+        }
       } catch (e) {
         console.log('Exception saving onboarding to Supabase:', e);
       }

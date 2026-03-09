@@ -44,7 +44,6 @@ import {
   MessageCircle,
 } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {

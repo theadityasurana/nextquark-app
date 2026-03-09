@@ -48,14 +48,17 @@ import {
   Share2,
   Lock,
   Search,
+  Moon,
+  Sun,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
-import Colors from '@/constants/colors';
+import Colors, { lightColors, darkColors } from '@/constants/colors';
 import { mockUser } from '@/mocks/user';
 import { UserProfile, WorkExperience, Education, Certification, Achievement } from '@/types';
 import { CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
 import RangeSlider from '@/components/RangeSlider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { fetchUserApplications } from '@/lib/jobs';
@@ -64,6 +67,7 @@ import { supabase } from '@/lib/supabase';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share, Clipboard } from 'react-native';
 import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboarding';
+import { universities } from '@/constants/universities';
 
 type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | null;
 
@@ -131,6 +135,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { logout, onboardingData, userProfile: supabaseProfile, saveProfile, refetchProfile, supabaseUserId } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const colors = theme === 'dark' ? darkColors : lightColors;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const { data: applications = [] } = useQuery({
@@ -307,6 +313,8 @@ export default function ProfileScreen() {
   const [cityQuery, setCityQuery] = useState('');
   const [roleQuery, setRoleQuery] = useState('');
   const [skillQuery, setSkillQuery] = useState('');
+  const [showUniversityDropdown, setShowUniversityDropdown] = useState(false);
+  const [universitySearch, setUniversitySearch] = useState('');
 
 const WORK_AUTH_OPTIONS = [
   'Yes, I am a U.S. Citizen',
@@ -521,6 +529,8 @@ const MAJOR_CITIES = [
     setEduDescription('• ');
     setEduAchievements('• ');
     setEduExtracurriculars('• ');
+    setUniversitySearch('');
+    setShowUniversityDropdown(false);
     setActiveModal('education');
   }, []);
 
@@ -534,6 +544,8 @@ const MAJOR_CITIES = [
     setEduDescription(edu.description ?? '');
     setEduAchievements(edu.achievements ?? '');
     setEduExtracurriculars(edu.extracurriculars ?? '');
+    setUniversitySearch(edu.institution);
+    setShowUniversityDropdown(false);
     setActiveModal('education');
   }, []);
 
@@ -985,36 +997,49 @@ const MAJOR_CITIES = [
     setEditingEducation(null);
     setEditingCertification(null);
     setEditingAchievement(null);
+    setShowUniversityDropdown(false);
+    setUniversitySearch('');
   }, []);
 
   return (
     <TabTransitionWrapper routeName="profile">
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
       <View style={styles.brandHeader}>
         <Image source={require('@/assets/images/header.png')} style={styles.brandLogo} resizeMode="contain" />
       </View>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: colors.secondary }]}>Profile</Text>
         <View style={styles.headerActions}>
           <Pressable
-            style={styles.settingsButton}
+            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+            onPress={toggleTheme}
+            testID="theme-toggle-btn"
+          >
+            {theme === 'dark' ? (
+              <Sun size={22} color={colors.textSecondary} />
+            ) : (
+              <Moon size={22} color={colors.textSecondary} />
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
             onPress={() => router.push('/profile-preview' as any)}
             testID="profile-preview-btn"
           >
-            <Eye size={22} color={Colors.textSecondary} />
+            <Eye size={22} color={colors.textSecondary} />
           </Pressable>
           <Pressable
-            style={styles.settingsButton}
+            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
             onPress={() => router.push('/settings' as any)}
             testID="settings-btn"
           >
-            <Settings size={22} color={Colors.textSecondary} />
+            <Settings size={22} color={colors.textSecondary} />
           </Pressable>
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={false} onRefresh={refetchProfile} tintColor={Colors.primary} />}>
-        <View style={styles.profileCard}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={false} onRefresh={refetchProfile} tintColor={colors.primary} />}>
+        <View style={[styles.profileCard, { backgroundColor: theme === 'dark' ? '#1E1E1E' : '#111111' }]}>
           <View style={styles.profileTop}>
             <Pressable onPress={openAvatarModal} style={styles.avatarWrapper}>
               <Image source={{ uri: user.avatar }} style={styles.avatar} />
@@ -1050,7 +1075,7 @@ const MAJOR_CITIES = [
               <Text style={styles.completionLabel}>Profile Strength</Text>
               <Text style={styles.completionPercent}>{user.profileCompletion}%</Text>
             </View>
-            <View style={styles.progressBar}>
+            <View style={[styles.progressBar, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.15)' }]}>
               <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
             </View>
             <Text style={styles.completionHint}>Add a portfolio to reach 100%</Text>
@@ -1058,12 +1083,12 @@ const MAJOR_CITIES = [
         </View>
 
         {(user.topSkills.length === 0 || user.education.length === 0 || user.experience.length === 0 || user.achievements.length === 0 || user.certifications.length === 0) && (
-          <View style={styles.completionPromptCard}>
+          <View style={[styles.completionPromptCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
             <View style={styles.completionPromptHeader}>
-              <Zap size={18} color="#111111" />
-              <Text style={styles.completionPromptTitle}>Complete Your Profile</Text>
+              <Zap size={18} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
+              <Text style={[styles.completionPromptTitle, { color: colors.textPrimary }]}>Complete Your Profile</Text>
             </View>
-            <Text style={styles.completionPromptText}>Add these sections to boost your visibility:</Text>
+            <Text style={[styles.completionPromptText, { color: colors.textSecondary }]}>Add these sections to boost your visibility:</Text>
             <View style={styles.missingFieldsList}>
               {user.topSkills.length === 0 && <Text style={styles.missingFieldItem}>• Select top skills</Text>}
               {user.education.length === 0 && <Text style={styles.missingFieldItem}>• Add education</Text>}
@@ -1135,60 +1160,60 @@ const MAJOR_CITIES = [
           </View>
         </Pressable>
 
-        <View style={styles.statsGrid}>
+        <View style={[styles.statsGrid, { backgroundColor: colors.surface }]}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totalApplications}</Text>
-            <Text style={styles.statTitle}>Applied</Text>
+            <Text style={[styles.statValue, { color: colors.secondary }]}>{totalApplications}</Text>
+            <Text style={[styles.statTitle, { color: colors.textTertiary }]}>Applied</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{interviewsScheduled}</Text>
-            <Text style={styles.statTitle}>Interviews</Text>
+            <Text style={[styles.statValue, { color: colors.secondary }]}>{interviewsScheduled}</Text>
+            <Text style={[styles.statTitle, { color: colors.textTertiary }]}>Interviews</Text>
           </View>
         </View>
 
 
 
-        <Pressable style={styles.contactCard} onPress={openContactModal}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={openContactModal}>
           <View style={styles.contactCardHeader}>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
-            <Pencil size={14} color={Colors.textTertiary} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Contact Information</Text>
+            <Pencil size={14} color={colors.textTertiary} />
           </View>
-          <View style={styles.contactItem}>
-            <View style={styles.contactIconBox}>
-              <Phone size={16} color="#111111" />
+          <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
+            <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
+              <Phone size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
             </View>
-            <Text style={styles.contactText}>{user.phone}</Text>
+            <Text style={[styles.contactText, { color: colors.textPrimary }]}>{user.phone}</Text>
           </View>
-          <View style={styles.contactItem}>
-            <View style={styles.contactIconBox}>
-              <Mail size={16} color="#111111" />
+          <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
+            <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
+              <Mail size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
             </View>
-            <Text style={styles.contactText}>{user.email}</Text>
+            <Text style={[styles.contactText, { color: colors.textPrimary }]}>{user.email}</Text>
           </View>
           {user.linkedinUrl ? (
-            <View style={styles.contactItem}>
-              <View style={styles.contactIconBox}>
-                <Linkedin size={16} color="#111111" />
+            <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
+              <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
+                <Linkedin size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
               </View>
-              <Text style={styles.contactText} numberOfLines={1}>{user.linkedinUrl}</Text>
+              <Text style={[styles.contactText, { color: colors.textPrimary }]} numberOfLines={1}>{user.linkedinUrl}</Text>
             </View>
           ) : null}
           {user.githubUrl ? (
-            <View style={styles.contactItem}>
-              <View style={styles.contactIconBox}>
-                <Github size={16} color="#111111" />
+            <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
+              <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
+                <Github size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
               </View>
-              <Text style={styles.contactText} numberOfLines={1}>{user.githubUrl}</Text>
+              <Text style={[styles.contactText, { color: colors.textPrimary }]} numberOfLines={1}>{user.githubUrl}</Text>
             </View>
           ) : null}
         </Pressable>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Favourite Companies</Text>
-            <Pressable style={styles.addButton} onPress={() => setActiveModal('favoritecompanies')}>
-              <Plus size={16} color={Colors.surface} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Favourite Companies</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={() => setActiveModal('favoritecompanies')}>
+              <Plus size={16} color={colors.surface} />
             </Pressable>
           </View>
           {(user.favoriteCompanies && user.favoriteCompanies.length > 0) ? (
@@ -1199,71 +1224,71 @@ const MAJOR_CITIES = [
                   ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${companyData.logo_url}`
                   : null;
                 return (
-                  <View key={idx} style={styles.favoriteCompanyChip}>
+                  <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
                     {logoUrl && <Image source={{ uri: logoUrl }} style={styles.favoriteCompanyLogo} />}
-                    <Text style={styles.favoriteCompanyText}>{company}</Text>
+                    <Text style={[styles.favoriteCompanyText, { color: colors.textPrimary }]}>{company}</Text>
                     <Pressable onPress={() => handleToggleFavoriteCompany(company)}>
-                      <X size={14} color={Colors.textSecondary} />
+                      <X size={14} color={colors.textSecondary} />
                     </Pressable>
                   </View>
                 );
               })}
             </View>
           ) : (
-            <Text style={styles.emptyFavoriteText}>No favorite companies added yet</Text>
+            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No favorite companies added yet</Text>
           )}
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Desired Roles</Text>
-            <Pressable style={styles.addButton} onPress={openDesiredRolesModal}>
-              <Plus size={16} color={Colors.surface} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Desired Roles</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openDesiredRolesModal}>
+              <Plus size={16} color={colors.surface} />
             </Pressable>
           </View>
           {(user.desiredRoles && user.desiredRoles.length > 0) ? (
             <View style={styles.chipGrid}>
               {user.desiredRoles.map((role, idx) => (
-                <View key={idx} style={[styles.prefChip, styles.prefChipActive]}>
-                  <Text style={[styles.prefChipText, styles.prefChipTextActive]}>{role}</Text>
+                <View key={idx} style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary }]}>
+                  <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>{role}</Text>
                   <Pressable onPress={() => handleToggleDesiredRole(role)}>
-                    <X size={12} color={Colors.surface} />
+                    <X size={12} color={colors.surface} />
                   </Pressable>
                 </View>
               ))}
             </View>
           ) : (
-            <Text style={styles.emptyFavoriteText}>No desired roles added yet</Text>
+            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No desired roles added yet</Text>
           )}
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Preferred Cities to Work</Text>
-            <Pressable style={styles.addButton} onPress={openPreferredCitiesModal}>
-              <Plus size={16} color={Colors.surface} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Preferred Cities to Work</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openPreferredCitiesModal}>
+              <Plus size={16} color={colors.surface} />
             </Pressable>
           </View>
           {(user.preferredCities && user.preferredCities.length > 0) ? (
             <View style={styles.chipGrid}>
               {user.preferredCities.map((city, idx) => (
-                <View key={idx} style={[styles.prefChip, styles.prefChipActive]}>
-                  <MapPin size={12} color={Colors.surface} />
-                  <Text style={[styles.prefChipText, styles.prefChipTextActive]}>{city}</Text>
+                <View key={idx} style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary }]}>
+                  <MapPin size={12} color={colors.surface} />
+                  <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>{city}</Text>
                   <Pressable onPress={() => handleTogglePreferredCity(city)}>
-                    <X size={12} color={Colors.surface} />
+                    <X size={12} color={colors.surface} />
                   </Pressable>
                 </View>
               ))}
             </View>
           ) : (
-            <Text style={styles.emptyFavoriteText}>No preferred cities added yet</Text>
+            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No preferred cities added yet</Text>
           )}
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Job Type Preferences</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Job Type Preferences</Text>
           </View>
           <View style={styles.chipGrid}>
             {JOB_TYPE_OPTIONS.map((pref) => {
@@ -1271,11 +1296,11 @@ const MAJOR_CITIES = [
               return (
                 <Pressable
                   key={pref}
-                  style={[styles.prefChip, selected && styles.prefChipActive]}
+                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.surface, borderColor: selected ? colors.secondary : colors.borderLight }]}
                   onPress={() => handleToggleJobPref(pref)}
                 >
-                  {selected && <Check size={14} color={Colors.surface} />}
-                  <Text style={[styles.prefChipText, selected && styles.prefChipTextActive]}>{pref}</Text>
+                  {selected && <Check size={14} color={colors.surface} />}
+                  <Text style={[styles.prefChipText, { color: selected ? colors.surface : colors.textPrimary }]}>{pref}</Text>
                 </Pressable>
               );
             })}
@@ -1284,7 +1309,7 @@ const MAJOR_CITIES = [
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Work Mode Preferences</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Work Mode Preferences</Text>
           </View>
           <View style={styles.chipGrid}>
             {WORK_MODE_OPTIONS.map((mode) => {
@@ -1292,11 +1317,11 @@ const MAJOR_CITIES = [
               return (
                 <Pressable
                   key={mode}
-                  style={[styles.prefChip, selected && styles.prefChipActive]}
+                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.surface, borderColor: selected ? colors.secondary : colors.borderLight }]}
                   onPress={() => handleToggleWorkMode(mode)}
                 >
-                  {selected && <Check size={14} color={Colors.surface} />}
-                  <Text style={[styles.prefChipText, selected && styles.prefChipTextActive]}>{mode}</Text>
+                  {selected && <Check size={14} color={colors.surface} />}
+                  <Text style={[styles.prefChipText, { color: selected ? colors.surface : colors.textPrimary }]}>{mode}</Text>
                 </Pressable>
               );
             })}
@@ -1305,13 +1330,13 @@ const MAJOR_CITIES = [
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Salary Preferences</Text>
-            <Pressable style={styles.currencyBtn} onPress={() => setShowCurrencyPicker(true)}>
-              <Text style={styles.currencyBtnText}>{user.salaryCurrency}</Text>
-              <ChevronDown size={14} color={Colors.textSecondary} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Salary Preferences</Text>
+            <Pressable style={[styles.currencyBtn, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => setShowCurrencyPicker(true)}>
+              <Text style={[styles.currencyBtnText, { color: colors.textPrimary }]}>{user.salaryCurrency}</Text>
+              <ChevronDown size={14} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <View style={styles.salarySliderContainer}>
+          <View style={[styles.salarySliderContainer, { backgroundColor: colors.surface }]}>
             <RangeSlider
               min={salaryConfig.min}
               max={salaryConfig.max}
@@ -1326,36 +1351,36 @@ const MAJOR_CITIES = [
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Top Skills</Text>
-            <Text style={styles.topSkillHint}>{user.topSkills.length}/5</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Top Skills</Text>
+            <Text style={[styles.topSkillHint, { color: colors.textTertiary }]}>{user.topSkills.length}/5</Text>
           </View>
-          <Text style={styles.topSkillSubtext}>Tap to toggle top skill status</Text>
+          <Text style={[styles.topSkillSubtext, { color: colors.textTertiary }]}>Tap to toggle top skill status</Text>
           <View style={styles.skillsWrap}>
             {user.skills.map((skill, idx) => {
               const isTop = user.topSkills.includes(skill);
               return (
                 <Pressable
                   key={idx}
-                  style={[styles.skillTag, isTop && styles.skillTagTop]}
+                  style={[styles.skillTag, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary }, isTop && { borderWidth: 2, borderColor: '#D4A017' }]}
                   onPress={() => handleToggleTopSkill(skill)}
                   onLongPress={() => handleRemoveSkill(idx)}
                 >
                   {isTop && <Star size={12} color="#D4A017" />}
-                  <Text style={[styles.skillTagText, isTop && styles.skillTagTextTop]}>{skill}</Text>
+                  <Text style={[styles.skillTagText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{skill}</Text>
                 </Pressable>
               );
             })}
-            <Pressable style={styles.addSkillBtn} onPress={openAddSkillModal} testID="add-skill-btn">
-              <Plus size={16} color={Colors.surface} />
+            <Pressable style={[styles.addSkillBtn, { backgroundColor: colors.secondary }]} onPress={openAddSkillModal} testID="add-skill-btn">
+              <Plus size={16} color={colors.surface} />
             </Pressable>
           </View>
         </View>
 
-        <View style={[styles.section, styles.darkSection]}>
+        <View style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.darkSectionTitle}>Experience</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: '#FFFFFF' }]} onPress={openAddExperienceModal} testID="add-experience-btn">
-              <Plus size={16} color="#111111" />
+            <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Experience</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: theme === 'dark' ? colors.secondary : '#FFFFFF' }]} onPress={openAddExperienceModal} testID="add-experience-btn">
+              <Plus size={16} color={theme === 'dark' ? colors.surface : '#111111'} />
             </Pressable>
           </View>
           {user.experience.map((exp) => (
@@ -1401,46 +1426,46 @@ const MAJOR_CITIES = [
           ))}
         </View>
 
-        <View style={[styles.section, styles.borderedSection]}>
+        <View style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Education</Text>
-            <Pressable style={styles.addButton} onPress={openAddEducationModal} testID="add-education-btn">
-              <Plus size={16} color={Colors.surface} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Education</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openAddEducationModal} testID="add-education-btn">
+              <Plus size={16} color={colors.surface} />
             </Pressable>
           </View>
           {user.education.map((edu) => (
             <Pressable key={edu.id} style={styles.experienceItem} onPress={() => openEditEducationModal(edu)}>
-              <View style={styles.expIcon}>
-                <GraduationCap size={18} color={Colors.accent} />
+              <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
+                <GraduationCap size={18} color={colors.accent} />
               </View>
               <View style={styles.expContent}>
-                <Text style={styles.expTitle}>{edu.degree} in {edu.field}</Text>
-                <Text style={styles.expCompany}>{edu.institution}</Text>
-                <Text style={styles.expDate}>{edu.startDate} — {edu.endDate}</Text>
-                {edu.description ? <Text style={styles.expDesc} numberOfLines={3}>{edu.description}</Text> : null}
+                <Text style={[styles.expTitle, { color: colors.secondary }]}>{edu.degree} in {edu.field}</Text>
+                <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{edu.institution}</Text>
+                <Text style={[styles.expDate, { color: colors.textTertiary }]}>{edu.startDate} — {edu.endDate}</Text>
+                {edu.description ? <Text style={[styles.expDesc, { color: colors.textTertiary }]} numberOfLines={3}>{edu.description}</Text> : null}
                 {edu.achievements ? (
                   <View style={styles.eduDetailRow}>
-                    <Text style={styles.eduDetailLabel}>Achievements: </Text>
-                    <Text style={styles.eduDetailText} numberOfLines={2}>{edu.achievements}</Text>
+                    <Text style={[styles.eduDetailLabel, { color: colors.textSecondary }]}>Achievements: </Text>
+                    <Text style={[styles.eduDetailText, { color: colors.textSecondary }]} numberOfLines={2}>{edu.achievements}</Text>
                   </View>
                 ) : null}
                 {edu.extracurriculars ? (
                   <View style={styles.eduDetailRow}>
-                    <Text style={styles.eduDetailLabel}>Extracurriculars: </Text>
-                    <Text style={styles.eduDetailText} numberOfLines={2}>{edu.extracurriculars}</Text>
+                    <Text style={[styles.eduDetailLabel, { color: colors.textSecondary }]}>Extracurriculars: </Text>
+                    <Text style={[styles.eduDetailText, { color: colors.textSecondary }]} numberOfLines={2}>{edu.extracurriculars}</Text>
                   </View>
                 ) : null}
               </View>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Pencil size={14} color={colors.textTertiary} />
             </Pressable>
           ))}
         </View>
 
-        <View style={[styles.section, styles.darkSection]}>
+        <View style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.darkSectionTitle}>Achievements & Honors</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: '#FFFFFF' }]} onPress={openAddAchievementModal} testID="add-achievement-btn">
-              <Plus size={16} color="#111111" />
+            <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Achievements & Honors</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: theme === 'dark' ? colors.secondary : '#FFFFFF' }]} onPress={openAddAchievementModal} testID="add-achievement-btn">
+              <Plus size={16} color={theme === 'dark' ? colors.surface : '#111111'} />
             </Pressable>
           </View>
           {user.achievements.map((ach) => (
@@ -1459,92 +1484,92 @@ const MAJOR_CITIES = [
           ))}
         </View>
 
-        <View style={[styles.section, styles.borderedSection]}>
+        <View style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Licenses & Certifications</Text>
-            <Pressable style={styles.addButton} onPress={openAddCertificationModal} testID="add-cert-btn">
-              <Plus size={16} color={Colors.surface} />
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Licenses & Certifications</Text>
+            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openAddCertificationModal} testID="add-cert-btn">
+              <Plus size={16} color={colors.surface} />
             </Pressable>
           </View>
           {user.certifications.map((cert) => (
             <Pressable key={cert.id} style={styles.experienceItem} onPress={() => openEditCertificationModal(cert)}>
-              <View style={[styles.expIcon, { backgroundColor: '#FFF3E0' }]}>
-                <Award size={18} color={Colors.warning} />
+              <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.warningSoft : '#FFF3E0' }]}>
+                <Award size={18} color={colors.warning} />
               </View>
               <View style={styles.expContent}>
-                <Text style={styles.expTitle}>{cert.name}</Text>
-                <Text style={styles.expCompany}>{cert.issuingOrganization}</Text>
+                <Text style={[styles.expTitle, { color: colors.secondary }]}>{cert.name}</Text>
+                <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{cert.issuingOrganization}</Text>
                 {cert.credentialUrl ? (
                   <View style={styles.credUrlRow}>
-                    <Link2 size={11} color={Colors.accent} />
-                    <Text style={styles.credUrlText} numberOfLines={1}>{cert.credentialUrl}</Text>
+                    <Link2 size={11} color={colors.accent} />
+                    <Text style={[styles.credUrlText, { color: colors.accent }]} numberOfLines={1}>{cert.credentialUrl}</Text>
                   </View>
                 ) : null}
                 {cert.skills.length > 0 && (
                   <View style={styles.certSkillsRow}>
                     {cert.skills.map((s, i) => (
-                      <View key={i} style={styles.certSkillChip}>
-                        <Text style={styles.certSkillChipText}>{s}</Text>
+                      <View key={i} style={[styles.certSkillChip, { backgroundColor: colors.accentSoft }]}>
+                        <Text style={[styles.certSkillChipText, { color: colors.accent }]}>{s}</Text>
                       </View>
                     ))}
                   </View>
                 )}
               </View>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Pencil size={14} color={colors.textTertiary} />
             </Pressable>
           ))}
         </View>
 
-        <View style={styles.menuSection}>
+        <View style={[styles.menuSection, { backgroundColor: colors.surface }]}>
           {[
-            { icon: Star, label: 'Saved Jobs', color: Colors.warning, onPress: () => router.push('/saved-jobs' as any) },
-            { icon: FileText, label: 'Resume', color: Colors.accent, onPress: () => router.push('/resume-management' as any) },
+            { icon: Star, label: 'Saved Jobs', color: colors.warning, onPress: () => router.push('/saved-jobs' as any) },
+            { icon: FileText, label: 'Resume', color: colors.accent, onPress: () => router.push('/resume-management' as any) },
           ].map((item, idx) => (
-            <Pressable key={idx} style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={item.onPress}>
+            <Pressable key={idx} style={({ pressed }) => [styles.menuItem, { borderBottomColor: colors.borderLight }, pressed && { backgroundColor: colors.background }]} onPress={item.onPress}>
               <View style={[styles.menuIcon, { backgroundColor: `${item.color}15` }]}>
                 <item.icon size={20} color={item.color} />
               </View>
-              <Text style={styles.menuLabel}>{item.label}</Text>
-              <ChevronRight size={18} color={Colors.textTertiary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{item.label}</Text>
+              <ChevronRight size={18} color={colors.textTertiary} />
             </Pressable>
           ))}
         </View>
 
-        <View style={styles.demoSection}>
+        <View style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <View style={styles.demoHeader}>
-            <FileText size={16} color={Colors.textSecondary} />
-            <Text style={styles.demoHeaderTitle}>Cover Letter</Text>
+            <FileText size={16} color={colors.textSecondary} />
+            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Cover Letter</Text>
             <Pressable onPress={openCoverLetterModal} style={{ marginLeft: 'auto' }}>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Pencil size={14} color={colors.textTertiary} />
             </Pressable>
           </View>
           {user.coverLetter ? (
-            <Text style={styles.coverLetterText} numberOfLines={4}>{user.coverLetter}</Text>
+            <Text style={[styles.coverLetterText, { color: colors.textSecondary }]} numberOfLines={4}>{user.coverLetter}</Text>
           ) : (
-            <Text style={styles.coverLetterPlaceholder}>Add a cover letter to personalize your applications...</Text>
+            <Text style={[styles.coverLetterPlaceholder, { color: colors.textTertiary }]}>Add a cover letter to personalize your applications...</Text>
           )}
         </View>
 
-        <Pressable style={styles.demoSection} onPress={openJobRequirementsModal}>
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={openJobRequirementsModal}>
           <View style={styles.demoHeader}>
-            <ShieldCheck size={16} color={Colors.textSecondary} />
-            <Text style={styles.demoHeaderTitle}>Job Requirements</Text>
+            <ShieldCheck size={16} color={colors.textSecondary} />
+            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Job Requirements</Text>
             <Pressable onPress={openJobRequirementsModal} style={{ marginLeft: 'auto' }}>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Pencil size={14} color={colors.textTertiary} />
             </Pressable>
           </View>
-          <Text style={styles.demoNote}>Your work authorization and visa status</Text>
+          <Text style={[styles.demoNote, { color: colors.textTertiary }]}>Your work authorization and visa status</Text>
           {user.workAuthorizationStatus ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Work Authorization</Text>
-              <Text style={styles.demoValue}>{user.workAuthorizationStatus}</Text>
+            <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Work Authorization</Text>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.workAuthorizationStatus}</Text>
             </View>
           ) : (
-            <Text style={styles.coverLetterPlaceholder}>Add work authorization status...</Text>
+            <Text style={[styles.coverLetterPlaceholder, { color: colors.textTertiary }]}>Add work authorization status...</Text>
           )}
           {user.jobRequirements && user.jobRequirements.length > 0 ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Requirements</Text>
+            <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Requirements</Text>
               <View style={styles.chipGrid}>
                 {user.jobRequirements.map((req, idx) => (
                   <View key={idx} style={[styles.prefChip, { backgroundColor: '#FFF9C4', borderColor: '#F57F17' }]}>
@@ -1556,49 +1581,49 @@ const MAJOR_CITIES = [
           ) : null}
         </Pressable>
 
-        <View style={styles.demoSection}>
+        <View style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <View style={styles.demoHeader}>
-            <Lock size={16} color={Colors.textTertiary} />
-            <Text style={styles.demoHeaderTitle}>Equal Opportunity Information</Text>
+            <Lock size={16} color={colors.textTertiary} />
+            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Equal Opportunity Information</Text>
           </View>
-          <Text style={styles.demoNote}>This information is confidential and voluntary</Text>
+          <Text style={[styles.demoNote, { color: colors.textTertiary }]}>This information is confidential and voluntary</Text>
           
-          <Pressable style={styles.demoItem} onPress={openVeteranStatusModal}>
-            <Text style={styles.demoLabel}>Veteran Status</Text>
+          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openVeteranStatusModal}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Veteran Status</Text>
             <View style={styles.demoValueRow}>
-              <Text style={styles.demoValue}>{user.veteranStatus || 'Not specified'}</Text>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.veteranStatus || 'Not specified'}</Text>
+              <Pencil size={14} color={colors.textTertiary} />
             </View>
           </Pressable>
 
-          <Pressable style={styles.demoItem} onPress={openDisabilityStatusModal}>
-            <Text style={styles.demoLabel}>Disability Status</Text>
+          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openDisabilityStatusModal}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Disability Status</Text>
             <View style={styles.demoValueRow}>
-              <Text style={styles.demoValue}>{user.disabilityStatus || 'Not specified'}</Text>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.disabilityStatus || 'Not specified'}</Text>
+              <Pencil size={14} color={colors.textTertiary} />
             </View>
           </Pressable>
 
-          <Pressable style={styles.demoItem} onPress={openEthnicityModal}>
-            <Text style={styles.demoLabel}>Ethnicity</Text>
+          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openEthnicityModal}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Ethnicity</Text>
             <View style={styles.demoValueRow}>
-              <Text style={styles.demoValue}>{user.ethnicity || 'Not specified'}</Text>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.ethnicity || 'Not specified'}</Text>
+              <Pencil size={14} color={colors.textTertiary} />
             </View>
           </Pressable>
 
-          <Pressable style={styles.demoItem} onPress={openRaceModal}>
-            <Text style={styles.demoLabel}>Race</Text>
+          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openRaceModal}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Race</Text>
             <View style={styles.demoValueRow}>
-              <Text style={styles.demoValue}>{user.race || 'Not specified'}</Text>
-              <Pencil size={14} color={Colors.textTertiary} />
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.race || 'Not specified'}</Text>
+              <Pencil size={14} color={colors.textTertiary} />
             </View>
           </Pressable>
 
           {user.gender ? (
-            <View style={styles.demoItem}>
-              <Text style={styles.demoLabel}>Gender</Text>
-              <Text style={styles.demoValue}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
+            <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Gender</Text>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
             </View>
           ) : null}
         </View>
@@ -1607,18 +1632,18 @@ const MAJOR_CITIES = [
       </ScrollView>
 
       <Modal visible={activeModal === 'skill'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Skill</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+              <Text style={[styles.modalTitle, { color: colors.secondary }]}>Add Skill</Text>
+              <Pressable onPress={closeModal} style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}><X size={22} color={colors.textPrimary} /></Pressable>
             </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
+            <View style={[styles.roleSearchContainer, { backgroundColor: colors.background, borderColor: colors.borderLight }]}>
+              <Search size={16} color={colors.textTertiary} />
               <TextInput
-                style={styles.roleSearchInput}
+                style={[styles.roleSearchInput, { color: colors.textPrimary }]}
                 placeholder="Search skills..."
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={colors.textTertiary}
                 value={skillQuery}
                 onChangeText={setSkillQuery}
                 autoFocus
@@ -1849,9 +1874,57 @@ const MAJOR_CITIES = [
               <Text style={styles.modalTitle}>{editingEducation ? 'Edit Education' : 'Add Education'}</Text>
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll} keyboardShouldPersistTaps="handled">
               <Text style={styles.fieldLabel}>Institution *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. MIT" placeholderTextColor={Colors.textTertiary} value={eduInstitution} onChangeText={setEduInstitution} />
+              <View style={styles.universityInputContainer}>
+                <TextInput
+                  style={styles.universityInput}
+                  placeholder="Select or type university"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={universitySearch}
+                  onChangeText={(text) => {
+                    setUniversitySearch(text);
+                    setEduInstitution(text);
+                    setShowUniversityDropdown(true);
+                  }}
+                  onFocus={() => setShowUniversityDropdown(true)}
+                />
+                <ChevronDown size={14} color={Colors.textTertiary} />
+              </View>
+              {showUniversityDropdown && (
+                <View style={styles.universityDropdown}>
+                  <ScrollView style={styles.universityDropdownScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                    {universitySearch && !universities.some(u => u.toLowerCase() === universitySearch.toLowerCase()) && (
+                      <Pressable
+                        style={styles.universityDropdownItem}
+                        onPress={() => {
+                          setEduInstitution(universitySearch);
+                          setShowUniversityDropdown(false);
+                        }}
+                      >
+                        <Plus size={16} color={Colors.primary} />
+                        <Text style={styles.universityDropdownItemTextAdd}>Add "{universitySearch}"</Text>
+                      </Pressable>
+                    )}
+                    {universities
+                      .filter(u => !universitySearch || u.toLowerCase().includes(universitySearch.toLowerCase()))
+                      .slice(0, 50)
+                      .map(uni => (
+                        <Pressable
+                          key={uni}
+                          style={styles.universityDropdownItem}
+                          onPress={() => {
+                            setEduInstitution(uni);
+                            setUniversitySearch(uni);
+                            setShowUniversityDropdown(false);
+                          }}
+                        >
+                          <Text style={styles.universityDropdownItemText}>{uni}</Text>
+                        </Pressable>
+                      ))}
+                  </ScrollView>
+                </View>
+              )}
               <Text style={styles.fieldLabel}>Degree *</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. Bachelor's" placeholderTextColor={Colors.textTertiary} value={eduDegree} onChangeText={setEduDegree} />
               <Text style={styles.fieldLabel}>Field of Study</Text>
@@ -2579,4 +2652,11 @@ const styles = StyleSheet.create({
   referralInfoText: { fontSize: 13, color: '#558B2F', marginBottom: 4 },
   shareNowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#43A047', borderRadius: 14, paddingVertical: 14 },
   shareNowBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  universityInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12, borderWidth: 1, borderColor: Colors.borderLight },
+  universityInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
+  universityDropdown: { backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, marginBottom: 12, maxHeight: 250 },
+  universityDropdownScroll: { maxHeight: 240 },
+  universityDropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  universityDropdownItemText: { fontSize: 15, color: Colors.textPrimary },
+  universityDropdownItemTextAdd: { fontSize: 15, color: Colors.primary, fontWeight: '600' as const },
 });

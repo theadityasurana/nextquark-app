@@ -1,4 +1,4 @@
-const Colors = {
+const lightColors = {
     primary: '#111111',
     primaryLight: '#333333',
     primarySoft: '#F0F0F0',
@@ -31,6 +31,43 @@ const Colors = {
     statusRejected: '#D32F2F',
     statusWithdrawn: '#9E9E9E',
   };
-  
-  export default Colors;
+
+const darkColors = {
+    primary: '#FFFFFF',
+    primaryLight: '#E0E0E0',
+    primarySoft: '#2A2A2A',
+    secondary: '#FFFFFF',
+    secondaryLight: '#E0E0E0',
+    accent: '#00E676',
+    accentSoft: '#1B3A2F',
+    warning: '#FFB300',
+    warningSoft: '#3A2F1B',
+    error: '#EF5350',
+    errorSoft: '#3A1B1B',
+    background: '#121212',
+    surface: '#1E1E1E',
+    surfaceElevated: '#2A2A2A',
+    border: '#333333',
+    borderLight: '#2A2A2A',
+    textPrimary: '#FFFFFF',
+    textSecondary: '#B0B0B0',
+    textTertiary: '#808080',
+    textInverse: '#111111',
+    cardShadow: 'rgba(0, 0, 0, 0.3)',
+    overlay: 'rgba(0, 0, 0, 0.7)',
+    matchGreen: '#00E676',
+    matchYellow: '#FFB300',
+    matchOrange: '#FF6E40',
+    statusApplied: '#B0B0B0',
+    statusReview: '#FFB300',
+    statusInterview: '#FF6E40',
+    statusOffer: '#00E676',
+    statusRejected: '#EF5350',
+    statusWithdrawn: '#808080',
+  };
+
+const Colors = lightColors;
+
+export { lightColors, darkColors };
+export default Colors;
   

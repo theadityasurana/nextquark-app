@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Menu, Star, Archive, Send, Mail, X, RefreshCw, AlertCircle, Trash2, MailOpen } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchGmailMessages, fetchSentMessages, getAvatarUrl, deleteGmailMessage, archiveGmailMessage, starGmailMessage, markAsRead } from '@/lib/gmail';
 import { useGmailAuth, exchangeCodeForToken, getValidAccessToken, revokeGmailAccess } from '@/lib/gmailAuth';
@@ -227,11 +226,11 @@ function MessagesScreen() {
     if (!gmailToken && !isConnecting) {
       return (
         <View style={styles.emptyState}>
-          <Mail size={44} color={colors.secondary} />
-          <Text style={[styles.emptyTitle, { color: colors.secondary }]}>Connect Gmail</Text>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Sign in with your Google account to access your Gmail inbox</Text>
-          <Pressable style={[styles.connectBtn, { backgroundColor: colors.secondary }]} onPress={connectGmail}>
-            <Text style={[styles.connectBtnText, { color: colors.surface }]}>Connect Gmail Account</Text>
+          <Mail size={44} color={Colors.secondary} />
+          <Text style={styles.emptyTitle}>Connect Gmail</Text>
+          <Text style={styles.emptyText}>Sign in with your Google account to access your Gmail inbox</Text>
+          <Pressable style={styles.connectBtn} onPress={connectGmail}>
+            <Text style={styles.connectBtnText}>Connect Gmail Account</Text>
           </Pressable>
         </View>
       );
@@ -289,9 +288,9 @@ function MessagesScreen() {
             <Menu size={22} color={Colors.textPrimary} />
           </Pressable>
           <View>
-            <Text style={[styles.headerTitle, { color: colors.secondary }]}>Inbox</Text>
+            <Text style={styles.headerTitle}>Inbox</Text>
             {unreadCount > 0 && (
-              <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>{unreadCount} unread</Text>
+              <Text style={styles.headerSubtitle}>{unreadCount} unread</Text>
             )}
           </View>
         </View>
@@ -390,61 +389,61 @@ function MessagesScreen() {
 export default MessagesScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFF" },
+  container: { flex: 1, backgroundColor: Colors.surface },
   brandHeader: { alignItems: 'center', paddingTop: 4, paddingBottom: 2 },
   brandLogo: { height: 32, width: 240 },
-  brandName: { fontSize: 12, fontWeight: '800' as const, color: "#000", letterSpacing: 2, textTransform: 'uppercase' as const },
+  brandName: { fontSize: 12, fontWeight: '800' as const, color: Colors.textTertiary, letterSpacing: 2, textTransform: 'uppercase' as const },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 28, fontWeight: '800' as const, color: "#000" },
-  headerSubtitle: { fontSize: 13, color: "#000", fontWeight: '600' as const, marginTop: 1 },
-  refreshBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", marginHorizontal: 20, marginBottom: 8, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
-  searchInput: { flex: 1, fontSize: 15, color: "#000", padding: 0 },
+  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 28, fontWeight: '800' as const, color: Colors.secondary },
+  headerSubtitle: { fontSize: 13, color: Colors.accent, fontWeight: '600' as const, marginTop: 1 },
+  refreshBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, marginHorizontal: 20, marginBottom: 8, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
+  searchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary, padding: 0 },
   tabsContainer: { paddingHorizontal: 20, gap: 6, paddingVertical: 6, flexDirection: 'row' },
-  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
-  tabActive: { backgroundColor: "#FFF", borderColor: "#DDD" },
-  tabText: { fontSize: 12, fontWeight: '600' as const, color: "#000" },
-  tabTextActive: { color: "#000" },
-  emailItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "#FFF" },
-  emailItemPressed: { backgroundColor: "#FFF" },
+  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.borderLight },
+  tabActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+  tabText: { fontSize: 12, fontWeight: '600' as const, color: Colors.textSecondary },
+  tabTextActive: { color: Colors.textInverse },
+  emailItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: Colors.surface },
+  emailItemPressed: { backgroundColor: Colors.background },
   emailItemUnread: { backgroundColor: '#F8FAFF' },
   starBtn: { padding: 4, marginRight: 8 },
-  emailAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFF" },
+  emailAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.borderLight },
   emailContent: { flex: 1, marginLeft: 12, marginRight: 8 },
   emailTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  emailSender: { fontSize: 14, color: "#000", flex: 1 },
-  emailSenderUnread: { fontWeight: '700' as const, color: "#000" },
-  emailTime: { fontSize: 11, color: "#000", marginLeft: 8 },
-  emailSubject: { fontSize: 14, color: "#000", marginTop: 2 },
-  emailSubjectUnread: { fontWeight: '700' as const, color: "#000" },
-  emailPreview: { fontSize: 13, color: "#000", marginTop: 2 },
+  emailSender: { fontSize: 14, color: Colors.textSecondary, flex: 1 },
+  emailSenderUnread: { fontWeight: '700' as const, color: Colors.textPrimary },
+  emailTime: { fontSize: 11, color: Colors.textTertiary, marginLeft: 8 },
+  emailSubject: { fontSize: 14, color: Colors.textSecondary, marginTop: 2 },
+  emailSubjectUnread: { fontWeight: '700' as const, color: Colors.textPrimary },
+  emailPreview: { fontSize: 13, color: Colors.textTertiary, marginTop: 2 },
   unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2196F3' },
-  separator: { height: 1, backgroundColor: "#FFF", marginLeft: 0 },
+  separator: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 0 },
   emptyContainer: { flex: 1 },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, gap: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '700' as const, color: "#000", marginTop: 8 },
-  emptyText: { fontSize: 14, color: "#000", textAlign: 'center', lineHeight: 20 },
-  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: "#FFF", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 12 },
+  emptyTitle: { fontSize: 18, fontWeight: '700' as const, color: Colors.secondary, marginTop: 8 },
+  emptyText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.secondary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 12 },
   retryBtnText: { fontSize: 14, fontWeight: '600' as const, color: '#FFFFFF' },
-  connectedBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: "#FFF", borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  connectedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFF" },
-  connectedText: { fontSize: 12, color: "#000", fontWeight: '500' as const, flex: 1, textAlign: 'center' as const },
-  connectBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12, marginTop: 16 },
+  connectedBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: Colors.background, borderTopWidth: 1, borderTopColor: Colors.borderLight },
+  connectedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.accent },
+  connectedText: { fontSize: 12, color: Colors.textTertiary, fontWeight: '500' as const, flex: 1, textAlign: 'center' as const },
+  connectBtn: { backgroundColor: Colors.secondary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12, marginTop: 16 },
   connectBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
-  disconnectBtn: { backgroundColor: "#FFF", paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: "#DDD" },
-  disconnectBtnText: { fontSize: 13, fontWeight: '600' as const, color: "#000" },
+  disconnectBtn: { backgroundColor: Colors.background, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: Colors.borderLight },
+  disconnectBtnText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textSecondary },
   sidebarOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', flexDirection: 'row' },
-  sidebarContent: { width: 280, backgroundColor: "#FFF", paddingTop: 60, paddingHorizontal: 16 },
+  sidebarContent: { width: 280, backgroundColor: Colors.surface, paddingTop: 60, paddingHorizontal: 16 },
   sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 8 },
-  sidebarTitle: { fontSize: 20, fontWeight: '800' as const, color: "#000" },
+  sidebarTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary },
   sidebarEmail: { paddingHorizontal: 12, paddingBottom: 16, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  sidebarEmailText: { fontSize: 13, color: "#000" },
+  sidebarEmailText: { fontSize: 13, color: Colors.textTertiary },
   sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 12, paddingVertical: 14, borderRadius: 12, marginBottom: 4 },
   sidebarItemActive: { backgroundColor: '#E3F2FD' },
-  sidebarItemText: { flex: 1, fontSize: 15, fontWeight: '600' as const, color: "#000" },
+  sidebarItemText: { flex: 1, fontSize: 15, fontWeight: '600' as const, color: Colors.textSecondary },
   sidebarItemTextActive: { color: '#1565C0' },
-  sidebarBadge: { backgroundColor: "#FFF", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  sidebarBadgeText: { fontSize: 11, fontWeight: '700' as const, color: "#000" },
+  sidebarBadge: { backgroundColor: Colors.secondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  sidebarBadgeText: { fontSize: 11, fontWeight: '700' as const, color: Colors.textInverse },
 });

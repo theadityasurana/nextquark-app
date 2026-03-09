@@ -6,7 +6,6 @@ import { Image } from 'expo-image';
 import { ArrowLeft, MapPin, Bookmark, BookmarkX, Wifi, Building2 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { Job } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -106,10 +105,10 @@ export default function SavedJobsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Saved Jobs</Text>
+        <Text style={styles.headerTitle}>Saved Jobs</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -157,12 +156,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: "#FFF",
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
+    color: "#000",
   },
   listContent: {
     paddingHorizontal: 16,

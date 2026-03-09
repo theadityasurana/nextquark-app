@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, FileText, Check, Upload, Trash2, Eye } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { Resume } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -13,7 +12,7 @@ import { getSubscriptionStatus } from '@/lib/subscription';
 import { useQuery } from '@tanstack/react-query';
 
 export default function ResumeManagementScreen() {
-  const colors = useColors();  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { supabaseUserId } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -223,12 +222,12 @@ export default function ResumeManagementScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <ArrowLeft size={22} color={Colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Resumes</Text>
+        <Text style={styles.headerTitle}>My Resumes</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -249,7 +248,7 @@ export default function ResumeManagementScreen() {
           )}
         </View>
 
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        <Text style={styles.subtitle}>
           Select your active resume to use when applying for jobs.
         </Text>
 
@@ -270,14 +269,14 @@ export default function ResumeManagementScreen() {
               </View>
               {resume.isActive && (
                 <View style={styles.activeBadge}>
-                  <Check size={14} color={colors.surface} />
+                  <Check size={14} color={Colors.surface} />
                   <Text style={styles.activeBadgeText}>Active</Text>
                 </View>
               )}
             </View>
             <View style={styles.resumeActions}>
               <Pressable style={styles.viewBtn} onPress={() => handleView(resume)}>
-                <Eye size={16} color={colors.accent} />
+                <Eye size={16} color={Colors.accent} />
               </Pressable>
               {!resume.isActive && (
                 <Pressable style={styles.setActiveBtn} onPress={() => handleSetActive(resume.id)}>
@@ -288,7 +287,7 @@ export default function ResumeManagementScreen() {
                 style={styles.deleteBtn}
                 onPress={() => handleDelete(resume.id)}
               >
-                <Trash2 size={16} color={colors.error} />
+                <Trash2 size={16} color={Colors.error} />
               </Pressable>
             </View>
           </Pressable>
@@ -300,7 +299,7 @@ export default function ResumeManagementScreen() {
           disabled={uploading || resumes.length >= resumeLimit}
         >
           {uploading ? (
-            <ActivityIndicator size="small" color={colors.accent} />
+            <ActivityIndicator size="small" color={Colors.accent} />
           ) : (
             <Upload size={24} color={resumes.length >= resumeLimit ? Colors.textTertiary : Colors.accent} />
           )}
@@ -339,12 +338,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: "#FFF",
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
+    color: "#000",
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -352,6 +353,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    color: "#000",
     marginBottom: 20,
     lineHeight: 20,
   },
@@ -503,7 +505,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 20,
     borderWidth: 1,
-    borderColor: "#E8F5E9",
+    borderColor: `${Colors.accent}20`,
   },
   tipTitle: {
     fontSize: 14,

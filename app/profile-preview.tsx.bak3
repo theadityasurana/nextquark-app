@@ -21,7 +21,6 @@ import {
   Github,
 } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { CURRENCIES } from '@/constants/cities';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -51,7 +50,7 @@ export default function ProfilePreviewScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
+          <ArrowLeft size={22} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Profile Preview</Text>
         <View style={{ width: 40 }} />
@@ -116,7 +115,7 @@ export default function ProfilePreviewScreen() {
           ) : null}
           <View style={styles.contactDivider} />
           <Pressable style={styles.resumeButton}>
-            <FileText size={18} color={colors.surface} />
+            <FileText size={18} color={Colors.surface} />
             <Text style={styles.resumeButtonText}>Resume</Text>
           </Pressable>
         </View>
@@ -139,7 +138,7 @@ export default function ProfilePreviewScreen() {
         {user.jobPreferences.length > 0 && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Target size={18} color={colors.secondary} />
+              <Target size={18} color={Colors.secondary} />
               <Text style={styles.cardTitle}>Job Preferences</Text>
             </View>
             <View style={styles.prefsWrap}>
@@ -181,7 +180,7 @@ export default function ProfilePreviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Award size={18} color={colors.secondary} />
+            <Award size={18} color={Colors.secondary} />
             <Text style={styles.cardTitle}>All Skills</Text>
           </View>
           <View style={styles.skillsWrap}>
@@ -195,7 +194,7 @@ export default function ProfilePreviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Briefcase size={18} color={colors.secondary} />
+            <Briefcase size={18} color={Colors.secondary} />
             <Text style={styles.cardTitle}>Experience</Text>
           </View>
           {user.experience.map((exp, idx) => (
@@ -207,7 +206,7 @@ export default function ProfilePreviewScreen() {
                 <Text style={styles.timelineCompany}>{exp.company}</Text>
                 {exp.jobLocation ? (
                   <View style={styles.locationRow}>
-                    <MapPin size={12} color={colors.textTertiary} />
+                    <MapPin size={12} color={Colors.textTertiary} />
                     <Text style={styles.jobLocationText}>{exp.jobLocation}</Text>
                   </View>
                 ) : null}
@@ -224,7 +223,7 @@ export default function ProfilePreviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <GraduationCap size={18} color={colors.secondary} />
+            <GraduationCap size={18} color={Colors.secondary} />
             <Text style={styles.cardTitle}>Education</Text>
           </View>
           {user.education.map((edu, idx) => (
@@ -258,7 +257,7 @@ export default function ProfilePreviewScreen() {
         {user.coverLetter ? (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <FileText size={18} color={colors.secondary} />
+              <FileText size={18} color={Colors.secondary} />
               <Text style={styles.cardTitle}>Cover Letter</Text>
             </View>
             <Text style={styles.bioText}>{user.coverLetter}</Text>
@@ -268,7 +267,7 @@ export default function ProfilePreviewScreen() {
         {(user.veteranStatus || user.disabilityStatus || user.ethnicity || user.gender || user.workAuthorizationStatus) && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Award size={18} color={colors.secondary} />
+              <Award size={18} color={Colors.secondary} />
               <Text style={styles.cardTitle}>Additional Information</Text>
             </View>
             {user.workAuthorizationStatus ? (
@@ -323,7 +322,7 @@ export default function ProfilePreviewScreen() {
         {user.certifications.length > 0 && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Award size={18} color={colors.warning} />
+              <Award size={18} color={Colors.warning} />
               <Text style={styles.cardTitle}>Licenses & Certifications</Text>
             </View>
             {user.certifications.map((cert, idx) => (
@@ -332,7 +331,7 @@ export default function ProfilePreviewScreen() {
                 <Text style={styles.certOrg}>{cert.issuingOrganization}</Text>
                 {cert.credentialUrl ? (
                   <View style={styles.certUrlRow}>
-                    <Link2 size={12} color={colors.accent} />
+                    <Link2 size={12} color={Colors.accent} />
                     <Text style={styles.certUrlText} numberOfLines={1}>{cert.credentialUrl}</Text>
                   </View>
                 ) : null}
@@ -652,7 +651,7 @@ const styles = StyleSheet.create({
   },
   certItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
+    borderBottomColor: Colors.borderLight,
   },
   certName: {
     fontSize: 15,
@@ -705,7 +704,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
+    borderBottomColor: Colors.borderLight,
   },
   infoLabel: {
     fontSize: 14,

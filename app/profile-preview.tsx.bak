@@ -21,7 +21,6 @@ import {
   Github,
 } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { CURRENCIES } from '@/constants/cities';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -29,12 +28,11 @@ export default function ProfilePreviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userProfile } = useAuth();
-  const colors = useColors();
   const user = userProfile;
 
   if (!user) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={styles.emptyText}>No profile data available</Text>
       </View>
     );
@@ -51,7 +49,7 @@ export default function ProfilePreviewScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
+          <ArrowLeft size={22} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Profile Preview</Text>
         <View style={{ width: 40 }} />
@@ -116,7 +114,7 @@ export default function ProfilePreviewScreen() {
           ) : null}
           <View style={styles.contactDivider} />
           <Pressable style={styles.resumeButton}>
-            <FileText size={18} color={colors.surface} />
+            <FileText size={18} color={Colors.surface} />
             <Text style={styles.resumeButtonText}>Resume</Text>
           </Pressable>
         </View>
@@ -139,7 +137,7 @@ export default function ProfilePreviewScreen() {
         {user.jobPreferences.length > 0 && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Target size={18} color={colors.secondary} />
+              <Target size={18} color={Colors.secondary} />
               <Text style={styles.cardTitle}>Job Preferences</Text>
             </View>
             <View style={styles.prefsWrap}>
@@ -181,7 +179,7 @@ export default function ProfilePreviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Award size={18} color={colors.secondary} />
+            <Award size={18} color={Colors.secondary} />
             <Text style={styles.cardTitle}>All Skills</Text>
           </View>
           <View style={styles.skillsWrap}>
@@ -195,7 +193,7 @@ export default function ProfilePreviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Briefcase size={18} color={colors.secondary} />
+            <Briefcase size={18} color={Colors.secondary} />
             <Text style={styles.cardTitle}>Experience</Text>
           </View>
           {user.experience.map((exp, idx) => (
@@ -207,7 +205,7 @@ export default function ProfilePreviewScreen() {
                 <Text style={styles.timelineCompany}>{exp.company}</Text>
                 {exp.jobLocation ? (
                   <View style={styles.locationRow}>
-                    <MapPin size={12} color={colors.textTertiary} />
+                    <MapPin size={12} color={Colors.textTertiary} />
                     <Text style={styles.jobLocationText}>{exp.jobLocation}</Text>
                   </View>
                 ) : null}
@@ -224,12 +222,12 @@ export default function ProfilePreviewScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <GraduationCap size={18} color={colors.secondary} />
+            <GraduationCap size={18} color={Colors.secondary} />
             <Text style={styles.cardTitle}>Education</Text>
           </View>
           {user.education.map((edu, idx) => (
             <View key={edu.id} style={[styles.timelineItem, idx === user.education.length - 1 && styles.lastTimelineItem]}>
-              <View style={[styles.timelineDot, { backgroundColor: "#FFF" }]} />
+              <View style={[styles.timelineDot, { backgroundColor: Colors.accent }]} />
               {idx < user.education.length - 1 && <View style={styles.timelineLine} />}
               <View style={styles.timelineContent}>
                 <Text style={styles.timelineTitle}>{edu.degree} in {edu.field}</Text>
@@ -258,7 +256,7 @@ export default function ProfilePreviewScreen() {
         {user.coverLetter ? (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <FileText size={18} color={colors.secondary} />
+              <FileText size={18} color={Colors.secondary} />
               <Text style={styles.cardTitle}>Cover Letter</Text>
             </View>
             <Text style={styles.bioText}>{user.coverLetter}</Text>
@@ -268,7 +266,7 @@ export default function ProfilePreviewScreen() {
         {(user.veteranStatus || user.disabilityStatus || user.ethnicity || user.gender || user.workAuthorizationStatus) && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Award size={18} color={colors.secondary} />
+              <Award size={18} color={Colors.secondary} />
               <Text style={styles.cardTitle}>Additional Information</Text>
             </View>
             {user.workAuthorizationStatus ? (
@@ -323,7 +321,7 @@ export default function ProfilePreviewScreen() {
         {user.certifications.length > 0 && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Award size={18} color={colors.warning} />
+              <Award size={18} color={Colors.warning} />
               <Text style={styles.cardTitle}>Licenses & Certifications</Text>
             </View>
             {user.certifications.map((cert, idx) => (
@@ -332,7 +330,7 @@ export default function ProfilePreviewScreen() {
                 <Text style={styles.certOrg}>{cert.issuingOrganization}</Text>
                 {cert.credentialUrl ? (
                   <View style={styles.certUrlRow}>
-                    <Link2 size={12} color={colors.accent} />
+                    <Link2 size={12} color={Colors.accent} />
                     <Text style={styles.certUrlText} numberOfLines={1}>{cert.credentialUrl}</Text>
                   </View>
                 ) : null}
@@ -359,7 +357,7 @@ export default function ProfilePreviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -372,14 +370,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -404,7 +402,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 32,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.borderLight,
   },
   onlineDot: {
     position: 'absolute',
@@ -413,9 +411,9 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.accent,
     borderWidth: 3,
-    borderColor: "#DDD",
+    borderColor: Colors.surface,
   },
   name: {
     fontSize: 24,
@@ -439,7 +437,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
   },
   contactCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -460,12 +458,12 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.textPrimary,
     fontWeight: '500' as const,
   },
   contactDivider: {
     height: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.borderLight,
     marginVertical: 10,
   },
   resumeButton: {
@@ -473,7 +471,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.secondary,
     borderRadius: 12,
     paddingVertical: 12,
     marginTop: 6,
@@ -481,7 +479,7 @@ const styles = StyleSheet.create({
   resumeButtonText: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.surface,
   },
   statsRow: {
     flexDirection: 'row',
@@ -490,7 +488,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
@@ -498,16 +496,16 @@ const styles = StyleSheet.create({
   statNum: {
     fontSize: 22,
     fontWeight: '800' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   statLabel: {
     fontSize: 12,
-    color: "#000",
+    color: Colors.textTertiary,
     fontWeight: '500' as const,
     marginTop: 2,
   },
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 18,
     marginBottom: 12,
@@ -521,11 +519,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   bioText: {
     fontSize: 15,
-    color: "#000",
+    color: Colors.textSecondary,
     lineHeight: 23,
     marginTop: 8,
   },
@@ -535,14 +533,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   prefChip: {
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.secondary,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
   },
   prefChipText: {
     fontSize: 13,
-    color: "#000",
+    color: Colors.textInverse,
     fontWeight: '600' as const,
   },
   salaryText: {
@@ -572,14 +570,14 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
   },
   skillChip: {
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.secondary,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
   skillChipText: {
     fontSize: 13,
-    color: "#000",
+    color: Colors.textInverse,
     fontWeight: '600' as const,
   },
   timelineItem: {
@@ -595,7 +593,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.secondary,
     marginTop: 4,
   },
   timelineLine: {
@@ -604,7 +602,7 @@ const styles = StyleSheet.create({
     top: 20,
     bottom: -16,
     width: 2,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.borderLight,
   },
   timelineContent: {
     flex: 1,
@@ -613,27 +611,27 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   timelineCompany: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   timelineDate: {
     fontSize: 12,
-    color: "#000",
+    color: Colors.textTertiary,
     marginTop: 3,
   },
   timelineDesc: {
     fontSize: 13,
-    color: "#000",
+    color: Colors.textSecondary,
     lineHeight: 20,
     marginTop: 6,
   },
   emptyText: {
     fontSize: 15,
-    color: "#000",
+    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -643,7 +641,7 @@ const styles = StyleSheet.create({
   eduExtraLabel: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.textPrimary,
     marginBottom: 2,
   },
   certItem: {
@@ -652,16 +650,16 @@ const styles = StyleSheet.create({
   },
   certItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
+    borderBottomColor: Colors.borderLight,
   },
   certName: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   certOrg: {
     fontSize: 13,
-    color: "#000",
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   certUrlRow: {
@@ -672,7 +670,7 @@ const styles = StyleSheet.create({
   },
   certUrlText: {
     fontSize: 12,
-    color: "#000",
+    color: Colors.accent,
     flex: 1,
   },
   certSkillsWrap: {
@@ -682,14 +680,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   certSkillBadge: {
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.accentSoft,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
   certSkillBadgeText: {
     fontSize: 11,
-    color: "#000",
+    color: Colors.accent,
     fontWeight: '600' as const,
   },
   darkCard: {
@@ -697,7 +695,7 @@ const styles = StyleSheet.create({
   },
   jobLocationText: {
     fontSize: 12,
-    color: "#000",
+    color: Colors.textTertiary,
     marginTop: 2,
   },
   infoRow: {
@@ -705,16 +703,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
+    borderBottomColor: Colors.borderLight,
   },
   infoLabel: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: "#000",
+    color: Colors.textSecondary,
   },
   infoValue: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.textPrimary,
     fontWeight: '500' as const,
   },
 });

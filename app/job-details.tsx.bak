@@ -6,7 +6,6 @@ import { Image } from 'expo-image';
 import { X, MapPin, Briefcase, Clock, Users, Heart, Bookmark, Share2, Wifi, Building2, Camera, ExternalLink, Globe } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { mockJobs } from '@/mocks/jobs';
 import { fetchJobById, incrementRightSwipe, addToLiveApplicationQueue } from '@/lib/jobs';
 import MatchScoreBadge from '@/components/MatchScoreBadge';
@@ -33,7 +32,7 @@ export default function JobDetailsScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surface }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
@@ -74,19 +73,19 @@ export default function JobDetailsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
       <View style={styles.header}>
-        <Pressable style={[styles.closeButton, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
-          <X size={22} color={colors.textPrimary} />
+        <Pressable style={styles.closeButton} onPress={() => router.back()}>
+          <X size={22} color={Colors.textPrimary} />
         </Pressable>
         <View style={styles.headerActions}>
-          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.surface }]}>
-            <Share2 size={20} color={colors.textSecondary} />
+          <Pressable style={styles.headerActionBtn}>
+            <Share2 size={20} color={Colors.textSecondary} />
           </Pressable>
-          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.surface }]} onPress={() => {
+          <Pressable style={styles.headerActionBtn} onPress={() => {
             setIsSaved(!isSaved);
             Alert.alert(isSaved ? 'Removed' : 'Saved', isSaved ? 'Job removed from saved jobs.' : 'Job saved successfully!');
             console.log(isSaved ? 'Job unsaved:' : 'Job saved:', job?.jobTitle);
           }}>
-            <Bookmark size={20} color={isSaved ? '#111111' : colors.textSecondary} fill={isSaved ? '#111111' : 'transparent'} />
+            <Bookmark size={20} color={isSaved ? '#111111' : Colors.textSecondary} fill={isSaved ? '#111111' : 'transparent'} />
           </Pressable>
         </View>
       </View>
@@ -94,11 +93,11 @@ export default function JobDetailsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.topSection}>
           <Image source={{ uri: job.companyLogo }} style={styles.logo} />
-          <Text style={[styles.companyName, { color: colors.textPrimary }]}>{job.companyName}</Text>
-          <Text style={[styles.jobTitle, { color: colors.secondary }]}>{job.jobTitle}</Text>
+          <Text style={styles.companyName}>{job.companyName}</Text>
+          <Text style={styles.jobTitle}>{job.jobTitle}</Text>
           <View style={styles.locationRow}>
-            <LocationIcon size={14} color={colors.textSecondary} />
-            <Text style={[styles.locationText, { color: colors.textSecondary }]}>{job.location}</Text>
+            <LocationIcon size={14} color={Colors.textSecondary} />
+            <Text style={styles.locationText}>{job.location}</Text>
             <View style={styles.typeBadge}>
               <Text style={styles.typeBadgeText}>{job.locationType}</Text>
             </View>
@@ -130,29 +129,29 @@ export default function JobDetailsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.secondary }]}>About the Role</Text>
-          <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{job.description}</Text>
+          <Text style={styles.sectionTitle}>About the Role</Text>
+          <Text style={styles.descriptionText}>{job.description}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.secondary }]}>About {job.companyName}</Text>
-          <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{job.companyDescription}</Text>
+          <Text style={styles.sectionTitle}>About {job.companyName}</Text>
+          <Text style={styles.descriptionText}>{job.companyDescription}</Text>
         </View>
 
         {job.detailedRequirements ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Detailed Requirements</Text>
-            <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{job.detailedRequirements}</Text>
+            <Text style={styles.sectionTitle}>Detailed Requirements</Text>
+            <Text style={styles.descriptionText}>{job.detailedRequirements}</Text>
           </View>
         ) : null}
 
         {job.requirements && job.requirements.length > 0 ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Key Requirements</Text>
+            <Text style={styles.sectionTitle}>Key Requirements</Text>
             {job.requirements.map((req, idx) => (
               <View key={idx} style={styles.reqRow}>
-                <View style={[styles.reqBullet, { backgroundColor: colors.accent }]} />
-                <Text style={[styles.reqText, { color: colors.textSecondary }]}>{req}</Text>
+                <View style={styles.reqBullet} />
+                <Text style={styles.reqText}>{req}</Text>
               </View>
             ))}
           </View>
@@ -174,11 +173,11 @@ export default function JobDetailsScreen() {
 
         {job.skills && job.skills.length > 0 ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Skills</Text>
+            <Text style={styles.sectionTitle}>Skills</Text>
             <View style={styles.tagsWrap}>
               {job.skills.map((skill, idx) => (
-                <View key={idx} style={[styles.skillTag, { backgroundColor: colors.surface }]}>
-                  <Text style={[styles.skillTagText, { color: colors.textPrimary }]}>{skill}</Text>
+                <View key={idx} style={styles.skillTag}>
+                  <Text style={styles.skillTagText}>{skill}</Text>
                 </View>
               ))}
             </View>
@@ -186,11 +185,11 @@ export default function JobDetailsScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Benefits</Text>
+          <Text style={styles.sectionTitle}>Benefits</Text>
           <View style={styles.tagsWrap}>
             {job.benefits.map((benefit, idx) => (
-              <View key={idx} style={[styles.benefitTag, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.benefitTagText, { color: colors.textPrimary }]}>{benefit}</Text>
+              <View key={idx} style={styles.benefitTag}>
+                <Text style={styles.benefitTagText}>{benefit}</Text>
               </View>
             ))}
           </View>
@@ -238,14 +237,14 @@ export default function JobDetailsScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
-        <Pressable style={[styles.passBtn, { backgroundColor: '#EF4444' }]}>
-          <X size={22} color="#FFFFFF" />
-          <Text style={[styles.passBtnText, { color: '#FFFFFF' }]}>Pass</Text>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <Pressable style={styles.passBtn}>
+          <X size={22} color={Colors.error} />
+          <Text style={styles.passBtnText}>Pass</Text>
         </Pressable>
-        <Pressable style={[styles.applyBtn, { backgroundColor: '#10B981' }]} onPress={handleApplyNow} disabled={isApplying}>
-          <Heart size={22} color="#FFFFFF" />
-          <Text style={[styles.applyBtnText, { color: '#FFFFFF' }]}>{isApplying ? 'Applying...' : 'Apply Now'}</Text>
+        <Pressable style={styles.applyBtn} onPress={handleApplyNow} disabled={isApplying}>
+          <Heart size={22} color={Colors.textInverse} />
+          <Text style={styles.applyBtnText}>{isApplying ? 'Applying...' : 'Apply Now'}</Text>
         </Pressable>
       </View>
     </View>
@@ -255,7 +254,7 @@ export default function JobDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -268,6 +267,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -279,6 +279,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -293,19 +294,19 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 20,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.borderLight,
     marginBottom: 14,
   },
   companyName: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.textSecondary,
     fontWeight: '600' as const,
     marginBottom: 4,
   },
   jobTitle: {
     fontSize: 24,
     fontWeight: '800' as const,
-    color: "#000",
+    color: Colors.secondary,
     textAlign: 'center',
     marginBottom: 10,
   },
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.textSecondary,
   },
   typeBadge: {
     backgroundColor: '#EEEEEE',
@@ -327,7 +328,7 @@ const styles = StyleSheet.create({
   },
   typeBadgeText: {
     fontSize: 12,
-    color: "#000",
+    color: Colors.textPrimary,
     fontWeight: '600' as const,
     textTransform: 'capitalize' as const,
   },
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.background,
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
@@ -346,13 +347,13 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 11,
-    color: "#000",
+    color: Colors.textTertiary,
     fontWeight: '500' as const,
   },
   infoValue: {
     fontSize: 13,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.secondary,
     textAlign: 'center',
   },
   salaryCard: {
@@ -366,18 +367,18 @@ const styles = StyleSheet.create({
   },
   salaryLabel: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.textSecondary,
     fontWeight: '600' as const,
   },
   salaryValue: {
     fontSize: 20,
     fontWeight: '800' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   salaryPeriod: {
     fontSize: 14,
     fontWeight: '400' as const,
-    color: "#000",
+    color: Colors.textTertiary,
   },
   section: {
     marginBottom: 24,
@@ -385,12 +386,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
-    color: "#000",
+    color: Colors.secondary,
     marginBottom: 12,
   },
   descriptionText: {
     fontSize: 15,
-    color: "#000",
+    color: Colors.textSecondary,
     lineHeight: 23,
   },
   cultureHeader: {
@@ -407,7 +408,7 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 14,
     marginRight: 10,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.borderLight,
   },
   reqRow: {
     flexDirection: 'row',
@@ -418,12 +419,14 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+    backgroundColor: Colors.textPrimary,
     marginTop: 7,
     marginRight: 12,
   },
   reqText: {
     flex: 1,
     fontSize: 14,
+    color: Colors.textSecondary,
     lineHeight: 21,
   },
   tagsWrap: {
@@ -432,34 +435,38 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   skillTag: {
+    backgroundColor: Colors.secondary,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
   skillTagText: {
     fontSize: 13,
+    color: Colors.textInverse,
     fontWeight: '600' as const,
   },
   benefitTag: {
+    backgroundColor: Colors.accentSoft,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
   benefitTagText: {
     fontSize: 13,
+    color: Colors.accent,
     fontWeight: '600' as const,
   },
   deadlineCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.warningSoft,
     padding: 14,
     borderRadius: 12,
   },
   deadlineText: {
     fontSize: 14,
-    color: "#000",
+    color: Colors.warning,
     fontWeight: '600' as const,
   },
   bottomBar: {
@@ -471,7 +478,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     gap: 12,
+    backgroundColor: Colors.surface,
     borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
   },
   passBtn: {
     flex: 1,
@@ -481,10 +490,14 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 14,
+    backgroundColor: Colors.errorSoft,
+    borderWidth: 1,
+    borderColor: `${Colors.error}30`,
   },
   passBtnText: {
     fontSize: 16,
     fontWeight: '700' as const,
+    color: Colors.error,
   },
   applyBtn: {
     flex: 2,
@@ -494,14 +507,16 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 14,
+    backgroundColor: Colors.accent,
   },
   applyBtnText: {
     fontSize: 16,
     fontWeight: '700' as const,
+    color: Colors.textInverse,
   },
   errorText: {
     fontSize: 16,
-    color: "#000",
+    color: Colors.textSecondary,
     textAlign: 'center',
     marginTop: 40,
   },
@@ -509,20 +524,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: "#FFF",
+    backgroundColor: Colors.primarySoft,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E3F2FD',
+    borderColor: `${Colors.primary}30`,
   },
   portalName: {
     fontSize: 15,
     fontWeight: '600' as const,
-    color: "#000",
+    color: Colors.secondary,
   },
   portalUrl: {
     fontSize: 12,
-    color: "#000",
+    color: Colors.textTertiary,
     marginTop: 2,
   },
   websiteCard: {
@@ -538,6 +553,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600' as const,
-    color: "#000",
+    color: Colors.primary,
   },
 });

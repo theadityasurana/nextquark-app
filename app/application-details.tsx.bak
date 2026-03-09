@@ -44,18 +44,17 @@ import {
   MessageCircle,
 } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pending', color: "#000", bg: '#EEEEEE' },
-  applied: { label: 'Applied', color: "#000", bg: '#EEEEEE' },
-  under_review: { label: 'Under Review', color: "#000", bg: '#FFF3E0' },
-  interviewing: { label: 'Interview Scheduled', color: "#000", bg: '#FFF3E0' },
-  interview_scheduled: { label: 'Interview Scheduled', color: "#000", bg: '#FFF3E0' },
-  offer: { label: 'Offer Received', color: "#000", bg: '#E8F5E9' },
-  rejected: { label: 'Not Selected', color: "#000", bg: '#FFEBEE' },
-  withdrawn: { label: 'Withdrawn', color: "#000", bg: '#F0F2F5' },
+  pending: { label: 'Pending', color: Colors.textSecondary, bg: '#EEEEEE' },
+  applied: { label: 'Applied', color: Colors.statusApplied, bg: '#EEEEEE' },
+  under_review: { label: 'Under Review', color: Colors.statusReview, bg: Colors.warningSoft },
+  interviewing: { label: 'Interview Scheduled', color: Colors.statusInterview, bg: '#FFF3E0' },
+  interview_scheduled: { label: 'Interview Scheduled', color: Colors.statusInterview, bg: '#FFF3E0' },
+  offer: { label: 'Offer Received', color: Colors.statusOffer, bg: Colors.accentSoft },
+  rejected: { label: 'Not Selected', color: Colors.statusRejected, bg: Colors.errorSoft },
+  withdrawn: { label: 'Withdrawn', color: Colors.statusWithdrawn, bg: '#F0F2F5' },
 };
 
 const platformLabels: Record<string, { label: string; color: string }> = {
@@ -132,7 +131,6 @@ export default function ApplicationDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const colors = useColors();
 
   const { data: appData, isLoading } = useQuery({
     queryKey: ['application-details', id],
@@ -232,8 +230,8 @@ export default function ApplicationDetailsScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
@@ -243,7 +241,7 @@ export default function ApplicationDetailsScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <ArrowLeft size={22} color={colors.textPrimary} />
+            <ArrowLeft size={22} color={Colors.textPrimary} />
           </Pressable>
         </View>
         <Text style={styles.errorText}>Application not found</Text>
@@ -574,21 +572,21 @@ export default function ApplicationDetailsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8FF' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
-  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700' as const, color: "#000" },
-  errorText: { fontSize: 16, color: "#000", textAlign: 'center', marginTop: 40 },
+  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary },
+  errorText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', marginTop: 40 },
   scrollContent: { paddingHorizontal: 16 },
   credentialsCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#90CAF9' },
   credIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#BBDEFB', justifyContent: 'center', alignItems: 'center' },
   credContent: { flex: 1, marginLeft: 12 },
   credTitle: { fontSize: 14, fontWeight: '700' as const, color: '#1565C0' },
   credSubtext: { fontSize: 12, color: '#42A5F5', marginTop: 2 },
-  companyCard: { backgroundColor: "#FFF", borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 12 },
-  logo: { width: 64, height: 64, borderRadius: 18, backgroundColor: "#FFF", marginBottom: 12 },
-  jobTitle: { fontSize: 20, fontWeight: '800' as const, color: "#000", textAlign: 'center' },
-  companyName: { fontSize: 14, color: "#000", fontWeight: '600' as const, marginTop: 4 },
+  companyCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 12 },
+  logo: { width: 64, height: 64, borderRadius: 18, backgroundColor: Colors.borderLight, marginBottom: 12 },
+  jobTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary, textAlign: 'center' },
+  companyName: { fontSize: 14, color: Colors.textSecondary, fontWeight: '600' as const, marginTop: 4 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  locationText: { fontSize: 13, color: "#000" },
+  locationText: { fontSize: 13, color: Colors.textTertiary },
   statusBadgeLarge: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10 },
   statusBadgeText: { fontSize: 14, fontWeight: '700' as const },
   progressCard: { backgroundColor: '#111111', borderRadius: 16, padding: 18, marginBottom: 12 },
@@ -610,26 +608,26 @@ const styles = StyleSheet.create({
   videoCloseBtn: { position: 'absolute' as const, top: 50, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   webView: { flex: 1, backgroundColor: '#000' },
   infoCards: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  infoCard: { flex: 1, backgroundColor: "#FFF", borderRadius: 14, padding: 14, alignItems: 'center', gap: 4 },
-  infoLabel: { fontSize: 11, color: "#000", fontWeight: '500' as const },
-  infoValue: { fontSize: 13, fontWeight: '700' as const, color: "#000", textAlign: 'center' },
-  salaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 14, padding: 16, marginBottom: 16 },
-  salaryLabel: { fontSize: 14, color: "#000", fontWeight: '600' as const },
-  salaryValue: { fontSize: 18, fontWeight: '800' as const, color: "#000" },
-  salaryPeriod: { fontSize: 13, fontWeight: '400' as const, color: "#000" },
+  infoCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 14, padding: 14, alignItems: 'center', gap: 4 },
+  infoLabel: { fontSize: 11, color: Colors.textTertiary, fontWeight: '500' as const },
+  infoValue: { fontSize: 13, fontWeight: '700' as const, color: Colors.secondary, textAlign: 'center' },
+  salaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 14, padding: 16, marginBottom: 16 },
+  salaryLabel: { fontSize: 14, color: Colors.textSecondary, fontWeight: '600' as const },
+  salaryValue: { fontSize: 18, fontWeight: '800' as const, color: Colors.secondary },
+  salaryPeriod: { fontSize: 13, fontWeight: '400' as const, color: Colors.textTertiary },
   section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 17, fontWeight: '700' as const, color: "#000", marginBottom: 10 },
-  descriptionText: { fontSize: 14, color: "#000", lineHeight: 22 },
+  sectionTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary, marginBottom: 10 },
+  descriptionText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22 },
   reqRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
-  reqBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFF", marginTop: 7, marginRight: 12 },
-  reqText: { flex: 1, fontSize: 14, color: "#000", lineHeight: 21 },
+  reqBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.textPrimary, marginTop: 7, marginRight: 12 },
+  reqText: { flex: 1, fontSize: 14, color: Colors.textSecondary, lineHeight: 21 },
   cultureHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  culturePhoto: { width: 200, height: 140, borderRadius: 14, marginRight: 10, backgroundColor: "#FFF" },
+  culturePhoto: { width: 200, height: 140, borderRadius: 14, marginRight: 10, backgroundColor: Colors.borderLight },
   tagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  skillTag: { backgroundColor: "#FFF", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  skillTagText: { fontSize: 13, color: "#000", fontWeight: '600' as const },
-  benefitTag: { backgroundColor: "#FFF", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  benefitTagText: { fontSize: 13, color: "#000", fontWeight: '600' as const },
+  skillTag: { backgroundColor: Colors.secondary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  skillTagText: { fontSize: 13, color: Colors.textInverse, fontWeight: '600' as const },
+  benefitTag: { backgroundColor: Colors.accentSoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  benefitTagText: { fontSize: 13, color: Colors.accent, fontWeight: '600' as const },
   actionNeededCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3E0', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#FFB74D' },
   actionNeededIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFE0B2', justifyContent: 'center', alignItems: 'center' },
   actionNeededContent: { flex: 1, marginLeft: 12 },
@@ -637,25 +635,25 @@ const styles = StyleSheet.create({
   actionNeededText: { fontSize: 12, color: '#F57C00', marginTop: 2 },
   questionBlock: { marginBottom: 16 },
   questionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  questionText: { fontSize: 14, fontWeight: '600' as const, color: "#000", flex: 1 },
+  questionText: { fontSize: 14, fontWeight: '600' as const, color: Colors.textPrimary, flex: 1 },
   optionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  optionChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
+  optionChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.borderLight },
   optionChipSelected: { backgroundColor: '#111111', borderColor: '#111111' },
-  optionChipText: { fontSize: 13, fontWeight: '600' as const, color: "#000" },
+  optionChipText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textSecondary },
   optionChipTextSelected: { color: '#FFFFFF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: "#FFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  modalContent: { backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  modalTitle: { fontSize: 20, fontWeight: '800' as const, color: "#000" },
-  modalCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  modalSubtext: { fontSize: 13, color: "#000", marginBottom: 16, lineHeight: 19 },
-  fieldLabel: { fontSize: 13, fontWeight: '600' as const, color: "#000", marginBottom: 6, marginTop: 8 },
-  modalInput: { backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: "#000", borderWidth: 1, borderColor: "#DDD" },
+  modalTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary },
+  modalCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+  modalSubtext: { fontSize: 13, color: Colors.textTertiary, marginBottom: 16, lineHeight: 19 },
+  fieldLabel: { fontSize: 13, fontWeight: '600' as const, color: Colors.textSecondary, marginBottom: 6, marginTop: 8 },
+  modalInput: { backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.borderLight },
   passwordRow: { position: 'relative' as const },
   passwordInput: { paddingRight: 50 },
   eyeBtn: { position: 'absolute' as const, right: 14, top: 14 },
   securityNote: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 4 },
-  securityText: { fontSize: 12, color: "#000" },
-  saveCredBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, marginTop: 16 },
+  securityText: { fontSize: 12, color: Colors.textTertiary },
+  saveCredBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.secondary, borderRadius: 14, paddingVertical: 14, marginTop: 16 },
   saveCredBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
 });

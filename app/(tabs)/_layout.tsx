@@ -2,6 +2,8 @@ import { Tabs } from 'expo-router';
 import { Home, Briefcase, MessageCircle, User, AlertCircle, Compass } from 'lucide-react-native';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { lightColors, darkColors } from '@/constants/colors';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUserApplications } from '@/lib/jobs';
 
@@ -21,6 +23,8 @@ function TabBarBadge({ count, type = 'count' }: { count: number; type?: 'count' 
 
 export default function TabLayout() {
   const { supabaseUserId, userProfile, swipedJobIds } = useAuth();
+  const { theme } = useTheme();
+  const colors = theme === 'dark' ? darkColors : lightColors;
   
   const { data: applications = [] } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
@@ -38,9 +42,13 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#000000',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: colors.secondary,
+        tabBarInactiveTintColor: colors.textTertiary,
         tabBarShowLabel: false,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
       }}
     >
       <Tabs.Screen

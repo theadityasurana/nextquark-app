@@ -21,7 +21,6 @@ import {
   Github,
 } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
 import { CURRENCIES } from '@/constants/cities';
 import { useAuth } from '@/contexts/AuthContext';
 

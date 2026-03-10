@@ -8,12 +8,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import TutorialModal from '@/components/TutorialModal';
+import * as Sentry from '@sentry/react-native';
+import { isRunningInExpoGo } from 'expo';
 
 let Notifications: any;
 try {
   Notifications = require('expo-notifications');
 } catch (e) {
   console.log('Notifications not available in Expo Go on Android');
+}
+
+// Initialize Sentry (only in production builds, not in Expo Go)
+if (!isRunningInExpoGo()) {
+  Sentry.init({
+    dsn: 'https://15ab1363e1904489737ea6627b0b4c9b@o4511018244440064.ingest.us.sentry.io/4511018251583488',
+    enableInExpoDevelopment: false,
+    debug: __DEV__,
+  });
 }
 
 SplashScreen.preventAutoHideAsync();
@@ -262,7 +273,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
@@ -279,3 +290,5 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+export default isRunningInExpoGo() ? RootLayout : Sentry.wrap(RootLayout);

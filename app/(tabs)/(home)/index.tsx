@@ -34,6 +34,7 @@ import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { getSubscriptionStatus, decrementApplicationCount, getSubscriptionDisplayName } from '@/lib/subscription';
 import { useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 
@@ -125,6 +126,11 @@ export default function HomeScreen() {
   const [activeSearchTags, setActiveSearchTags] = useState<string[]>([]);
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
   const position = useRef(new Animated.ValueXY()).current;
+
+  // Test Sentry
+  useEffect(() => {
+    Sentry.captureException(new Error('Test error from HomeScreen'));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

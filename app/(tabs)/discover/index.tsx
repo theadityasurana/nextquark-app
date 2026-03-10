@@ -380,10 +380,10 @@ export default function DiscoverScreen() {
               {(['24h', '48h', '7d', '30d'] as const).map((range) => (
                 <Pressable
                   key={range}
-                  style={[styles.recentTimeChip, recentJobsTimeRange === range && styles.recentTimeChipActive]}
+                  style={[styles.recentTimeChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, recentJobsTimeRange === range && { backgroundColor: colors.secondary, borderColor: colors.secondary }]}
                   onPress={() => setRecentJobsTimeRange(range)}
                 >
-                  <Text style={[styles.recentTimeText, recentJobsTimeRange === range && styles.recentTimeTextActive]}>
+                  <Text style={[styles.recentTimeText, { color: colors.textPrimary }, recentJobsTimeRange === range && { color: colors.surface }]}>
                     {range === '24h' ? '24h' : range === '48h' ? '48h' : range === '7d' ? '7d' : '30d'}
                   </Text>
                 </Pressable>
@@ -422,10 +422,10 @@ export default function DiscoverScreen() {
               {(['24h', '3d', '7d', '30d', '365d', 'all'] as const).map((range) => (
                 <Pressable
                   key={range}
-                  style={[styles.timeRangeChip, analyticsTimeRange === range && styles.timeRangeChipActive]}
+                  style={[styles.timeRangeChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, analyticsTimeRange === range && { backgroundColor: colors.secondary, borderColor: colors.secondary }]}
                   onPress={() => setAnalyticsTimeRange(range)}
                 >
-                  <Text style={[styles.timeRangeText, analyticsTimeRange === range && styles.timeRangeTextActive]}>
+                  <Text style={[styles.timeRangeText, { color: colors.textPrimary }, analyticsTimeRange === range && { color: colors.surface }]}>
                     {range === '24h' ? '24h' : range === '3d' ? '3d' : range === '7d' ? '7d' : range === '30d' ? '30d' : range === '365d' ? '1y' : 'All'}
                   </Text>
                 </Pressable>
@@ -723,10 +723,7 @@ const styles = StyleSheet.create({
   analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   analyticsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
   timeRangeSelector: { flexDirection: 'row', gap: 6, paddingRight: 20, marginBottom: 12 },
-  timeRangeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
-  timeRangeChipActive: { backgroundColor: "#FFF", borderColor: "#DDD" },
-  timeRangeText: { fontSize: 11, fontWeight: '600', color: "#000" },
-  timeRangeTextActive: { color: "#000" },
+  timeRangeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   analyticsRow: { gap: 12, paddingRight: 20 },
   analyticsCard: { width: 280, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#DDD" },
   analyticsCardTitle: { fontSize: 16, fontWeight: '700', color: "#000", marginBottom: 4 },
@@ -741,10 +738,8 @@ const styles = StyleSheet.create({
   recentJobsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingRight: 20 },
   recentJobsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
   recentTimeSelector: { flexDirection: 'row', gap: 6, paddingRight: 20, marginBottom: 12 },
-  recentTimeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
-  recentTimeChipActive: { backgroundColor: "#FFF", borderColor: "#DDD" },
-  recentTimeText: { fontSize: 11, fontWeight: '600', color: "#000" },
-  recentTimeTextActive: { color: "#000" },
+  recentTimeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  recentTimeText: { fontSize: 11, fontWeight: '600' },
   recentJobsRow: { gap: 12, paddingRight: 20 },
   recentJobCard: { width: 180, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#DDD" },
   recentJobLogo: { width: 48, height: 48, borderRadius: 12, marginBottom: 10, backgroundColor: "#FFF" },

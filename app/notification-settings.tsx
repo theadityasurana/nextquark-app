@@ -28,27 +28,11 @@ export default function NotificationSettingsScreen() {
       enabled: true,
     },
     {
-      key: 'new_matches',
-      title: 'New Job Matches',
-      description: 'Get notified when new jobs match your profile',
-      icon: Zap,
-      iconColor: '#FF8F00',
-      enabled: true,
-    },
-    {
       key: 'application_updates',
       title: 'Application Updates',
       description: 'Status changes on your applications',
       icon: Briefcase,
       iconColor: Colors.textPrimary,
-      enabled: true,
-    },
-    {
-      key: 'messages',
-      title: 'Messages',
-      description: 'New messages from recruiters and companies',
-      icon: MessageCircle,
-      iconColor: '#1E88E5',
       enabled: true,
     },
     {

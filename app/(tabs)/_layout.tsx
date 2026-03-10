@@ -57,7 +57,7 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size, focused }) => (
             <View>
-              <User size={size} color={color} fill={focused ? color : 'none'} />
+              <User size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
               {isProfileIncomplete && <TabBarBadge count={1} type="alert" />}
             </View>
           ),
@@ -69,7 +69,7 @@ export default function TabLayout() {
           title: 'Discover',
           tabBarIcon: ({ color, size, focused }) => (
             <View>
-              <Compass size={size} color={color} fill={focused ? color : 'none'} />
+              <Compass size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
               {favoriteCompaniesCount > 0 && <TabBarBadge count={favoriteCompaniesCount} />}
             </View>
           ),
@@ -81,7 +81,7 @@ export default function TabLayout() {
           title: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
             <View>
-              <Home size={size} color={color} fill={focused ? color : 'none'} />
+              <Home size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
               {jobsRemaining > 0 && <TabBarBadge count={jobsRemaining} />}
             </View>
           ),
@@ -93,7 +93,7 @@ export default function TabLayout() {
           title: 'Applications',
           tabBarIcon: ({ color, size, focused }) => (
             <View>
-              <Briefcase size={size} color={color} fill={focused ? color : 'none'} />
+              <Briefcase size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
               {applicationsCount > 0 && <TabBarBadge count={applicationsCount} />}
             </View>
           ),
@@ -105,7 +105,7 @@ export default function TabLayout() {
           title: 'Messages',
           tabBarIcon: ({ color, size, focused }) => (
             <View>
-              <MessageCircle size={size} color={color} fill={focused ? color : 'none'} />
+              <MessageCircle size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
               {unreadMessages > 0 && <TabBarBadge count={unreadMessages} />}
             </View>
           ),

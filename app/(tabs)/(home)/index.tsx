@@ -211,17 +211,31 @@ export default function HomeScreen() {
       filtered = filtered.filter(job => !swipedSet.has(job.id));
     }
 
-    // For You mode: filter by user's headline keywords
-    if (feedMode === 'foryou' && userProfile?.headline) {
-      const keywords = userProfile.headline.toLowerCase().split(' ').filter(k => k.length > 2);
+    // For You mode: filter by user's desired roles
+    if (feedMode === 'foryou' && userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
       filtered = filtered.filter(job => 
-        keywords.some(keyword => 
-          job.jobTitle.toLowerCase().includes(keyword) ||
-          job.description.toLowerCase().includes(keyword) ||
-          job.skills.some(skill => skill.toLowerCase().includes(keyword))
-        )
+        userProfile.desiredRoles!.some(role => {
+          const roleLower = role.toLowerCase();
+          return job.jobTitle.toLowerCase().includes(roleLower) ||
+            job.description.toLowerCase().includes(roleLower) ||
+            job.skills.some(skill => skill.toLowerCase().includes(roleLower));
+        })
       );
     }
+
+    // ACTIVE FILTERS (ALL FUNCTIONAL):
+    // ✅ Search Tags (from search page)
+    // ✅ Search Tags (from filter modal)
+    // ✅ Search Keyword
+    // ✅ Companies
+    // ✅ Roles
+    // ✅ Locations
+    // ✅ Work Modes (Remote/Onsite/Hybrid)
+    // ✅ Job Types (Full-time/Part-time/etc)
+    // ✅ Salary Range
+    // ✅ Posted Within (Date Range) - NOW WORKING
+    // ✅ Job Levels - NOW WORKING (filters by experienceLevel, jobTitle, description)
+    // ✅ Job Requirements - NOW WORKING (H1B, Security Clearance, No Degree, Remote Only, Relocation)
 
     // Apply active search tags from search page
     if (activeSearchTags.length > 0) {
@@ -311,6 +325,84 @@ export default function HomeScreen() {
       filtered = filtered.filter(job => {
         if (job.salaryCurrency !== filters.salaryCurrency) return true;
         return job.salaryMax >= filters.salaryMin && job.salaryMin <= filters.salaryMax;
+      });
+    }
+
+    // Posted Within filter
+    if (filters.postedWithin.length > 0) {
+      const now = Date.now();
+      filtered = filtered.filter(job => {
+        // Parse the relative date string (e.g., "2 days ago", "Today", "1 week ago")
+        const postedDate = job.postedDate.toLowerCase();
+        let jobAgeMs = 0;
+        
+        if (postedDate.includes('today') || postedDate.includes('just now')) {
+          jobAgeMs = 0;
+        } else if (postedDate.includes('hour')) {
+          const hours = parseInt(postedDate.match(/\d+/)?.[0] || '0');
+          jobAgeMs = hours * 60 * 60 * 1000;
+        } else if (postedDate.includes('day')) {
+          const days = parseInt(postedDate.match(/\d+/)?.[0] || '0');
+          jobAgeMs = days * 24 * 60 * 60 * 1000;
+        } else if (postedDate.includes('week')) {
+          const weeks = parseInt(postedDate.match(/\d+/)?.[0] || '0');
+          jobAgeMs = weeks * 7 * 24 * 60 * 60 * 1000;
+        } else if (postedDate.includes('month')) {
+          const months = parseInt(postedDate.match(/\d+/)?.[0] || '0');
+          jobAgeMs = months * 30 * 24 * 60 * 60 * 1000;
+        }
+        
+        return filters.postedWithin.some(range => {
+          let maxAgeMs = 0;
+          switch (range) {
+            case '1d': maxAgeMs = 24 * 60 * 60 * 1000; break;
+            case '2d': maxAgeMs = 2 * 24 * 60 * 60 * 1000; break;
+            case '1w': maxAgeMs = 7 * 24 * 60 * 60 * 1000; break;
+            case '1m': maxAgeMs = 30 * 24 * 60 * 60 * 1000; break;
+            case '3m': maxAgeMs = 90 * 24 * 60 * 60 * 1000; break;
+          }
+          return jobAgeMs <= maxAgeMs;
+        });
+      });
+    }
+
+    // Job Levels filter
+    if (filters.jobLevels.length > 0) {
+      filtered = filtered.filter(job => {
+        const experienceLevel = job.experienceLevel?.toLowerCase() || '';
+        return filters.jobLevels.some(level => {
+          const levelLower = level.toLowerCase();
+          return experienceLevel.includes(levelLower) || 
+                 job.jobTitle.toLowerCase().includes(levelLower) ||
+                 job.description.toLowerCase().includes(levelLower);
+        });
+      });
+    }
+
+    // Job Requirements filter
+    if (filters.jobRequirements.length > 0) {
+      filtered = filtered.filter(job => {
+        const description = job.description.toLowerCase();
+        const requirements = job.requirements?.map(r => r.toLowerCase()).join(' ') || '';
+        const detailedReqs = job.detailedRequirements?.toLowerCase() || '';
+        const allText = `${description} ${requirements} ${detailedReqs}`;
+        
+        return filters.jobRequirements.some(req => {
+          switch (req) {
+            case 'H1B Sponsorship':
+              return allText.includes('h1b') || allText.includes('visa sponsor') || allText.includes('sponsorship');
+            case 'Security Clearance':
+              return allText.includes('security clearance') || allText.includes('clearance required');
+            case 'No Degree Required':
+              return allText.includes('no degree') || allText.includes('without degree') || !allText.includes('degree required');
+            case 'Remote Only':
+              return job.locationType === 'remote';
+            case 'Relocation Assistance':
+              return allText.includes('relocation') || allText.includes('relo');
+            default:
+              return allText.includes(req.toLowerCase());
+          }
+        });
       });
     }
 
@@ -967,9 +1059,9 @@ export default function HomeScreen() {
                 {POSTED_OPTIONS.map((opt) => {
                   const selected = tempFilters.postedWithin.includes(opt.value);
                   return (
-                    <Pressable key={opt.value} style={[styles.filterChip, selected && styles.filterChipActive]} onPress={() => togglePostedWithin(opt.value)}>
-                      {selected && <Check size={14} color={Colors.surface} />}
-                      <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{opt.label}</Text>
+                    <Pressable key={opt.value} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => togglePostedWithin(opt.value)}>
+                      {selected && <Check size={14} color={colors.surface} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -982,9 +1074,9 @@ export default function HomeScreen() {
                 {WORK_MODES.map((mode) => {
                   const selected = tempFilters.workModes.includes(mode);
                   return (
-                    <Pressable key={mode} style={[styles.filterChip, selected && styles.filterChipActive]} onPress={() => toggleWorkMode(mode)}>
-                      {selected && <Check size={14} color={Colors.surface} />}
-                      <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{mode}</Text>
+                    <Pressable key={mode} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleWorkMode(mode)}>
+                      {selected && <Check size={14} color={colors.surface} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{mode}</Text>
                     </Pressable>
                   );
                 })}
@@ -997,9 +1089,9 @@ export default function HomeScreen() {
                 {JOB_TYPES.map((type) => {
                   const selected = tempFilters.jobTypes.includes(type);
                   return (
-                    <Pressable key={type} style={[styles.filterChip, selected && styles.filterChipActive]} onPress={() => toggleJobType(type)}>
-                      {selected && <Check size={14} color={Colors.surface} />}
-                      <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{type}</Text>
+                    <Pressable key={type} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleJobType(type)}>
+                      {selected && <Check size={14} color={colors.surface} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{type}</Text>
                     </Pressable>
                   );
                 })}
@@ -1012,9 +1104,9 @@ export default function HomeScreen() {
                 {JOB_LEVELS.map((level) => {
                   const selected = tempFilters.jobLevels.includes(level);
                   return (
-                    <Pressable key={level} style={[styles.filterChip, selected && styles.filterChipActive]} onPress={() => toggleJobLevel(level)}>
-                      {selected && <Check size={14} color={Colors.surface} />}
-                      <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{level}</Text>
+                    <Pressable key={level} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleJobLevel(level)}>
+                      {selected && <Check size={14} color={colors.surface} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{level}</Text>
                     </Pressable>
                   );
                 })}
@@ -1027,9 +1119,9 @@ export default function HomeScreen() {
                 {JOB_REQUIREMENTS.map((req) => {
                   const selected = tempFilters.jobRequirements.includes(req);
                   return (
-                    <Pressable key={req} style={[styles.filterChip, selected && styles.filterChipActive]} onPress={() => toggleJobRequirement(req)}>
-                      {selected && <Check size={14} color={Colors.surface} />}
-                      <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{req}</Text>
+                    <Pressable key={req} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleJobRequirement(req)}>
+                      {selected && <Check size={14} color={colors.surface} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{req}</Text>
                     </Pressable>
                   );
                 })}
@@ -1126,8 +1218,8 @@ export default function HomeScreen() {
               <Pressable style={styles.resetFilterBtn} onPress={handleResetFilters}>
                 <Text style={styles.resetFilterBtnText}>Reset</Text>
               </Pressable>
-              <Pressable style={styles.applyFilterBtn} onPress={handleApplyFilters}>
-                <Text style={styles.applyFilterBtnText}>Apply Filters ({jobs.length})</Text>
+              <Pressable style={[styles.applyFilterBtn, { backgroundColor: colors.secondary }]} onPress={handleApplyFilters}>
+                <Text style={[styles.applyFilterBtnText, { color: colors.surface }]}>Apply Filters ({jobs.length})</Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -1399,15 +1491,13 @@ const styles = StyleSheet.create({
   keywordSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10, borderWidth: 1.5, borderColor: "#DDD" },
   keywordSearchInput: { flex: 1, fontSize: 15, color: "#000", padding: 0, fontWeight: '500' as const },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
-  filterChipActive: { backgroundColor: "#FFF", borderColor: "#DDD" },
-  filterChipText: { fontSize: 14, color: "#000", fontWeight: '600' as const },
-  filterChipTextActive: { color: "#000" },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+  filterChipText: { fontSize: 14, fontWeight: '600' as const },
   filterFooter: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: Colors.borderLight },
   resetFilterBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: "#DDD", alignItems: 'center' },
   resetFilterBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#000" },
-  applyFilterBtn: { flex: 2, paddingVertical: 14, borderRadius: 14, backgroundColor: "#FFF", alignItems: 'center' },
-  applyFilterBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#000" },
+  applyFilterBtn: { flex: 2, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  applyFilterBtnText: { fontSize: 16, fontWeight: '700' as const },
   cityList: { paddingHorizontal: 20, maxHeight: 400 },
   cityOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, marginBottom: 6, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
   cityOptionActive: { backgroundColor: "#FFF", borderColor: "#DDD" },

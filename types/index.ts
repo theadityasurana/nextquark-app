@@ -172,5 +172,13 @@ export interface Job {
     jobRequirements?: string[];
     favoriteCompanies?: string[];
     preferredWorkLocations?: string[];
+    workdayEmail?: string;
+    workdayPassword?: string;
+    jobleverEmail?: string;
+    jobleverPassword?: string;
+    greenhouseEmail?: string;
+    greenhousePassword?: string;
+    taleoEmail?: string;
+    taleoPassword?: string;
   }
   

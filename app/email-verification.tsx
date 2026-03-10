@@ -56,7 +56,6 @@ export default function EmailVerificationScreen() {
     if (fullCode === '123456' || fullCode.length === 6) {
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await signUpWithEmail(email || 'user@email.com', 'tempPass123!', '');
-      router.replace('/onboarding' as any);
     } else {
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),

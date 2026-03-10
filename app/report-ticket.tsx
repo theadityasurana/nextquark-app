@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ChevronDown, Paperclip, Send } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
+import { supabase } from '@/lib/supabase';
 
 const issueCategories: Record<string, string[]> = {
   problem: [
@@ -57,11 +58,12 @@ export default function ReportTicketScreen() {
   const [description, setDescription] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [attachments, setAttachments] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = issueCategories[ticketType] || issueCategories.problem;
   const title = titles[ticketType] || 'Report';
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedIssue) {
       Alert.alert('Required', 'Please select an issue category.');
       return;
@@ -70,12 +72,42 @@ export default function ReportTicketScreen() {
       Alert.alert('Required', 'Please describe the issue.');
       return;
     }
-    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(
-      'Ticket Submitted',
-      'Thank you for your report. Our team will review it and get back to you within 24-48 hours.',
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+
+    setIsSubmitting(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to submit a ticket.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const { error } = await supabase.from('support_tickets').insert({
+        user_id: user.id,
+        type: ticketType,
+        category: selectedIssue,
+        description: description.trim(),
+        attachments: attachments.length > 0 ? attachments : null,
+        status: 'open',
+      });
+
+      if (error) throw error;
+
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      Alert.alert(
+        'Ticket Submitted',
+        'Thank you for your report. Our team will review it and get back to you within 24-48 hours.',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error: any) {
+      console.error('Error submitting ticket:', error);
+      Alert.alert('Error', 'Failed to submit ticket. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAttach = () => {
@@ -154,9 +186,15 @@ export default function ReportTicketScreen() {
           )}
         </View>
 
-        <Pressable style={styles.submitButton} onPress={handleSubmit}>
-          <Send size={18} color="#FFFFFF" />
-          <Text style={styles.submitButtonText}>Submit Report</Text>
+        <Pressable style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Send size={18} color="#FFFFFF" />
+              <Text style={styles.submitButtonText}>Submit Report</Text>
+            </>
+          )}
         </Pressable>
 
         <View style={{ height: 40 }} />
@@ -207,6 +245,9 @@ const styles = StyleSheet.create({
   submitButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: '#111111', borderRadius: 16, paddingVertical: 16,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
   submitButtonText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
 });

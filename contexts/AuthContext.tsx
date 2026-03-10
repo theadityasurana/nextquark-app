@@ -92,6 +92,14 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     desiredRoles: Array.isArray(profile.desired_roles) ? profile.desired_roles : undefined,
     preferredCities: Array.isArray(profile.preferred_cities) ? profile.preferred_cities : undefined,
     favoriteCompanies,
+    workdayEmail: profile.workday_email || undefined,
+    workdayPassword: profile.workday_password || undefined,
+    jobleverEmail: profile.joblever_email || undefined,
+    jobleverPassword: profile.joblever_password || undefined,
+    greenhouseEmail: profile.greenhouse_email || undefined,
+    greenhousePassword: profile.greenhouse_password || undefined,
+    taleoEmail: profile.taleo_email || undefined,
+    taleoPassword: profile.taleo_password || undefined,
   };
 }
 
@@ -106,6 +114,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const fetchAndSetProfile = useCallback(async (userId: string, session: Session) => {
     try {
+      console.log('[AUTH] fetchAndSetProfile for userId:', userId);
+      
+      // Clear previous user data first to prevent data leakage
+      console.log('[AUTH] Clearing previous user data before fetching new profile');
+      setUserProfile(null);
+      setOnboardingData(defaultOnboardingData);
+      setSwipedJobIds([]);
+      
       // Register for push notifications
       registerForPushNotifications().then(token => {
         if (token) {
@@ -134,8 +150,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           first_name: firstName,
           last_name: lastName,
           is_onboarding_complete: false,
-          applications_remaining: 40, // Default swipes for new users
-          applications_limit: 40, // Default limit for new users
+          applications_remaining: 40,
+          applications_limit: 40,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -151,11 +167,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         };
         setAuthState(newAuthState);
         await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(newAuthState));
-        setOnboardingData({
+        
+        const freshOnboardingData = {
           ...defaultOnboardingData,
           firstName,
           lastName,
-        });
+        };
+        setOnboardingData(freshOnboardingData);
+        await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(freshOnboardingData));
         console.log('New user profile created, isOnboardingComplete: false');
         return;
       }
@@ -284,6 +303,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     try {
       console.log('signUpWithEmail called:', email, name);
 
+      // Clear any existing user data before signing up
+      console.log('[AUTH] Clearing previous user data before signup');
+      setUserProfile(null);
+      setOnboardingData(defaultOnboardingData);
+      setSwipedJobIds([]);
+      await AsyncStorage.multiRemove([ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -318,8 +344,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         first_name: firstName,
         last_name: lastName,
         is_onboarding_complete: false,
-        applications_remaining: 40, // Default swipes for new users
-        applications_limit: 40, // Default limit for new users
+        applications_remaining: 40,
+        applications_limit: 40,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -338,11 +364,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       };
       setAuthState(newState);
       await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(newState));
-      setOnboardingData({
+      
+      const freshOnboardingData = {
         ...defaultOnboardingData,
         firstName,
         lastName,
-      });
+      };
+      setOnboardingData(freshOnboardingData);
+      await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(freshOnboardingData));
 
       return { success: true, userId: data.user.id };
     } catch (e: any) {
@@ -354,6 +383,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const signInWithEmail = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       console.log('signInWithEmail called:', email);
+
+      // Clear any existing user data before signing in
+      console.log('[AUTH] Clearing previous user data before signin');
+      setUserProfile(null);
+      setOnboardingData(defaultOnboardingData);
+      setSwipedJobIds([]);
+      await AsyncStorage.multiRemove([ONBOARDING_KEY, SWIPED_JOBS_KEY]);
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -559,6 +595,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (profileData.favoriteCompanies !== undefined) dbData.favorite_companies = profileData.favoriteCompanies;
       if (profileData.desiredRoles !== undefined) dbData.desired_roles = profileData.desiredRoles;
       if (profileData.preferredCities !== undefined) dbData.preferred_cities = profileData.preferredCities;
+      if (profileData.workdayEmail !== undefined) dbData.workday_email = profileData.workdayEmail || null;
+      if (profileData.workdayPassword !== undefined) dbData.workday_password = profileData.workdayPassword || null;
+      if (profileData.jobleverEmail !== undefined) dbData.joblever_email = profileData.jobleverEmail || null;
+      if (profileData.jobleverPassword !== undefined) dbData.joblever_password = profileData.jobleverPassword || null;
+      if (profileData.greenhouseEmail !== undefined) dbData.greenhouse_email = profileData.greenhouseEmail || null;
+      if (profileData.greenhousePassword !== undefined) dbData.greenhouse_password = profileData.greenhousePassword || null;
+      if (profileData.taleoEmail !== undefined) dbData.taleo_email = profileData.taleoEmail || null;
+      if (profileData.taleoPassword !== undefined) dbData.taleo_password = profileData.taleoPassword || null;
 
       const { error } = await supabase.from('profiles').upsert({
         id: supabaseUserId,

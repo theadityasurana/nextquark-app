@@ -69,7 +69,7 @@ import { Share, Clipboard } from 'react-native';
 import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboarding';
 import { universities } from '@/constants/universities';
 
-type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | null;
+type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | null;
 
 const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
@@ -164,15 +164,7 @@ export default function ProfileScreen() {
   ).length;
 
   const [user, setUser] = useState<UserProfile>(() => {
-    if (supabaseProfile) {
-      return { ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] };
-    }
-    // Only build from onboarding if we have a valid supabaseUserId
-    // This prevents showing cached data from other users
-    if (supabaseUserId) {
-      return buildProfileFromOnboarding(onboardingData);
-    }
-    // Return empty profile if no user is authenticated
+    // Always start with empty profile - data will be loaded from supabaseProfile
     return buildProfileFromOnboarding(defaultOnboardingData);
   });
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -315,6 +307,18 @@ export default function ProfileScreen() {
   const [skillQuery, setSkillQuery] = useState('');
   const [showUniversityDropdown, setShowUniversityDropdown] = useState(false);
   const [universitySearch, setUniversitySearch] = useState('');
+  const [workdayEmail, setWorkdayEmail] = useState(user.workdayEmail || '');
+  const [workdayPassword, setWorkdayPassword] = useState(user.workdayPassword || '');
+  const [showWorkdayPassword, setShowWorkdayPassword] = useState(false);
+  const [jobleverEmail, setJobleverEmail] = useState(user.jobleverEmail || '');
+  const [jobleverPassword, setJobleverPassword] = useState(user.jobleverPassword || '');
+  const [showJobleverPassword, setShowJobleverPassword] = useState(false);
+  const [greenhouseEmail, setGreenhouseEmail] = useState(user.greenhouseEmail || '');
+  const [greenhousePassword, setGreenhousePassword] = useState(user.greenhousePassword || '');
+  const [showGreenhousePassword, setShowGreenhousePassword] = useState(false);
+  const [taleoEmail, setTaleoEmail] = useState(user.taleoEmail || '');
+  const [taleoPassword, setTaleoPassword] = useState(user.taleoPassword || '');
+  const [showTaleoPassword, setShowTaleoPassword] = useState(false);
 
 const WORK_AUTH_OPTIONS = [
   'Yes, I am a U.S. Citizen',
@@ -419,12 +423,23 @@ const MAJOR_CITIES = [
   }, [progressAnim, user.profileCompletion]);
 
   useEffect(() => {
-    if (supabaseProfile && supabaseUserId) {
-      // Only update user state if we have both profile and userId
-      // This ensures we're showing the correct user's data
-      setUser(prev => ({ ...prev, ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] }));
+    // Reset user state when supabaseUserId changes (user switch)
+    if (!supabaseUserId) {
+      console.log('[PROFILE] No supabaseUserId, resetting to default profile');
+      setUser(buildProfileFromOnboarding(defaultOnboardingData));
+      return;
     }
-  }, [supabaseProfile, supabaseUserId]);
+
+    // Load profile data for the current authenticated user
+    if (supabaseProfile && supabaseProfile.id === supabaseUserId) {
+      console.log('[PROFILE] Loading profile for user:', supabaseUserId);
+      setUser(prev => ({ ...prev, ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] }));
+    } else if (supabaseUserId && !supabaseProfile) {
+      // User is authenticated but profile hasn't loaded yet, use onboarding data
+      console.log('[PROFILE] Using onboarding data for user:', supabaseUserId);
+      setUser(buildProfileFromOnboarding(onboardingData));
+    }
+  }, [supabaseProfile, supabaseUserId, onboardingData]);
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(false);
@@ -605,6 +620,22 @@ const MAJOR_CITIES = [
     setCityQuery('');
     setActiveModal('preferredcities');
   }, []);
+
+  const openWorkdayCredentialsModal = useCallback(() => {
+    setWorkdayEmail(user.workdayEmail || '');
+    setWorkdayPassword(user.workdayPassword || '');
+    setShowWorkdayPassword(false);
+    setJobleverEmail(user.jobleverEmail || '');
+    setJobleverPassword(user.jobleverPassword || '');
+    setShowJobleverPassword(false);
+    setGreenhouseEmail(user.greenhouseEmail || '');
+    setGreenhousePassword(user.greenhousePassword || '');
+    setShowGreenhousePassword(false);
+    setTaleoEmail(user.taleoEmail || '');
+    setTaleoPassword(user.taleoPassword || '');
+    setShowTaleoPassword(false);
+    setActiveModal('workdaycredentials');
+  }, [user.workdayEmail, user.workdayPassword, user.jobleverEmail, user.jobleverPassword, user.greenhouseEmail, user.greenhousePassword, user.taleoEmail, user.taleoPassword]);
 
   const openVeteranStatusModal = useCallback(() => {
     setSelectedVeteranStatus(user.veteranStatus || '');
@@ -913,6 +944,21 @@ const MAJOR_CITIES = [
     setUser((prev) => ({ ...prev, race: selectedRace || undefined }));
     setActiveModal(null);
   }, [selectedRace]);
+
+  const handleSaveWorkdayCredentials = useCallback(() => {
+    setUser((prev) => ({ 
+      ...prev, 
+      workdayEmail: workdayEmail.trim() || undefined, 
+      workdayPassword: workdayPassword.trim() || undefined,
+      jobleverEmail: jobleverEmail.trim() || undefined,
+      jobleverPassword: jobleverPassword.trim() || undefined,
+      greenhouseEmail: greenhouseEmail.trim() || undefined,
+      greenhousePassword: greenhousePassword.trim() || undefined,
+      taleoEmail: taleoEmail.trim() || undefined,
+      taleoPassword: taleoPassword.trim() || undefined,
+    }));
+    setActiveModal(null);
+  }, [workdayEmail, workdayPassword, jobleverEmail, jobleverPassword, greenhouseEmail, greenhousePassword, taleoEmail, taleoPassword]);
 
   const handleToggleDesiredRole = useCallback((role: string) => {
     setUser((prev) => {
@@ -1579,6 +1625,41 @@ const MAJOR_CITIES = [
               </View>
             </View>
           ) : null}
+        </Pressable>
+
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={openWorkdayCredentialsModal}>
+          <View style={styles.demoHeader}>
+            <Lock size={16} color={colors.textSecondary} />
+            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Portal Credentials</Text>
+            <Pressable onPress={openWorkdayCredentialsModal} style={{ marginLeft: 'auto' }}>
+              <Pencil size={14} color={colors.textTertiary} />
+            </Pressable>
+          </View>
+          <Text style={[styles.demoNote, { color: colors.textTertiary }]}>We'll use these to auto-create accounts and apply on your behalf</Text>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Workday</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.workdayEmail || 'Not configured'}</Text>
+            </View>
+          </View>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Joblever</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.jobleverEmail || 'Not configured'}</Text>
+            </View>
+          </View>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Greenhouse</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.greenhouseEmail || 'Not configured'}</Text>
+            </View>
+          </View>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
+            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Oracle Taleo</Text>
+            <View style={styles.demoValueRow}>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.taleoEmail || 'Not configured'}</Text>
+            </View>
+          </View>
         </Pressable>
 
         <View style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
@@ -2394,6 +2475,137 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
+      <Modal visible={activeModal === 'workdaycredentials'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Portal Credentials</Text>
+              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                <X size={22} color={Colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.securityNote}>
+              <ShieldCheck size={16} color={Colors.success} />
+              <Text style={styles.securityNoteText}>Your passwords are encrypted and stored securely</Text>
+            </View>
+            <Text style={[styles.credentialsInfo, { color: Colors.textSecondary }]}>We'll use these credentials to automatically create accounts and apply to jobs on your behalf when you swipe right.</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <Text style={styles.portalSectionTitle}>Workday</Text>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="your.email@company.com"
+                placeholderTextColor={Colors.textTertiary}
+                value={workdayEmail}
+                onChangeText={setWorkdayEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <Text style={styles.fieldLabel}>Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter password"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={workdayPassword}
+                  onChangeText={setWorkdayPassword}
+                  secureTextEntry={!showWorkdayPassword}
+                  autoCapitalize="none"
+                />
+                <Pressable onPress={() => setShowWorkdayPassword(!showWorkdayPassword)} style={styles.eyeIcon}>
+                  <Eye size={20} color={Colors.textTertiary} />
+                </Pressable>
+              </View>
+
+              <Text style={styles.portalSectionTitle}>Joblever</Text>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="your.email@company.com"
+                placeholderTextColor={Colors.textTertiary}
+                value={jobleverEmail}
+                onChangeText={setJobleverEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <Text style={styles.fieldLabel}>Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter password"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={jobleverPassword}
+                  onChangeText={setJobleverPassword}
+                  secureTextEntry={!showJobleverPassword}
+                  autoCapitalize="none"
+                />
+                <Pressable onPress={() => setShowJobleverPassword(!showJobleverPassword)} style={styles.eyeIcon}>
+                  <Eye size={20} color={Colors.textTertiary} />
+                </Pressable>
+              </View>
+
+              <Text style={styles.portalSectionTitle}>Greenhouse</Text>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="your.email@company.com"
+                placeholderTextColor={Colors.textTertiary}
+                value={greenhouseEmail}
+                onChangeText={setGreenhouseEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <Text style={styles.fieldLabel}>Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter password"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={greenhousePassword}
+                  onChangeText={setGreenhousePassword}
+                  secureTextEntry={!showGreenhousePassword}
+                  autoCapitalize="none"
+                />
+                <Pressable onPress={() => setShowGreenhousePassword(!showGreenhousePassword)} style={styles.eyeIcon}>
+                  <Eye size={20} color={Colors.textTertiary} />
+                </Pressable>
+              </View>
+
+              <Text style={styles.portalSectionTitle}>Oracle Taleo</Text>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="your.email@company.com"
+                placeholderTextColor={Colors.textTertiary}
+                value={taleoEmail}
+                onChangeText={setTaleoEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <Text style={styles.fieldLabel}>Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter password"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={taleoPassword}
+                  onChangeText={setTaleoPassword}
+                  secureTextEntry={!showTaleoPassword}
+                  autoCapitalize="none"
+                />
+                <Pressable onPress={() => setShowTaleoPassword(!showTaleoPassword)} style={styles.eyeIcon}>
+                  <Eye size={20} color={Colors.textTertiary} />
+                </Pressable>
+              </View>
+            </ScrollView>
+            <Pressable style={styles.modalSaveBtn} onPress={handleSaveWorkdayCredentials}>
+              <Check size={18} color={Colors.surface} />
+              <Text style={styles.modalSaveBtnText}>Save Credentials</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
       <Modal visible={activeModal === 'favoritecompanies'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -2659,4 +2871,11 @@ const styles = StyleSheet.create({
   universityDropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   universityDropdownItemText: { fontSize: 15, color: Colors.textPrimary },
   universityDropdownItemTextAdd: { fontSize: 15, color: Colors.primary, fontWeight: '600' as const },
+  securityNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E8F5E9', padding: 12, borderRadius: 10, marginBottom: 16 },
+  securityNoteText: { fontSize: 12, color: '#2E7D32', fontWeight: '600' as const, flex: 1 },
+  credentialsInfo: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 16, paddingHorizontal: 4 },
+  portalSectionTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary, marginTop: 16, marginBottom: 8 },
+  passwordInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, marginBottom: 12 },
+  passwordInput: { flex: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: Colors.textPrimary },
+  eyeIcon: { paddingHorizontal: 12 },
 });

@@ -64,7 +64,6 @@ export default function MobileSignUpScreen() {
     if (code.length !== 6) return;
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await signUpWithEmail(`${selectedCountry.code}${phoneNumber}@phone.local`, 'tempPass123!', 'New User');
-    router.replace('/onboarding' as any);
   };
 
   const handleResend = () => {

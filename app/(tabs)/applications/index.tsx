@@ -16,6 +16,7 @@ export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { supabaseUserId } = useAuth();
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'pending' | 'interviewing' | 'offer'>('all');
 
   const { data: applications = [], isLoading, refetch } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
@@ -75,6 +76,11 @@ export default function ApplicationsScreen() {
     return { total, pending, interviewing, offers };
   }, [mappedApplications]);
 
+  const filteredApplications = useMemo(() => {
+    if (selectedFilter === 'all') return mappedApplications;
+    return mappedApplications.filter((a) => a.status === selectedFilter);
+  }, [mappedApplications, selectedFilter]);
+
   const renderItem = ({ item }: { item: Application }) => (
     <ApplicationItem application={item} />
   );
@@ -101,41 +107,58 @@ export default function ApplicationsScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        <Pressable 
+          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'all' && styles.statCardActive]} 
+          onPress={() => setSelectedFilter('all')}
+        >
           <TrendingUp size={18} color={colors.textPrimary} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.total}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Applied</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        </Pressable>
+        <Pressable 
+          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'pending' && styles.statCardActive]} 
+          onPress={() => setSelectedFilter('pending')}
+        >
           <Clock size={18} color={colors.warning} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.pending}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        </Pressable>
+        <Pressable 
+          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'interviewing' && styles.statCardActive]} 
+          onPress={() => setSelectedFilter('interviewing')}
+        >
           <FileCheck size={18} color={colors.statusInterview} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.interviewing}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Interviews</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        </Pressable>
+        <Pressable 
+          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'offer' && styles.statCardActive]} 
+          onPress={() => setSelectedFilter('offer')}
+        >
           <Award size={18} color={colors.accent} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.offers}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Offers</Text>
-        </View>
+        </Pressable>
       </View>
 
       <FlatList
-        data={mappedApplications}
+        data={filteredApplications}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
-        contentContainerStyle={mappedApplications.length === 0 ? styles.emptyContainer : undefined}
+        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContainer : undefined}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No applications</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Start swiping on jobs to see your applications here</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {selectedFilter === 'all' 
+                ? 'Start swiping on jobs to see your applications here'
+                : `No ${selectedFilter} applications found`
+              }
+            </Text>
           </View>
         }
       />
@@ -192,6 +215,11 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
     gap: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  statCardActive: {
+    borderColor: '#22c55e',
   },
   statNumber: {
     fontSize: 22,

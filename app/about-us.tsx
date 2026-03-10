@@ -3,12 +3,17 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Target, Eye, Heart, Zap } from 'lucide-react-native';
+import { ArrowLeft, Linkedin, Twitter, Github, Globe, Instagram } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { Linking } from 'react-native';
 
 export default function AboutUsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const openLink = (url: string) => {
+    Linking.openURL(url);
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -23,92 +28,72 @@ export default function AboutUsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroSection}>
           <Text style={styles.brandName}>NEXTQUARK</Text>
-          <Text style={styles.tagline}>Swipe Right on Your Dream Job</Text>
+          <Text style={styles.tagline}>Building the future of job hunting</Text>
         </View>
-
-        <Image source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&h=300&fit=crop' }} style={styles.heroImage} />
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Our Story</Text>
+          <Text style={styles.cardTitle}>About NextQuark</Text>
           <Text style={styles.bodyText}>
-            NextQuark was born from a simple frustration: job searching should not feel like a chore. In 2024, our founding team — a group of engineers, designers, and recruiters — came together with a bold vision: to reimagine how people find meaningful work.
+            Applying for jobs today is slow, repetitive, and unnecessarily frustrating. Candidates spend hours filling out the same forms across different company portals, uploading resumes again and again, and navigating outdated application systems.
           </Text>
           <Text style={styles.bodyText}>
-            We believed that the same intuitive, engaging experience that revolutionized social connections could transform professional ones. By combining the simplicity of swiping with the power of AI, we created a platform where finding your next opportunity feels natural, even enjoyable.
+            NextQuark changes that.
+          </Text>
+          <Text style={styles.bodyText}>
+            Our platform turns job applications into a simple, intuitive experience. Instead of filling out countless forms, users can discover opportunities and apply with a single swipe. Behind the scenes, intelligent automation handles the heavy lifting — filling application forms, uploading resumes, and submitting applications across company portals in real time.
+          </Text>
+          <Text style={styles.bodyText}>
+            The goal is simple: make job hunting faster, smarter, and less painful.
           </Text>
         </View>
 
-        <View style={styles.valuesGrid}>
-          <View style={styles.valueCard}>
-            <View style={[styles.valueIcon, { backgroundColor: '#E3F2FD' }]}>
-              <Target size={24} color="#1565C0" />
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Our Mission</Text>
+          <Text style={styles.bodyText}>
+            We believe the process of finding a job should be as seamless as discovering one.
+          </Text>
+          <Text style={styles.bodyText}>
+            Our mission is to remove friction from the job search process and empower candidates to focus on what actually matters — preparing for interviews, learning new skills, and building meaningful careers.
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Founder</Text>
+          <Text style={styles.bodyText}>
+            NextQuark was founded by Aditya Surana.
+          </Text>
+          <Text style={styles.bodyText}>
+            Aditya is a 2025 graduate from IIT BHU, where he completed a B.Tech + M.Tech in Engineering Physics. During his time at IIT BHU, he developed a strong interest in building technology-driven products and exploring how intelligent systems can simplify complex processes.
+          </Text>
+          <Text style={styles.bodyText}>
+            Rather than following a traditional path, Aditya has always been drawn to creating things — experimenting with ideas, building products from scratch, and solving problems using technology.
+          </Text>
+          <Text style={styles.bodyText}>
+            NextQuark started from a simple observation: applying to jobs online is unnecessarily tedious. That insight led to building a product that reimagines the entire job application experience.
+          </Text>
+
+          <View style={styles.socialSection}>
+            <Text style={styles.socialTitle}>Connect with the Founder</Text>
+            <View style={styles.socialIcons}>
+              <Pressable style={styles.socialBtn} onPress={() => openLink('https://linkedin.com/in/adityasurana7')}>
+                <Linkedin size={22} color={Colors.textPrimary} />
+              </Pressable>
+              <Pressable style={styles.socialBtn} onPress={() => openLink('https://twitter.com/theadityasurana')}>
+                <Twitter size={22} color={Colors.textPrimary} />
+              </Pressable>
+              <Pressable style={styles.socialBtn} onPress={() => openLink('https://github.com/theadityasurana')}>
+                <Github size={22} color={Colors.textPrimary} />
+              </Pressable>
+              <Pressable style={styles.socialBtn} onPress={() => openLink('https://nextquark.in')}>
+                <Globe size={22} color={Colors.textPrimary} />
+              </Pressable>
+              <Pressable style={styles.socialBtn} onPress={() => openLink('https://www.instagram.com/adityasurana7/')}>
+                <Instagram size={22} color={Colors.textPrimary} />
+              </Pressable>
             </View>
-            <Text style={styles.valueTitle}>Mission</Text>
-            <Text style={styles.valueText}>To connect every professional with opportunities that match their skills, aspirations, and values.</Text>
           </View>
-          <View style={styles.valueCard}>
-            <View style={[styles.valueIcon, { backgroundColor: '#FFF8E1' }]}>
-              <Eye size={24} color="#FF8F00" />
-            </View>
-            <Text style={styles.valueTitle}>Vision</Text>
-            <Text style={styles.valueText}>A world where finding the right job is as effortless as a swipe, powered by intelligent matching.</Text>
-          </View>
-        </View>
 
-        <Image source={{ uri: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?w=600&h=300&fit=crop' }} style={styles.heroImage} />
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>What We Believe</Text>
-          <Text style={styles.bodyText}>
-            We believe that everyone deserves a job they love. We believe technology should remove barriers, not create them. We believe in transparency — both for job seekers who deserve honest job descriptions and companies who deserve authentic candidate profiles.
-          </Text>
-          <Text style={styles.bodyText}>
-            Our AI does not just match keywords. It understands context, career trajectories, and cultural fit. When a company shows interest in you, it means their team genuinely believes you could thrive there.
-          </Text>
-        </View>
-
-        <View style={styles.statsSection}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>2M+</Text>
-            <Text style={styles.statLabel}>Job Seekers</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>50k+</Text>
-            <Text style={styles.statLabel}>Companies</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>500k+</Text>
-            <Text style={styles.statLabel}>Hires Made</Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Our Goals</Text>
-          <View style={styles.goalRow}>
-            <Zap size={18} color={Colors.accent} />
-            <Text style={styles.goalText}>Expand to 100+ countries by 2027</Text>
-          </View>
-          <View style={styles.goalRow}>
-            <Heart size={18} color={Colors.error} />
-            <Text style={styles.goalText}>Help 10 million people find meaningful work</Text>
-          </View>
-          <View style={styles.goalRow}>
-            <Target size={18} color="#1565C0" />
-            <Text style={styles.goalText}>Achieve 95%+ match satisfaction rate</Text>
-          </View>
-          <View style={styles.goalRow}>
-            <Eye size={18} color="#FF8F00" />
-            <Text style={styles.goalText}>Pioneer AI-driven career development tools</Text>
-          </View>
-        </View>
-
-        <Image source={{ uri: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=300&fit=crop' }} style={styles.heroImage} />
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Join Our Journey</Text>
-          <Text style={styles.bodyText}>
-            Whether you are a job seeker looking for your next adventure or a company searching for exceptional talent, NextQuark is here to make that connection happen. We are just getting started, and the best is yet to come.
-          </Text>
+          <Image source={require('@/assets/images/aditya.png')} style={styles.founderImage} />
         </View>
 
         <View style={{ height: 40 }} />
@@ -141,4 +126,9 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4, fontWeight: '500' as const },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   goalText: { fontSize: 15, color: Colors.textSecondary, flex: 1 },
+  socialSection: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: Colors.borderLight },
+  socialTitle: { fontSize: 16, fontWeight: '700' as const, color: Colors.secondary, marginBottom: 12, textAlign: 'center' },
+  socialIcons: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },
+  socialBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+  founderImage: { width: '100%', height: 300, borderRadius: 16, backgroundColor: Colors.borderLight },
 });

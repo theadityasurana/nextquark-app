@@ -71,12 +71,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const inTabs = seg === '(tabs)';
     const inWelcomeBack = seg === 'welcome-back';
 
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!isAuthenticated && !inAuthGroup && !inOnboarding) {
       console.log('Redirecting to welcome - not authenticated');
       router.replace('/welcome' as any);
-    } else if (isAuthenticated && !isOnboardingComplete && !inOnboarding) {
-      console.log('Redirecting to onboarding - not completed');
-      router.replace('/onboarding' as any);
     } else if (isAuthenticated && isOnboardingComplete && (inAuthGroup || inOnboarding)) {
       console.log('Redirecting to home - fully authenticated');
       router.replace('/(tabs)' as any);

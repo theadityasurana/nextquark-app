@@ -2126,7 +2126,7 @@ const MAJOR_CITIES = [
                 if (referralStats?.referralCode) {
                   try {
                     await Share.share({
-                      message: `Join NextQuark with my referral code ${referralStats.referralCode} and get 5 free job application swipes! Download the app now.`,
+                      message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${referralStats.referralCode} and get 5 free application swipes to get started. Download now!`,
                     });
                   } catch (error) {
                     console.error('Error sharing:', error);

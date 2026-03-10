@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, Image, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, TextInput, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Plus, SlidersHorizontal, X, ChevronDown, Check, Search, Users, Crown, Building2, TrendingUp, Clock, GraduationCap } from 'lucide-react-native';
+import { Plus, SlidersHorizontal, X, ChevronDown, Check, Search, Users, Crown, Building2, TrendingUp, Clock, GraduationCap, Trophy } from 'lucide-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
@@ -170,6 +171,23 @@ export default function DiscoverScreen() {
     },
   });
 
+  const { data: topCompaniesWithLogos = [] } = useQuery({
+    queryKey: ['top-companies-logos'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('companies').select('name, logo_url').not('logo_url', 'is', null).limit(20);
+      if (error) {
+        console.error('Error fetching top companies:', error);
+        return [];
+      }
+      console.log('Top companies fetched:', data?.length);
+      if (data && data.length > 0) {
+        console.log('First company sample:', JSON.stringify(data[0]));
+        console.log('Logo URL sample:', data[0].logo_url);
+      }
+      return data || [];
+    },
+  });
+
   const { data: jobsByCompany = {}, refetch: refetchJobs } = useQuery({
     queryKey: ['jobs-by-favorite-companies', favoriteCompanies],
     queryFn: async () => {
@@ -251,6 +269,9 @@ export default function DiscoverScreen() {
                   </View>
                 )}
               </Pressable>
+              <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => router.push('/leaderboard' as any)}>
+                <Trophy size={18} color={colors.textPrimary} />
+              </Pressable>
               <Pressable style={styles.inviteButton} onPress={async () => {
                 if (!referralStats?.referralCode && supabaseUserId) {
                   const code = await createReferralCode(supabaseUserId, userProfile?.full_name || 'User');
@@ -323,6 +344,28 @@ export default function DiscoverScreen() {
                   );
                 })}
               </ScrollView>
+            )}
+          </View>
+
+          <View style={styles.topCompaniesSection}>
+            <View style={styles.topCompaniesHeader}>
+              <Building2 size={20} color={colors.secondary} />
+              <Text style={[styles.topCompaniesSectionTitle, { color: colors.secondary }]}>Top Companies Hiring This Week</Text>
+            </View>
+            {topCompaniesWithLogos.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topCompaniesRow}>
+                {topCompaniesWithLogos.map((company: any) => {
+                  const logoUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/logos/${company.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
+                  
+                  return (
+                    <Pressable key={company.name} style={styles.companyLogoTile} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: company.name } })}>
+                      <Image source={{ uri: logoUrl }} style={styles.companyLogoImage} contentFit="contain" transition={200} cachePolicy="memory-disk" />
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <Text style={styles.noDataText}>No companies available</Text>
             )}
           </View>
 
@@ -670,6 +713,12 @@ const styles = StyleSheet.create({
   friendName: { fontSize: 12, fontWeight: '600', color: "#000", textAlign: 'center', lineHeight: 16 },
   loadingText: { fontSize: 13, color: "#000", paddingVertical: 20 },
   emptyFriendsText: { fontSize: 13, color: "#000", fontStyle: 'italic', paddingVertical: 20 },
+  topCompaniesSection: { marginBottom: 24, paddingLeft: 20 },
+  topCompaniesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
+  topCompaniesSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
+  topCompaniesRow: { gap: 12, paddingRight: 20 },
+  companyLogoTile: { width: 80, height: 80, backgroundColor: "#FFF", borderRadius: 12, padding: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD" },
+  companyLogoImage: { width: 64, height: 64, borderRadius: 8 },
   analyticsSection: { marginBottom: 24, paddingLeft: 20 },
   analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   analyticsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },

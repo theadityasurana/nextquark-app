@@ -88,38 +88,87 @@ export async function applyReferralCode(
     }
 
     console.log('💰 [REFERRAL] Awarding swipes to referrer...');
-    // Award swipes to referrer
-    const { error: referrerUpdateError } = await supabase
-      .from('profiles')
-      .update({
-        applications_remaining: (referrer.applications_remaining || 0) + SWIPES_PER_REFERRAL,
-        applications_limit: (referrer.applications_limit || 0) + SWIPES_PER_REFERRAL,
-        referral_swipes_earned: ((referrer as any).referral_swipes_earned || 0) + SWIPES_PER_REFERRAL,
-      })
-      .eq('id', referrer.id);
+    console.log('🔍 [REFERRAL] Referrer current swipes:', {
+      applications_remaining: referrer.applications_remaining,
+      applications_limit: referrer.applications_limit
+    });
+    
+    // Award swipes to referrer - add 5 swipes to their current balance
+    const newReferrerRemaining = (referrer.applications_remaining || 0) + SWIPES_PER_REFERRAL;
+    const newReferrerLimit = (referrer.applications_limit || 0) + SWIPES_PER_REFERRAL;
+    const newReferrerEarned = ((referrer as any).referral_swipes_earned || 0) + SWIPES_PER_REFERRAL;
+    
+    // Try RPC function first, fallback to direct update
+    let referrerUpdateError = null;
+    try {
+      const { error: rpcError } = await supabase.rpc('update_referrer_swipes', {
+        referrer_user_id: referrer.id,
+        swipes_to_add: SWIPES_PER_REFERRAL
+      });
+      referrerUpdateError = rpcError;
+      
+      if (rpcError) {
+        console.log('⚠️ [REFERRAL] RPC failed, trying direct update:', rpcError.message);
+        // Fallback: try direct update (might work if RLS allows)
+        const { error: directError } = await supabase
+          .from('profiles')
+          .update({
+            applications_remaining: newReferrerRemaining,
+            applications_limit: newReferrerLimit,
+            referral_swipes_earned: newReferrerEarned,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', referrer.id);
+        referrerUpdateError = directError;
+      }
+    } catch (e: any) {
+      console.log('⚠️ [REFERRAL] Exception updating referrer:', e);
+      referrerUpdateError = e;
+    }
+
+    console.log('🔍 [REFERRAL] Referrer new swipes:', {
+      applications_remaining: newReferrerRemaining,
+      applications_limit: newReferrerLimit,
+      referral_swipes_earned: newReferrerEarned
+    });
 
     if (referrerUpdateError) {
-      console.log('❌ [REFERRAL] Error updating referrer:', referrerUpdateError.message);
+      console.log('❌ [REFERRAL] Error updating referrer:', referrerUpdateError.message || referrerUpdateError);
+      console.log('❌ [REFERRAL] Full error:', JSON.stringify(referrerUpdateError));
     } else {
       console.log('✅ [REFERRAL] Referrer updated successfully');
     }
 
     console.log('💰 [REFERRAL] Awarding swipes to new user...');
-    // Award swipes to new user
+    // Award swipes to new user - ensure they get exactly 45 swipes (40 default + 5 bonus)
     const { data: newUser } = await supabase
       .from('profiles')
       .select('applications_remaining, applications_limit')
       .eq('id', newUserId)
       .single();
 
+    console.log('🔍 [REFERRAL] New user current swipes:', {
+      applications_remaining: newUser?.applications_remaining,
+      applications_limit: newUser?.applications_limit
+    });
+
+    // Calculate new user swipes: ensure they have 40 base + 5 referral bonus = 45 total
+    const baseSwipes = 40;
+    const totalSwipesForNewUser = baseSwipes + SWIPES_PER_REFERRAL; // 45 total
+    
     const { error: newUserUpdateError } = await supabase
       .from('profiles')
       .update({
-        applications_remaining: (newUser?.applications_remaining || 40) + SWIPES_PER_REFERRAL,
-        applications_limit: (newUser?.applications_limit || 40) + SWIPES_PER_REFERRAL,
+        applications_remaining: totalSwipesForNewUser,
+        applications_limit: totalSwipesForNewUser,
         referred_by: referrer.id,
       })
       .eq('id', newUserId);
+
+    console.log('🔍 [REFERRAL] New user final swipes:', {
+      applications_remaining: totalSwipesForNewUser,
+      applications_limit: totalSwipesForNewUser
+    });
 
     if (newUserUpdateError) {
       console.log('❌ [REFERRAL] Error updating new user:', newUserUpdateError.message);
@@ -143,7 +192,7 @@ export async function applyReferralCode(
     }
 
     console.log('🎉 [REFERRAL] Referral process completed successfully!');
-    return { success: true, message: `You earned ${SWIPES_PER_REFERRAL} bonus swipes!` };
+    return { success: true, message: `Welcome! You received ${SWIPES_PER_REFERRAL} bonus swipes (${baseSwipes + SWIPES_PER_REFERRAL} total)!` };
   } catch (error) {
     console.error('💥 [REFERRAL] Exception in applyReferralCode:', error);
     return { success: false, message: 'Failed to apply referral code' };

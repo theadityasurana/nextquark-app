@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { X, MapPin, Briefcase, GraduationCap, Trophy, Award, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
@@ -49,29 +49,44 @@ export default function FriendProfileScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </>
     );
   }
 
   if (!profile) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.errorText}>Profile not found</Text>
-      </View>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+          <Text style={styles.errorText}>Profile not found</Text>
+        </View>
+      </>
     );
   }
 
-  const avatarUrl = profile.avatar_url
-    ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`
-    : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.full_name || 'User') + '&background=6366f1&color=fff&size=400';
+  let avatarUrl;
+  if (profile.avatar_url) {
+    if (profile.avatar_url.startsWith('http')) {
+      avatarUrl = profile.avatar_url;
+    } else {
+      avatarUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`;
+    }
+  } else {
+    avatarUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.full_name || 'User') + '&background=6366f1&color=fff&size=200';
+  }
 
   const paginatedJobs = appliedJobs.slice(jobsPage * JOBS_PER_PAGE, (jobsPage + 1) * JOBS_PER_PAGE);
   const totalPages = Math.ceil(appliedJobs.length / JOBS_PER_PAGE);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable style={styles.closeButton} onPress={() => router.back()}>
           <X size={22} color={colors.textPrimary} />
@@ -225,7 +240,8 @@ export default function FriendProfileScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+      </View>
+    </>
   );
 }
 

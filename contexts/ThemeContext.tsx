@@ -11,11 +11,12 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>('dark');
 
   useEffect(() => {
     AsyncStorage.getItem('theme').then((saved) => {
-      if (saved === 'dark') setTheme('dark');
+      if (saved === 'light') setTheme('light');
+      else if (saved === 'dark') setTheme('dark');
     });
   }, []);
 

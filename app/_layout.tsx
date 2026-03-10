@@ -21,6 +21,7 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 const TUTORIAL_COMPLETED_KEY = 'nextquark_tutorial_completed';
+const APP_OPENED_KEY = 'nextquark_app_opened';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isOnboardingComplete, isLoading } = useAuth();
@@ -28,6 +29,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
+  const [appOpenedChecked, setAppOpenedChecked] = useState(false);
   const notificationListener = useRef<any>();
   const responseListener = useRef<any>();
 
@@ -61,12 +63,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !appOpenedChecked) return;
 
     const seg = segments[0] as string;
     const inAuthGroup = seg === 'welcome' || seg === 'sign-up' || seg === 'sign-in' || seg === 'email-verification' || seg === 'mobile-signup';
     const inOnboarding = seg === 'onboarding';
     const inTabs = seg === '(tabs)';
+    const inWelcomeBack = seg === 'welcome-back';
 
     if (!isAuthenticated && !inAuthGroup) {
       console.log('Redirecting to welcome - not authenticated');
@@ -76,11 +79,30 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       router.replace('/onboarding' as any);
     } else if (isAuthenticated && isOnboardingComplete && (inAuthGroup || inOnboarding)) {
       console.log('Redirecting to home - fully authenticated');
-      router.replace('/(tabs)/(home)' as any);
+      router.replace('/(tabs)' as any);
     } else if (isAuthenticated && isOnboardingComplete && inTabs) {
       checkAndShowTutorial();
     }
-  }, [isAuthenticated, isOnboardingComplete, isLoading, segments]);
+  }, [isAuthenticated, isOnboardingComplete, isLoading, segments, appOpenedChecked]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    checkAppOpened();
+  }, [isLoading]);
+
+  const checkAppOpened = async () => {
+    if (appOpenedChecked) return;
+    try {
+      const opened = await AsyncStorage.getItem(APP_OPENED_KEY);
+      setAppOpenedChecked(true);
+      if (isAuthenticated && isOnboardingComplete && !opened) {
+        router.replace('/welcome-back' as any);
+      }
+    } catch (e) {
+      console.log('Error checking app opened status:', e);
+      setAppOpenedChecked(true);
+    }
+  };
 
   const checkAndShowTutorial = async () => {
     if (tutorialChecked) return;
@@ -131,6 +153,7 @@ function RootLayoutNav() {
     <AuthGuard>
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="welcome-back" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="sign-up" options={{ headerShown: false }} />
         <Stack.Screen name="mobile-signup" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />

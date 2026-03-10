@@ -134,6 +134,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           first_name: firstName,
           last_name: lastName,
           is_onboarding_complete: false,
+          applications_remaining: 40, // Default swipes for new users
+          applications_limit: 40, // Default limit for new users
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -316,6 +318,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         first_name: firstName,
         last_name: lastName,
         is_onboarding_complete: false,
+        applications_remaining: 40, // Default swipes for new users
+        applications_limit: 40, // Default limit for new users
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

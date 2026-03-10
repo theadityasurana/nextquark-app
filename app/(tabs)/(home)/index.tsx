@@ -795,18 +795,6 @@ export default function HomeScreen() {
         <View style={styles.headerLeft}>
           <View style={styles.logoRow}>
             <Image source={require('@/assets/images/header.png')} style={styles.appLogo} resizeMode="contain" />
-            {subscriptionData && (
-              <View style={[
-                styles.subscriptionBadge,
-                subscriptionData.subscription_type === 'free' && styles.subscriptionBadgeFree,
-                subscriptionData.subscription_type === 'pro' && styles.subscriptionBadgePro,
-                subscriptionData.subscription_type === 'premium' && styles.subscriptionBadgePremium,
-              ]}>
-                <Text style={styles.subscriptionBadgeText}>
-                  {subscriptionData.subscription_type.toUpperCase()}
-                </Text>
-              </View>
-            )}
           </View>
           <Text style={[styles.headerTitle, { color: colors.secondary }]}>{greeting}</Text>
           <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>
@@ -819,17 +807,31 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable style={styles.headerButton} onPress={() => router.push('/(tabs)/(home)/search' as any)}>
-            <Search size={20} color={Colors.textSecondary} />
-          </Pressable>
-          <Pressable style={styles.headerButton} onPress={handleOpenFilters}>
-            <SlidersHorizontal size={20} color={Colors.textSecondary} />
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </Pressable>
+          <View style={styles.headerButtonsRow}>
+            <Pressable style={styles.headerButton} onPress={() => router.push('/(tabs)/(home)/search' as any)}>
+              <Search size={20} color={Colors.textSecondary} />
+            </Pressable>
+            <Pressable style={styles.headerButton} onPress={handleOpenFilters}>
+              <SlidersHorizontal size={20} color={Colors.textSecondary} />
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+          {subscriptionData && (
+            <View style={[
+              styles.subscriptionBadge,
+              subscriptionData.subscription_type === 'free' && styles.subscriptionBadgeFree,
+              subscriptionData.subscription_type === 'pro' && styles.subscriptionBadgePro,
+              subscriptionData.subscription_type === 'premium' && styles.subscriptionBadgePremium,
+            ]}>
+              <Text style={styles.subscriptionBadgeText}>
+                {subscriptionData.subscription_type.toUpperCase()}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -876,6 +878,47 @@ export default function HomeScreen() {
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.emptyText}>Loading jobs...</Text>
           </View>
+        ) : subscriptionData && subscriptionData.applications_remaining <= 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Heart size={40} color={Colors.error} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.secondary }]}>Out of Swipes!</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Sorry, but you have run out of free swipes. Consider upgrading your plan or share NextQuark with your friends to earn more swipes.</Text>
+            <View style={styles.outOfSwipesActions}>
+              <Pressable 
+                style={[styles.upgradeButton, { backgroundColor: colors.surface }]} 
+                onPress={() => router.push('/premium' as any)}
+              >
+                <Text style={[styles.upgradeButtonText, { color: colors.secondary }]}>Upgrade to Pro</Text>
+              </Pressable>
+              <Pressable 
+                style={styles.shareButton} 
+                onPress={async () => {
+                  if (supabaseUserId) {
+                    const { getReferralStats, createReferralCode } = await import('@/lib/referral');
+                    const stats = await getReferralStats(supabaseUserId);
+                    if (!stats?.referralCode) {
+                      await createReferralCode(supabaseUserId, userName || 'User');
+                    }
+                    const updatedStats = await getReferralStats(supabaseUserId);
+                    if (updatedStats?.referralCode) {
+                      try {
+                        const { Share } = await import('react-native');
+                        await Share.share({
+                          message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${updatedStats.referralCode} and get 5 free application swipes to get started. Download now!`,
+                        });
+                      } catch (error) {
+                        console.error('Error sharing:', error);
+                      }
+                    }
+                  }
+                }}
+              >
+                <Text style={styles.shareButtonText}>Share to Earn Free Swipes</Text>
+              </Pressable>
+            </View>
+          </View>
         ) : currentIndex >= jobs.length ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
@@ -892,7 +935,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {currentIndex < jobs.length && (
+      {currentIndex < jobs.length && subscriptionData && subscriptionData.applications_remaining > 0 && (
         <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, 10) + 8, backgroundColor: colors.surface }]}>
           <Pressable style={[styles.actionButton, styles.passButton, swipeDirection === 'left' && styles.activePass]} onPress={() => forceSwipe('left')}>
             <X size={28} color={swipeDirection === 'left' ? Colors.textInverse : Colors.error} strokeWidth={2.5} />
@@ -1276,7 +1319,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 12 },
   headerLeft: { flex: 1 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  appLogo: { height: 28, width: 200 },
+  appLogo: { height: 28, width: 200, alignSelf: 'flex-start' },
   appName: { fontSize: 12, fontWeight: '800' as const, color: "#000", letterSpacing: 2, textTransform: 'uppercase' as const },
   subscriptionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   subscriptionBadgeFree: { backgroundColor: '#10B981' },
@@ -1285,7 +1328,8 @@ const styles = StyleSheet.create({
   subscriptionBadgeText: { fontSize: 9, fontWeight: '800' as const, color: '#FFFFFF', letterSpacing: 0.5 },
   headerTitle: { fontSize: 22, fontWeight: '800' as const, color: "#000" },
   headerSubtitle: { fontSize: 14, color: "#000", marginTop: 2 },
-  headerActions: { flexDirection: 'row', gap: 10 },
+  headerActions: { flexDirection: 'column', gap: 8, alignItems: 'flex-end' },
+  headerButtonsRow: { flexDirection: 'row', gap: 10 },
   headerButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center', shadowColor: "rgba(0,0,0,0.1)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2, position: 'relative' as const },
   filterBadge: { position: 'absolute' as const, top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   filterBadgeText: { fontSize: 10, fontWeight: '700' as const, color: "#000" },
@@ -1328,6 +1372,11 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, color: "#000", textAlign: 'center', lineHeight: 22 },
   resetButton: { marginTop: 24, paddingHorizontal: 28, paddingVertical: 14, backgroundColor: "#FFF", borderRadius: 14 },
   resetButtonText: { fontSize: 16, fontWeight: '700' as const, color: "#000" },
+  outOfSwipesActions: { marginTop: 24, width: '100%', gap: 12 },
+  upgradeButton: { backgroundColor: '#111111', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
+  upgradeButtonText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  shareButton: { backgroundColor: '#43A047', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
+  shareButtonText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
   filterOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   filterContent: { backgroundColor: "#FFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },

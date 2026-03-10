@@ -103,7 +103,7 @@ function normalizeLocationType(type?: string): 'remote' | 'onsite' | 'hybrid' {
 
 const SUPABASE_URL = 'https://widujxpahzlpegzjjpqp.supabase.co';
 
-function getCompanyLogoUrl(companyName: string, logo?: string, logoUrl?: string): string {
+export function getCompanyLogoUrl(companyName: string, logo?: string, logoUrl?: string): string {
   if (logoUrl && logoUrl.startsWith('http')) return logoUrl;
   if (logo && logo.startsWith('http')) return logo;
   if (logoUrl) {

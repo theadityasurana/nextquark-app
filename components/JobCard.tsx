@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Factory } from 'lucide-react-native';
+import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Factory, Building, FileCheck, Shield } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Job } from '@/types';
 import MatchScoreBadge from './MatchScoreBadge';
@@ -86,12 +86,19 @@ export default function JobCard({ job, onViewDetails, backgroundColor }: JobCard
             <MatchScoreBadge score={job.matchScore} />
           </View>
         </View>
-        {job.industry && (
+        {(job.industry || job.companyType) && (
           <View style={styles.industryRow}>
-            <View style={styles.industryChip}>
-              <Factory size={11} color="#3F51B5" />
-              <Text style={styles.industryText}>{job.industry}</Text>
-            </View>
+            {job.industry && (
+              <View style={styles.industryChip}>
+                <Factory size={11} color="#3F51B5" />
+                <Text style={styles.industryText}>{job.industry}</Text>
+              </View>
+            )}
+            {job.companyType && (
+              <View style={[styles.industryChip, { backgroundColor: '#E8F5E9' }]}>
+                <Text style={[styles.industryText, { color: '#2E7D32' }]}>{job.companyType}</Text>
+              </View>
+            )}
           </View>
         )}
         <Text style={styles.jobTitle} numberOfLines={2}>{job.jobTitle}</Text>
@@ -136,7 +143,7 @@ export default function JobCard({ job, onViewDetails, backgroundColor }: JobCard
           </View>
         </View>
 
-        {(job.jobLevel || job.jobRequirements) && (
+        {(job.jobLevel || job.jobRequirements || job.educationLevel || job.workAuthorization) && (
           <View style={styles.metaSectionContainer}>
             <Text style={styles.metaSectionTitle}>Additional Info</Text>
             <View style={styles.metaRow}>
@@ -150,6 +157,18 @@ export default function JobCard({ job, onViewDetails, backgroundColor }: JobCard
                   <Text style={[styles.metaText, { color: '#F57F17' }]}>{req}</Text>
                 </View>
               ))}
+              {job.educationLevel && (
+                <View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}>
+                  <GraduationCap size={12} color="#1565C0" />
+                  <Text style={[styles.metaText, { color: '#1565C0' }]}>{job.educationLevel}</Text>
+                </View>
+              )}
+              {job.workAuthorization && (
+                <View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}>
+                  <Shield size={12} color="#E65100" />
+                  <Text style={[styles.metaText, { color: '#E65100' }]}>{job.workAuthorization}</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -244,7 +263,7 @@ const styles = StyleSheet.create({
   companyName: { fontSize: 17, fontWeight: '700' as const, color: Colors.textPrimary },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 },
   locationText: { fontSize: 12, color: Colors.textPrimary },
-  industryRow: { marginBottom: 8, marginTop: -4 },
+  industryRow: { marginBottom: 8, marginTop: -4, flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   industryChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#E8EAF6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
   industryText: { fontSize: 11, color: '#3F51B5', fontWeight: '600' as const },
   industryRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },

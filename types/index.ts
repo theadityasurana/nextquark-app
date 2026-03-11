@@ -30,6 +30,10 @@ export interface Job {
     jobLevel?: string;
     jobRequirements?: string[];
     industry?: string;
+    companySize?: string;
+    companyType?: string;
+    educationLevel?: string;
+    workAuthorization?: string;
   }
   
   export interface Match {

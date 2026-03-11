@@ -124,6 +124,16 @@ export default function JobDetailsScreen() {
           </View>
         </View>
 
+        {job.companySize && (
+          <View style={styles.companySizeCard}>
+            <Building2 size={18} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.companySizeLabel}>Company Size</Text>
+              <Text style={styles.companySizeValue}>{job.companySize} employees</Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.salaryCard}>
           <Text style={styles.salaryLabel}>Salary Range</Text>
           <Text style={styles.salaryValue}>{formatSalary()}<Text style={styles.salaryPeriod}> /{job.salaryPeriod}</Text></Text>
@@ -134,10 +144,12 @@ export default function JobDetailsScreen() {
           <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{job.description}</Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.secondary }]}>About {job.companyName}</Text>
-          <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{job.companyDescription}</Text>
-        </View>
+        {job.companyDescription && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>About {job.companyName}</Text>
+            <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{job.companyDescription}</Text>
+          </View>
+        )}
 
         {job.detailedRequirements ? (
           <View style={styles.section}>
@@ -220,7 +232,19 @@ export default function JobDetailsScreen() {
         {job.companyWebsite && (
           <Pressable
             style={styles.websiteCard}
-            onPress={() => Linking.openURL(job.companyWebsite!).catch(() => console.log('Could not open website'))}
+            onPress={() => {
+              console.log('Opening website:', job.companyWebsite);
+              const url = job.companyWebsite!;
+              // Ensure URL has protocol
+              const formattedUrl = url.startsWith('http://') || url.startsWith('https://') 
+                ? url 
+                : `https://${url}`;
+              console.log('Formatted URL:', formattedUrl);
+              Linking.openURL(formattedUrl).catch((err) => {
+                console.log('Could not open website:', err);
+                Alert.alert('Error', 'Could not open website. Please check the URL.');
+              });
+            }}
           >
             <Globe size={16} color={Colors.primary} />
             <Text style={styles.websiteText}>Visit Company Website</Text>
@@ -378,6 +402,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '400' as const,
     color: "#000",
+  },
+  companySizeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+  },
+  companySizeLabel: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600' as const,
+    marginBottom: 2,
+  },
+  companySizeValue: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#059669',
   },
   section: {
     marginBottom: 24,

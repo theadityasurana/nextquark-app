@@ -36,6 +36,8 @@ export interface SupabaseJob {
   type?: string;
   salary_range?: string;
   created_at?: string;
+  education_level?: string;
+  work_authorization?: string;
 }
 
 export interface SupabaseCompany {
@@ -156,6 +158,8 @@ export function mapSupabaseJobToJob(raw: SupabaseJob): Job {
     companyWebsite: raw.company_website,
     salaryRangeRaw: salaryFromRange.raw || undefined,
     industry: undefined,
+    educationLevel: raw.education_level,
+    workAuthorization: raw.work_authorization,
   };
 }
 
@@ -195,14 +199,12 @@ export async function fetchJobsFromSupabase(): Promise<Job[]> {
   try {
     console.log('Fetching jobs from Supabase...');
     
-    // First, get the total count
     const { count } = await supabase
       .from('jobs')
       .select('*', { count: 'exact', head: true });
     
     console.log(`Total jobs in database: ${count}`);
     
-    // Fetch all jobs using pagination if needed
     const pageSize = 1000;
     const allData: SupabaseJob[] = [];
     
@@ -234,34 +236,38 @@ export async function fetchJobsFromSupabase(): Promise<Job[]> {
     }
 
     console.log(`Successfully fetched ${allData.length} jobs from Supabase (total in DB: ${count})`);
-    const jobs = allData.map((row: SupabaseJob) => mapSupabaseJobToJob(row));
-
-    const uniqueCompanies = [...new Set(jobs.map(j => j.companyName))];
-    const companyDataMap = new Map<string, { description?: string; logo?: string; website?: string; linkedin?: string; industry?: string }>();
-
-    await Promise.all(
-      uniqueCompanies.map(async (name) => {
-        try {
-          const { data: company } = await supabase
-            .from('companies')
-            .select('description, logo, logo_url, website, linkedin, industry')
-            .ilike('name', name)
-            .single();
-          if (company) companyDataMap.set(name, company);
-        } catch {}
-      })
-    );
-
-    return jobs.map((job) => {
-      const companyData = companyDataMap.get(job.companyName);
-      if (!companyData) return job;
-      const enriched = { ...job };
-      if (companyData.description) enriched.companyDescription = companyData.description;
-      if (companyData.logo || companyData.logo_url) enriched.companyLogo = getCompanyLogoUrl(job.companyName, companyData.logo, companyData.logo_url);
-      if (companyData.website) enriched.companyWebsite = companyData.website;
-      if (companyData.linkedin) enriched.companyLinkedIn = companyData.linkedin;
-      if (companyData.industry) enriched.industry = companyData.industry;
-      return enriched;
+    
+    // Fetch company data for all companies in one query
+    const uniqueCompanies = [...new Set(allData.map(j => j.company_name).filter(Boolean))];
+    const { data: companies } = await supabase
+      .from('companies')
+      .select('name, industry, size, company_type, description, website')
+      .in('name', uniqueCompanies);
+    
+    const companyDataMap = new Map<string, { industry?: string; size?: string; company_type?: string; description?: string; website?: string }>();
+    companies?.forEach(company => {
+      if (company.name) {
+        companyDataMap.set(company.name.toLowerCase(), {
+          industry: company.industry,
+          size: company.size,
+          company_type: company.company_type,
+          description: company.description,
+          website: company.website,
+        });
+      }
+    });
+    
+    return allData.map((row: SupabaseJob) => {
+      const job = mapSupabaseJobToJob(row);
+      const companyData = companyDataMap.get(row.company_name?.toLowerCase() || '');
+      if (companyData) {
+        if (companyData.industry) job.industry = companyData.industry;
+        if (companyData.size) job.companySize = companyData.size;
+        if (companyData.company_type) job.companyType = companyData.company_type;
+        if (companyData.description) job.companyDescription = companyData.description;
+        if (companyData.website) job.companyWebsite = companyData.website;
+      }
+      return job;
     });
   } catch (e) {
     console.log('Exception fetching jobs:', e);
@@ -439,7 +445,25 @@ export async function fetchJobById(jobId: string): Promise<Job | null> {
     }
 
     if (!data) return null;
-    return mapSupabaseJobToJob(data as SupabaseJob);
+    
+    const job = mapSupabaseJobToJob(data as SupabaseJob);
+    
+    // Enrich with company data
+    const { data: company } = await supabase
+      .from('companies')
+      .select('industry, size, company_type, description, website')
+      .ilike('name', job.companyName)
+      .single();
+    
+    if (company) {
+      if (company.industry) job.industry = company.industry;
+      if (company.size) job.companySize = company.size;
+      if (company.company_type) job.companyType = company.company_type;
+      if (company.description) job.companyDescription = company.description;
+      if (company.website) job.companyWebsite = company.website;
+    }
+    
+    return job;
   } catch (e) {
     console.log('Exception fetching job by ID:', e);
     return null;

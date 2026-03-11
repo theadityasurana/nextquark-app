@@ -475,6 +475,7 @@ export default function HomeScreen() {
     const currentJob = jobs[currentIndex];
     if (!currentJob) return;
 
+    console.log('🔒 Disabling swipe - handleSwipeComplete started for direction:', direction);
     setIsSwipeEnabled(false);
     triggerHaptic();
     console.log(`Swiped ${direction} on job:`, currentJob.jobTitle, 'at', currentJob.companyName);
@@ -598,13 +599,18 @@ export default function HomeScreen() {
       
       // Re-enable swiping after card transition completes
       setTimeout(() => {
+        console.log('🔓 Re-enabling swipe - transition complete');
         setIsSwipeEnabled(true);
       }, 100);
     }, 150);
   }, [currentIndex, position, triggerHaptic, jobs, refetchJobs, addSwipedJobId, supabaseUserId, userProfile, userName, queryClient]);
 
   const forceSwipe = useCallback((direction: string) => {
-    if (!isSwipeEnabled) return;
+    if (!isSwipeEnabled) {
+      console.log('🚫 forceSwipe blocked - isSwipeEnabled:', isSwipeEnabled);
+      return;
+    }
+    console.log('✅ forceSwipe allowed - direction:', direction, 'isSwipeEnabled:', isSwipeEnabled);
     const x = direction === 'right' ? SCREEN_WIDTH * 1.5 : direction === 'left' ? -SCREEN_WIDTH * 1.5 : 0;
     const y = direction === 'up' ? -SCREEN_HEIGHT : 0;
     Animated.timing(position, {
@@ -614,14 +620,18 @@ export default function HomeScreen() {
     }).start(() => handleSwipeComplete(direction));
   }, [position, handleSwipeComplete, isSwipeEnabled]);
 
-  const panResponder = useRef(
-    PanResponder.create({
+  const panResponder = useMemo(
+    () => PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gesture) => {
-        if (!isSwipeEnabled) return false;
+        if (!isSwipeEnabled) {
+          console.log('🚫 Gesture blocked - isSwipeEnabled:', isSwipeEnabled);
+          return false;
+        }
         return Math.abs(gesture.dx) > 10 || Math.abs(gesture.dy) > 10;
       },
       onPanResponderMove: (_, gesture) => {
+        if (!isSwipeEnabled) return;
         position.setValue({ x: gesture.dx, y: gesture.dy });
         if (gesture.dx > 50) setSwipeDirection('right');
         else if (gesture.dx < -50) setSwipeDirection('left');
@@ -629,6 +639,10 @@ export default function HomeScreen() {
         else setSwipeDirection(null);
       },
       onPanResponderRelease: (_, gesture) => {
+        if (!isSwipeEnabled) {
+          console.log('🚫 Release blocked - isSwipeEnabled:', isSwipeEnabled);
+          return;
+        }
         if (gesture.dx > SWIPE_THRESHOLD) {
           forceSwipe('right');
         } else if (gesture.dx < -SWIPE_THRESHOLD) {
@@ -644,11 +658,13 @@ export default function HomeScreen() {
           setSwipeDirection(null);
         }
       },
-    })
-  ).current;
+    }),
+    [isSwipeEnabled, position, forceSwipe]
+  );
 
   useEffect(() => {
     if (currentIndex < jobs.length && jobs[currentIndex]) {
+      console.log('🔄 useEffect: Re-enabling swipe for new card at index:', currentIndex);
       setIsSwipeEnabled(true);
     }
   }, [currentIndex, jobs]);

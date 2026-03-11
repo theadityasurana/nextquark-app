@@ -251,24 +251,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       } else if (event === 'SIGNED_IN' && session?.user) {
         await handleSession(session, 'onAuthStateChange-SIGNED_IN');
       } else if (event === 'INITIAL_SESSION' && !session) {
-        console.log('[AUTH] INITIAL_SESSION with no session');
+        console.log('[AUTH] INITIAL_SESSION with no session, clearing stale data');
         try {
-          const [authStr, onbStr] = await Promise.all([
-            AsyncStorage.getItem(AUTH_KEY),
-            AsyncStorage.getItem(ONBOARDING_KEY),
-          ]);
-          if (authStr) {
-            const localAuth = JSON.parse(authStr) as AuthState;
-            console.log('[AUTH] Loaded local auth state, isAuthenticated:', localAuth.isAuthenticated);
-            setAuthState(localAuth);
-          } else {
-            console.log('[AUTH] No local auth state found');
-          }
-          if (onbStr) {
-            setOnboardingData(JSON.parse(onbStr) as OnboardingData);
-          }
+          await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
         } catch (e) {
-          console.log('[AUTH] Error loading local storage:', e);
+          console.log('[AUTH] Error clearing storage:', e);
         }
         if (!initialResolved) {
           initialResolved = true;

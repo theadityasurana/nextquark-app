@@ -484,16 +484,20 @@ export default function HomeScreen() {
       console.log('Current job data:', JSON.stringify({ id: currentJob.id, company: currentJob.companyName, title: currentJob.jobTitle, logo: currentJob.companyLogo }));
       addSwipedJobId(currentJob.id);
       
-      setNotification({ 
-        visible: true, 
-        job: {
-          ...currentJob,
-          companyName: currentJob.companyName || 'Company',
-          jobTitle: currentJob.jobTitle || 'Position',
-          companyLogo: currentJob.companyLogo || 'https://via.placeholder.com/52'
-        }
-      });
-      setTimeout(() => setNotification(null), 3000);
+      // Only show notification if we have valid job data
+      if (currentJob.companyName && currentJob.jobTitle && currentJob.companyLogo) {
+        setNotification({ 
+          visible: true, 
+          job: currentJob
+        });
+        setTimeout(() => setNotification(null), 3000);
+      } else {
+        console.warn('Skipping notification - incomplete job data:', { 
+          hasCompany: !!currentJob.companyName, 
+          hasTitle: !!currentJob.jobTitle, 
+          hasLogo: !!currentJob.companyLogo 
+        });
+      }
       
       console.log('Incrementing right_swipe for job:', currentJob.id);
       incrementRightSwipe(currentJob.id).then(() => {
@@ -516,8 +520,11 @@ export default function HomeScreen() {
             console.log('Successfully added to live_application_queue for job:', currentJob.id);
             console.log('live_application_queue entry created successfully');
           } else {
-            console.log('Failed to create live_application_queue entry');
+            console.error('❌ FAILED to create live_application_queue entry for job:', currentJob.id);
+            console.error('This means the job will NOT be in your applications queue!');
           }
+        }).catch((error) => {
+          console.error('❌ EXCEPTION adding to live_application_queue:', error);
         });
 
         // Send job application confirmation email
@@ -556,6 +563,9 @@ export default function HomeScreen() {
           console.log('To enable emails in production APK, deploy API routes to a server or use a service like SendGrid/Mailgun');
         }
       } else {
+        console.error('❌ SKIPPING live_application_queue: Missing data');
+        console.error('supabaseUserId:', supabaseUserId ? 'EXISTS' : 'MISSING');
+        console.error('userProfile:', userProfile ? 'EXISTS' : 'MISSING');
         console.log('Skipping live_application_queue: no supabaseUserId or userProfile');
       }
     }
@@ -580,12 +590,17 @@ export default function HomeScreen() {
     }
 
     setSwipeDirection(null);
-    position.setValue({ x: 0, y: 0 });
-    setCurrentIndex((prev) => prev + 1);
-
+    
+    // Delay resetting position and incrementing index to avoid flicker
     setTimeout(() => {
-      setIsSwipeEnabled(true);
-    }, 300);
+      position.setValue({ x: 0, y: 0 });
+      setCurrentIndex((prev) => prev + 1);
+      
+      // Re-enable swiping after card transition completes
+      setTimeout(() => {
+        setIsSwipeEnabled(true);
+      }, 100);
+    }, 150);
   }, [currentIndex, position, triggerHaptic, jobs, refetchJobs, addSwipedJobId, supabaseUserId, userProfile, userName, queryClient]);
 
   const forceSwipe = useCallback((direction: string) => {
@@ -935,21 +950,21 @@ export default function HomeScreen() {
 
       <View style={styles.feedToggleRow}>
         <Pressable
-          style={[styles.feedToggleBtn, feedMode === 'discover' && styles.feedToggleBtnActive]}
+          style={[styles.feedToggleBtn, feedMode === 'discover' ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } : { backgroundColor: 'transparent', borderColor: '#FFFFFF', borderWidth: 1 }]}
           onPress={() => setFeedMode('discover')}
         >
-          <Text style={[styles.feedToggleText, feedMode === 'discover' && styles.feedToggleTextActive]}>Discover</Text>
-          <View style={[styles.feedToggleBadge, feedMode === 'discover' && styles.feedToggleBadgeActive]}>
-            <Text style={[styles.feedToggleBadgeText, feedMode === 'discover' && styles.feedToggleBadgeTextActive]}>{allJobs.length}</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'discover' ? '#000000' : '#FFFFFF' }]}>Discover</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'discover' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)' }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? '#000000' : '#FFFFFF' }]}>{allJobs.length}</Text>
           </View>
         </Pressable>
         <Pressable
-          style={[styles.feedToggleBtn, feedMode === 'foryou' && styles.feedToggleBtnActive]}
+          style={[styles.feedToggleBtn, feedMode === 'foryou' ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } : { backgroundColor: 'transparent', borderColor: '#FFFFFF', borderWidth: 1 }]}
           onPress={() => setFeedMode('foryou')}
         >
-          <Text style={[styles.feedToggleText, feedMode === 'foryou' && styles.feedToggleTextActive]}>For You</Text>
-          <View style={[styles.feedToggleBadge, feedMode === 'foryou' && styles.feedToggleBadgeActive]}>
-            <Text style={[styles.feedToggleBadgeText, feedMode === 'foryou' && styles.feedToggleBadgeTextActive]}>{jobs.length}</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>For You</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)' }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>{jobs.length}</Text>
           </View>
         </Pressable>
       </View>
@@ -963,7 +978,6 @@ export default function HomeScreen() {
               </View>
             ))}
             <Pressable style={styles.clearSearchButton} onPress={clearSearchTags}>
-              <X size={14} color={Colors.error} />
               <Text style={styles.clearSearchText}>Clear</Text>
             </Pressable>
           </ScrollView>
@@ -1065,9 +1079,9 @@ export default function HomeScreen() {
                 {POSTED_OPTIONS.map((opt) => {
                   const selected = tempFilters.postedWithin.includes(opt.value);
                   return (
-                    <Pressable key={opt.value} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => togglePostedWithin(opt.value)}>
-                      {selected && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{opt.label}</Text>
+                    <Pressable key={opt.value} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => togglePostedWithin(opt.value)}>
+                      {selected && <Check size={14} color="#FFFFFF" />}
+                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -1080,9 +1094,9 @@ export default function HomeScreen() {
                 {WORK_MODES.map((mode) => {
                   const selected = tempFilters.workModes.includes(mode);
                   return (
-                    <Pressable key={mode} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleWorkMode(mode)}>
-                      {selected && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{mode}</Text>
+                    <Pressable key={mode} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleWorkMode(mode)}>
+                      {selected && <Check size={14} color="#FFFFFF" />}
+                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{mode}</Text>
                     </Pressable>
                   );
                 })}
@@ -1095,9 +1109,9 @@ export default function HomeScreen() {
                 {JOB_TYPES.map((type) => {
                   const selected = tempFilters.jobTypes.includes(type);
                   return (
-                    <Pressable key={type} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleJobType(type)}>
-                      {selected && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{type}</Text>
+                    <Pressable key={type} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobType(type)}>
+                      {selected && <Check size={14} color="#FFFFFF" />}
+                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{type}</Text>
                     </Pressable>
                   );
                 })}
@@ -1110,9 +1124,9 @@ export default function HomeScreen() {
                 {JOB_LEVELS.map((level) => {
                   const selected = tempFilters.jobLevels.includes(level);
                   return (
-                    <Pressable key={level} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleJobLevel(level)}>
-                      {selected && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{level}</Text>
+                    <Pressable key={level} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobLevel(level)}>
+                      {selected && <Check size={14} color="#FFFFFF" />}
+                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{level}</Text>
                     </Pressable>
                   );
                 })}
@@ -1125,9 +1139,9 @@ export default function HomeScreen() {
                 {JOB_REQUIREMENTS.map((req) => {
                   const selected = tempFilters.jobRequirements.includes(req);
                   return (
-                    <Pressable key={req} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, selected && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => toggleJobRequirement(req)}>
-                      {selected && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, selected && { color: colors.surface }]}>{req}</Text>
+                    <Pressable key={req} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobRequirement(req)}>
+                      {selected && <Check size={14} color="#FFFFFF" />}
+                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{req}</Text>
                     </Pressable>
                   );
                 })}
@@ -1146,9 +1160,9 @@ export default function HomeScreen() {
               {tempFilters.companies.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.companies.map((company) => (
-                    <Pressable key={company} style={styles.selectedCityChip} onPress={() => toggleCompany(company)}>
-                      <Text style={styles.selectedCityText}>{company}</Text>
-                      <X size={12} color={Colors.surface} />
+                    <Pressable key={company} style={styles.selectedItemChip} onPress={() => toggleCompany(company)}>
+                      <Text style={styles.selectedItemText}>{company}</Text>
+                      <X size={12} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
@@ -1167,9 +1181,9 @@ export default function HomeScreen() {
               {tempFilters.roles.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.roles.map((role) => (
-                    <Pressable key={role} style={styles.selectedCityChip} onPress={() => toggleRole(role)}>
-                      <Text style={styles.selectedCityText}>{role}</Text>
-                      <X size={12} color={Colors.surface} />
+                    <Pressable key={role} style={styles.selectedItemChip} onPress={() => toggleRole(role)}>
+                      <Text style={styles.selectedItemText}>{role}</Text>
+                      <X size={12} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
@@ -1188,9 +1202,9 @@ export default function HomeScreen() {
               {tempFilters.locations.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.locations.map((location) => (
-                    <Pressable key={location} style={styles.selectedCityChip} onPress={() => toggleLocation(location)}>
-                      <Text style={styles.selectedCityText}>{location}</Text>
-                      <X size={12} color={Colors.surface} />
+                    <Pressable key={location} style={styles.selectedItemChip} onPress={() => toggleLocation(location)}>
+                      <Text style={styles.selectedItemText}>{location}</Text>
+                      <X size={12} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
@@ -1312,19 +1326,19 @@ export default function HomeScreen() {
                     ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${company.logo_url}`
                     : null;
                   return (
-                    <Pressable key={company.name} style={[styles.cityOption, selected && styles.cityOptionActive]} onPress={() => toggleCompany(company.name)}>
+                    <Pressable key={company.name} style={[styles.cityOption, selected && { borderColor: '#22c55e', borderWidth: 2 }]} onPress={() => toggleCompany(company.name)}>
                       <View style={styles.companyOptionContent}>
                         {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companyLogo} />}
-                        <Text style={[styles.cityOptionText, selected && styles.cityOptionTextActive]}>{company.name}</Text>
+                        <Text style={[styles.cityOptionText, selected && { color: '#22c55e' }]}>{company.name}</Text>
                       </View>
-                      {selected && <Check size={18} color={Colors.surface} />}
+                      {selected && <Check size={18} color="#22c55e" />}
                     </Pressable>
                   );
                 })
               )}
             </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={() => setShowCompanyPicker(false)}>
-              <Text style={styles.cityDoneBtnText}>Done ({tempFilters.companies.length} selected)</Text>
+            <Pressable style={styles.companyDoneBtn} onPress={() => setShowCompanyPicker(false)}>
+              <Text style={styles.companyDoneBtnText}>Done ({tempFilters.companies.length} selected)</Text>
             </Pressable>
           </View>
         </View>
@@ -1355,15 +1369,15 @@ export default function HomeScreen() {
               {filteredLocations.map((location) => {
                 const selected = tempFilters.locations.includes(location);
                 return (
-                  <Pressable key={location} style={[styles.cityOption, selected && styles.cityOptionActive]} onPress={() => toggleLocation(location)}>
-                    <Text style={[styles.cityOptionText, selected && styles.cityOptionTextActive]}>{location}</Text>
-                    {selected && <Check size={18} color={Colors.surface} />}
+                  <Pressable key={location} style={[styles.cityOption, selected && { borderColor: '#22c55e', borderWidth: 2 }]} onPress={() => toggleLocation(location)}>
+                    <Text style={[styles.cityOptionText, selected && { color: '#22c55e' }]}>{location}</Text>
+                    {selected && <Check size={18} color="#22c55e" />}
                   </Pressable>
                 );
               })}
             </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={() => setShowLocationPicker(false)}>
-              <Text style={styles.cityDoneBtnText}>Done ({tempFilters.locations.length} selected)</Text>
+            <Pressable style={styles.locationDoneBtn} onPress={() => setShowLocationPicker(false)}>
+              <Text style={styles.locationDoneBtnText}>Done ({tempFilters.locations.length} selected)</Text>
             </Pressable>
           </View>
         </View>
@@ -1394,15 +1408,15 @@ export default function HomeScreen() {
               {filteredRoles.map((role) => {
                 const selected = tempFilters.roles.includes(role);
                 return (
-                  <Pressable key={role} style={[styles.cityOption, selected && styles.cityOptionActive]} onPress={() => toggleRole(role)}>
-                    <Text style={[styles.cityOptionText, selected && styles.cityOptionTextActive]}>{role}</Text>
-                    {selected && <Check size={18} color={Colors.surface} />}
+                  <Pressable key={role} style={[styles.cityOption, selected && { borderColor: '#22c55e', borderWidth: 2 }]} onPress={() => toggleRole(role)}>
+                    <Text style={[styles.cityOptionText, selected && { color: '#22c55e' }]}>{role}</Text>
+                    {selected && <Check size={18} color="#22c55e" />}
                   </Pressable>
                 );
               })}
             </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={() => setShowRolePicker(false)}>
-              <Text style={styles.cityDoneBtnText}>Done ({tempFilters.roles.length} selected)</Text>
+            <Pressable style={styles.roleDoneBtn} onPress={() => setShowRolePicker(false)}>
+              <Text style={styles.roleDoneBtnText}>Done ({tempFilters.roles.length} selected)</Text>
             </Pressable>
           </View>
         </View>
@@ -1433,20 +1447,16 @@ const styles = StyleSheet.create({
   filterBadgeText: { fontSize: 10, fontWeight: '700' as const, color: "#000" },
   aiButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   feedToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 6 },
-  feedToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
-  feedToggleBtnActive: { backgroundColor: '#111111', borderColor: '#111111' },
-  feedToggleText: { fontSize: 13, fontWeight: '600' as const, color: "#000" },
-  feedToggleTextActive: { color: '#FFFFFF' },
-  feedToggleBadge: { backgroundColor: "#FFF", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  feedToggleBadgeActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
-  feedToggleBadgeText: { fontSize: 10, fontWeight: '700' as const, color: "#000" },
-  feedToggleBadgeTextActive: { color: '#FFFFFF' },
-  activeSearchContainer: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#FFF" },
+  feedToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  feedToggleText: { fontSize: 13, fontWeight: '600' as const },
+  feedToggleBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
+  feedToggleBadgeText: { fontSize: 10, fontWeight: '700' as const },
+  activeSearchContainer: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#000000' },
   activeSearchScroll: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  activeSearchTag: { backgroundColor: "#FFF", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  activeSearchTagText: { fontSize: 13, fontWeight: '600' as const, color: "#000" },
-  clearSearchButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: "#FFF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  clearSearchText: { fontSize: 12, fontWeight: '600' as const, color: "#000" },
+  activeSearchTag: { backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  activeSearchTagText: { fontSize: 13, fontWeight: '600' as const, color: '#000000' },
+  clearSearchButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#000000', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#FFFFFF' },
+  clearSearchText: { fontSize: 12, fontWeight: '600' as const, color: '#FFFFFF' },
   cardsContainer: { flex: 1, paddingHorizontal: 12, paddingTop: 2 },
   cardWrapper: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
   overlayLabel: { position: 'absolute' as const, zIndex: 10, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
@@ -1509,8 +1519,16 @@ const styles = StyleSheet.create({
   cityOptionActive: { backgroundColor: "#FFF", borderColor: "#DDD" },
   cityOptionText: { fontSize: 14, fontWeight: '600' as const, color: "#000" },
   cityOptionTextActive: { color: "#000" },
-  cityDoneBtn: { marginHorizontal: 20, marginVertical: 16, paddingVertical: 14, borderRadius: 14, backgroundColor: "#FFF", alignItems: 'center' },
-  cityDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#000" },
+  cityDoneBtn: { marginHorizontal: 20, marginVertical: 16, paddingVertical: 14, borderRadius: 14, backgroundColor: "#000000", alignItems: 'center' },
+  cityDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#FFFFFF" },
+  companyDoneBtn: { marginHorizontal: 20, marginVertical: 16, paddingVertical: 14, borderRadius: 14, backgroundColor: "#000000", alignItems: 'center' },
+  companyDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#FFFFFF" },
+  locationDoneBtn: { marginHorizontal: 20, marginVertical: 16, paddingVertical: 14, borderRadius: 14, backgroundColor: "#000000", alignItems: 'center' },
+  locationDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#FFFFFF" },
+  roleDoneBtn: { marginHorizontal: 20, marginVertical: 16, paddingVertical: 14, borderRadius: 14, backgroundColor: "#000000", alignItems: 'center' },
+  roleDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#FFFFFF" },
+  selectedItemChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: "#000000", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  selectedItemText: { fontSize: 12, color: "#FFFFFF", fontWeight: '600' as const },
   companyOptionContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   companyLogo: { width: 24, height: 24, borderRadius: 4 },
   searchTagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },

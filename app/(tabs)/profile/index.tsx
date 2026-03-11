@@ -165,7 +165,12 @@ export default function ProfileScreen() {
 
   const [user, setUser] = useState<UserProfile>(() => {
     // Always start with empty profile - data will be loaded from supabaseProfile
-    return buildProfileFromOnboarding(defaultOnboardingData);
+    const profile = buildProfileFromOnboarding(defaultOnboardingData);
+    // Set default salary to INR with range 0 to 1 crore
+    profile.salaryCurrency = 'INR';
+    profile.salaryMinPref = 0;
+    profile.salaryMaxPref = 10000000;
+    return profile;
   });
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
@@ -1163,14 +1168,14 @@ const MAJOR_CITIES = [
           <Pressable 
             style={[
               styles.subscriptionBadge,
-              { backgroundColor: getSubscriptionBadgeColor(subscriptionData?.subscription_type || 'free') }
+              { backgroundColor: subscriptionData?.subscription_type === 'pro' ? '#FF9800' : '#9C27B0' }
             ]}
             onPress={() => router.push('/premium' as any)}
           >
             <Crown size={20} color="#FFFFFF" />
             <View style={styles.subscriptionBadgeContent}>
               <Text style={styles.subscriptionBadgeTitle}>
-                You are a {getSubscriptionDisplayName(subscriptionData?.subscription_type || 'free')}
+                You are a {subscriptionData?.subscription_type === 'pro' ? 'Pro' : 'Premium'} User
               </Text>
               <Text style={styles.subscriptionBadgeSubtext}>
                 {subscriptionData?.applications_remaining || 0} applications remaining this month

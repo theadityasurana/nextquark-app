@@ -15,7 +15,7 @@ let Notifications: any;
 try {
   Notifications = require('expo-notifications');
 } catch (e) {
-  console.log('Notifications not available in Expo Go on Android');
+  // Notifications not available in Expo Go on Android
 }
 
 // Initialize Sentry (only in production builds, not in Expo Go)

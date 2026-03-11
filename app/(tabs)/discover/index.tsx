@@ -174,7 +174,7 @@ export default function DiscoverScreen() {
   const { data: topCompaniesWithLogos = [] } = useQuery({
     queryKey: ['top-companies-logos'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('companies').select('name, logo_url').not('logo_url', 'is', null).limit(20);
+      const { data, error } = await supabase.from('companies').select('name, logo_url').not('logo_url', 'is', null).order('name');
       if (error) {
         console.error('Error fetching top companies:', error);
         return [];
@@ -628,18 +628,18 @@ export default function DiscoverScreen() {
                 <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Industry</Text>
                 <View style={styles.chipGrid}>
                   {uniqueIndustries.map(industry => (
-                    <Pressable key={industry} style={[styles.filterChip, { backgroundColor: colors.background, borderColor: colors.borderLight }, industryFilter.includes(industry) && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setIndustryFilter(prev => prev.includes(industry) ? prev.filter(i => i !== industry) : [...prev, industry])}>
-                      {industryFilter.includes(industry) && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, industryFilter.includes(industry) && { color: colors.surface }]}>{industry}</Text>
+                    <Pressable key={industry} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, industryFilter.includes(industry) && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setIndustryFilter(prev => prev.includes(industry) ? prev.filter(i => i !== industry) : [...prev, industry])}>
+                      {industryFilter.includes(industry) && <Check size={14} color={colors.textInverse} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, industryFilter.includes(industry) && { color: colors.textInverse }]}>{industry}</Text>
                     </Pressable>
                   ))}
                 </View>
                 <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Location</Text>
                 <View style={styles.chipGrid}>
                   {uniqueLocations.map(location => (
-                    <Pressable key={location} style={[styles.filterChip, { backgroundColor: colors.background, borderColor: colors.borderLight }, locationFilter.includes(location) && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setLocationFilter(prev => prev.includes(location) ? prev.filter(l => l !== location) : [...prev, location])}>
-                      {locationFilter.includes(location) && <Check size={14} color={colors.surface} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, locationFilter.includes(location) && { color: colors.surface }]}>{location}</Text>
+                    <Pressable key={location} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, locationFilter.includes(location) && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setLocationFilter(prev => prev.includes(location) ? prev.filter(l => l !== location) : [...prev, location])}>
+                      {locationFilter.includes(location) && <Check size={14} color={colors.textInverse} />}
+                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, locationFilter.includes(location) && { color: colors.textInverse }]}>{location}</Text>
                     </Pressable>
                   ))}
                 </View>

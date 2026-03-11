@@ -58,7 +58,7 @@ export const MAJOR_CITIES = [
   export function getSalaryConfig(currencyCode: string): SalaryConfig {
     switch (currencyCode) {
       case 'INR':
-        return { min: 0, max: 50000000, step: 200000 };
+        return { min: 0, max: 10000000, step: 500000 };
       case 'EUR':
         return { min: 0, max: 500000, step: 5000 };
       case 'GBP':

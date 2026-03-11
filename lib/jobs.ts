@@ -194,23 +194,47 @@ async function enrichJobWithCompanyData(job: Job, companyName: string): Promise<
 export async function fetchJobsFromSupabase(): Promise<Job[]> {
   try {
     console.log('Fetching jobs from Supabase...');
-    const { data, error } = await supabase
+    
+    // First, get the total count
+    const { count } = await supabase
       .from('jobs')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.log('Error fetching jobs from Supabase:', error.message);
-      return [];
+      .select('*', { count: 'exact', head: true });
+    
+    console.log(`Total jobs in database: ${count}`);
+    
+    // Fetch all jobs using pagination if needed
+    const pageSize = 1000;
+    const allData: SupabaseJob[] = [];
+    
+    if (count && count > 0) {
+      const totalPages = Math.ceil(count / pageSize);
+      
+      for (let page = 0; page < totalPages; page++) {
+        const { data, error } = await supabase
+          .from('jobs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) {
+          console.log(`Error fetching page ${page + 1}:`, error.message);
+          break;
+        }
+        
+        if (data && data.length > 0) {
+          allData.push(...data);
+          console.log(`Fetched page ${page + 1}/${totalPages} (${data.length} jobs)`);
+        }
+      }
     }
 
-    if (!data || data.length === 0) {
+    if (allData.length === 0) {
       console.log('No jobs found in Supabase');
       return [];
     }
 
-    console.log(`Fetched ${data.length} jobs from Supabase`);
-    const jobs = data.map((row: SupabaseJob) => mapSupabaseJobToJob(row));
+    console.log(`Successfully fetched ${allData.length} jobs from Supabase (total in DB: ${count})`);
+    const jobs = allData.map((row: SupabaseJob) => mapSupabaseJobToJob(row));
 
     const uniqueCompanies = [...new Set(jobs.map(j => j.companyName))];
     const companyDataMap = new Map<string, { description?: string; logo?: string; website?: string; linkedin?: string; industry?: string }>();

@@ -212,7 +212,7 @@ export default function FriendProfileScreen() {
                 <Pressable style={[styles.pageBtn, jobsPage === 0 && styles.pageBtnDisabled]} onPress={() => setJobsPage(p => Math.max(0, p - 1))} disabled={jobsPage === 0}>
                   <ChevronLeft size={16} color={jobsPage === 0 ? colors.textTertiary : colors.secondary} />
                 </Pressable>
-                <Text style={[styles.pageText, { color: colors.textSecondary }]}>Page {jobsPage + 1} of {totalPages}</Text>
+                <Text style={styles.pageText}>Page {jobsPage + 1} of {totalPages}</Text>
                 <Pressable style={[styles.pageBtn, jobsPage === totalPages - 1 && styles.pageBtnDisabled]} onPress={() => setJobsPage(p => Math.min(totalPages - 1, p + 1))} disabled={jobsPage === totalPages - 1}>
                   <ChevronRight size={16} color={jobsPage === totalPages - 1 ? colors.textTertiary : colors.secondary} />
                 </Pressable>
@@ -260,8 +260,8 @@ const styles = StyleSheet.create({
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: "#000", marginBottom: 12 },
   skillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  skillTag: { backgroundColor: "#FFF", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  skillTagText: { fontSize: 12, color: "#000", fontWeight: '600' },
+  skillTag: { backgroundColor: "#000000", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  skillTagText: { fontSize: 12, color: "#FFFFFF", fontWeight: '600' },
   expItem: { flexDirection: 'row', marginBottom: 16 },
   expIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   expContent: { flex: 1, marginLeft: 12 },
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 16 },
   pageBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD" },
   pageBtnDisabled: { opacity: 0.3 },
-  pageText: { fontSize: 13, color: "#000", fontWeight: '600' },
+  pageText: { fontSize: 13, color: "#000000", fontWeight: '600' },
   companiesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   companyChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: "#FFF", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: "#DDD" },
   companyLogo: { width: 20, height: 20, borderRadius: 4 },

@@ -11,7 +11,6 @@ import {
   Modal,
   ScrollView,
   TextInput,
-  ActivityIndicator,
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -124,13 +123,93 @@ export default function HomeScreen() {
   const [notification, setNotification] = useState<{ visible: boolean; job?: Job } | null>(null);
   const [isSwipeEnabled, setIsSwipeEnabled] = useState(true);
   const [activeSearchTags, setActiveSearchTags] = useState<string[]>([]);
+  const [loadingWordIndex, setLoadingWordIndex] = useState(0);
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
   const position = useRef(new Animated.ValueXY()).current;
+  const loadingWordOpacity = useRef(new Animated.Value(0)).current;
+  const swipeCardAnim = useRef(new Animated.Value(0)).current;
+
+  const loadingWords = ['Vibe', 'Check', 'Apply'];
 
   // Test Sentry
   useEffect(() => {
     Sentry.captureException(new Error('Test error from HomeScreen'));
   }, []);
+
+  // Loading word animation
+  useEffect(() => {
+    if (!isLoadingJobs) {
+      setLoadingWordIndex(0);
+      loadingWordOpacity.setValue(0);
+      swipeCardAnim.setValue(0);
+      return;
+    }
+
+    // Swipe card animation
+    const swipeAnimation = Animated.loop(
+      Animated.sequence([
+        // Swipe right
+        Animated.timing(swipeCardAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        // Pause
+        Animated.delay(200),
+        // Swipe left
+        Animated.timing(swipeCardAnim, {
+          toValue: -1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        // Pause
+        Animated.delay(200),
+        // Return to center
+        Animated.timing(swipeCardAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        // Pause before loop
+        Animated.delay(400),
+      ])
+    );
+    swipeAnimation.start();
+
+    const animateWord = () => {
+      // Fade in
+      Animated.timing(loadingWordOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        // Hold for a moment
+        setTimeout(() => {
+          // Fade out
+          Animated.timing(loadingWordOpacity, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }).start(() => {
+            // Move to next word
+            setLoadingWordIndex((prev) => {
+              const next = prev + 1;
+              if (next < loadingWords.length) {
+                return next;
+              }
+              return 0; // Loop back to start
+            });
+          });
+        }, 600);
+      });
+    };
+
+    animateWord();
+
+    return () => {
+      swipeAnimation.stop();
+    };
+  }, [isLoadingJobs, loadingWordIndex, loadingWordOpacity, swipeCardAnim, loadingWords.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -208,6 +287,26 @@ export default function HomeScreen() {
     
     return shuffled;
   }, [supabaseJobs]);
+
+  // Calculate For You count separately (constant regardless of active section)
+  const forYouCount = useMemo(() => {
+    let filtered = allJobs;
+    if (swipedJobIds.length > 0) {
+      const swipedSet = new Set(swipedJobIds);
+      filtered = filtered.filter(job => !swipedSet.has(job.id));
+    }
+    if (userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
+      filtered = filtered.filter(job => 
+        userProfile.desiredRoles!.some(role => {
+          const roleLower = role.toLowerCase();
+          return job.jobTitle.toLowerCase().includes(roleLower) ||
+            job.description.toLowerCase().includes(roleLower) ||
+            job.skills.some(skill => skill.toLowerCase().includes(roleLower));
+        })
+      );
+    }
+    return filtered.length;
+  }, [allJobs, swipedJobIds, userProfile]);
 
   const jobs: Job[] = useMemo(() => {
     let filtered = allJobs;
@@ -881,7 +980,7 @@ export default function HomeScreen() {
           <Animated.View style={[styles.overlayLabel, styles.saveLabel, { opacity: saveOpacity }]}>
             <Text style={styles.saveLabelText}>SAVE</Text>
           </Animated.View>
-          <JobCard job={job} onViewDetails={() => router.push({ pathname: '/job-details' as any, params: { id: job.id } })} backgroundColor={cardColor} />
+          <JobCard job={job} onViewDetails={() => router.push({ pathname: '/job-details' as any, params: { id: job.id } })} backgroundColor={cardColor} showMatchBadge={feedMode === 'foryou'} />
         </Animated.View>
       );
     }
@@ -895,7 +994,7 @@ export default function HomeScreen() {
             { transform: [{ scale: nextCardScale }], opacity: nextCardOpacity, paddingHorizontal: 16 },
           ]}
         >
-          <JobCard job={job} backgroundColor={cardColor} />
+          <JobCard job={job} backgroundColor={cardColor} showMatchBadge={feedMode === 'foryou'} />
         </Animated.View>
       );
     }
@@ -980,7 +1079,7 @@ export default function HomeScreen() {
         >
           <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>For You</Text>
           <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)' }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>{jobs.length}</Text>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>{forYouCount}</Text>
           </View>
         </Pressable>
       </View>
@@ -1002,9 +1101,53 @@ export default function HomeScreen() {
 
       <View style={styles.cardsContainer}>
         {isLoadingJobs ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.emptyText}>Loading jobs...</Text>
+          <View style={styles.loadingContainer}>
+            <Animated.View
+              style={[
+                styles.swipeCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderLight,
+                  transform: [
+                    {
+                      translateX: swipeCardAnim.interpolate({
+                        inputRange: [-1, 0, 1],
+                        outputRange: [-80, 0, 80],
+                      }),
+                    },
+                    {
+                      rotate: swipeCardAnim.interpolate({
+                        inputRange: [-1, 0, 1],
+                        outputRange: ['-15deg', '0deg', '15deg'],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View style={[styles.swipeCardInner, { backgroundColor: colors.background }]}>
+                <View style={styles.swipeCardHeader}>
+                  <View style={[styles.swipeCardLogo, { backgroundColor: colors.borderLight }]} />
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '70%' }]} />
+                    <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '50%', marginTop: 6 }]} />
+                  </View>
+                </View>
+                <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '90%', height: 12, marginTop: 12 }]} />
+                <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '60%', height: 8, marginTop: 8 }]} />
+              </View>
+            </Animated.View>
+            <Animated.Text 
+              style={[
+                styles.loadingWordText, 
+                { 
+                  color: colors.textPrimary,
+                  opacity: loadingWordOpacity 
+                }
+              ]}
+            >
+              {loadingWords[loadingWordIndex]}
+            </Animated.Text>
           </View>
         ) : subscriptionData && subscriptionData.applications_remaining <= 0 ? (
           <View style={styles.emptyState}>
@@ -1557,4 +1700,11 @@ const styles = StyleSheet.create({
   notificationTitle: { fontSize: 11, fontWeight: '600' as const, color: "#000", textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 4 },
   notificationCompany: { fontSize: 17, fontWeight: '700' as const, color: "#000", marginBottom: 2 },
   notificationRole: { fontSize: 14, color: "#000", lineHeight: 18 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 40 },
+  loadingWordText: { fontSize: 32, fontWeight: '800' as const, letterSpacing: 1 },
+  swipeCard: { width: 280, height: 180, borderRadius: 20, borderWidth: 2, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
+  swipeCardInner: { flex: 1, borderRadius: 16, padding: 16 },
+  swipeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  swipeCardLogo: { width: 40, height: 40, borderRadius: 10 },
+  swipeCardLine: { height: 10, borderRadius: 5 },
 });

@@ -11,6 +11,7 @@ interface JobCardProps {
   job: Job;
   onViewDetails?: () => void;
   backgroundColor?: string;
+  showMatchBadge?: boolean;
 }
 
 function getLocationIcon(type: string) {
@@ -28,7 +29,7 @@ function getExperienceBanner(level: string): string {
   return level;
 }
 
-export default function JobCard({ job, onViewDetails, backgroundColor }: JobCardProps) {
+export default function JobCard({ job, onViewDetails, backgroundColor, showMatchBadge = true }: JobCardProps) {
   const router = useRouter();
   const LocationIcon = getLocationIcon(job.locationType);
   const expBanner = getExperienceBanner(job.experienceLevel);
@@ -83,7 +84,7 @@ export default function JobCard({ job, onViewDetails, backgroundColor }: JobCard
             </View>
           </View>
           <View style={styles.matchAndExp}>
-            <MatchScoreBadge score={job.matchScore} />
+            {showMatchBadge && <MatchScoreBadge score={job.matchScore} />}
           </View>
         </View>
         {(job.industry || job.companyType) && (

@@ -179,12 +179,13 @@ export default function DiscoverScreen() {
         console.error('Error fetching top companies:', error);
         return [];
       }
-      console.log('Top companies fetched:', data?.length);
-      if (data && data.length > 0) {
-        console.log('First company sample:', JSON.stringify(data[0]));
-        console.log('Logo URL sample:', data[0].logo_url);
-      }
-      return data || [];
+      if (!data) return [];
+      const seen = new Set();
+      return data.filter((c: any) => {
+        if (seen.has(c.name)) return false;
+        seen.add(c.name);
+        return true;
+      });
     },
   });
 
@@ -354,11 +355,11 @@ export default function DiscoverScreen() {
             </View>
             {topCompaniesWithLogos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topCompaniesRow}>
-                {topCompaniesWithLogos.map((company: any) => {
+                {topCompaniesWithLogos.map((company: any, index: number) => {
                   const logoUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/logos/${company.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
                   
                   return (
-                    <Pressable key={company.name} style={styles.companyLogoTile} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: company.name } })}>
+                    <Pressable key={`${company.name}-${index}`} style={styles.companyLogoTile} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: company.name } })}>
                       <Image source={{ uri: logoUrl }} style={styles.companyLogoImage} contentFit="contain" transition={200} cachePolicy="memory-disk" />
                     </Pressable>
                   );

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Home, Briefcase, MessageCircle, User, AlertCircle, Compass } from 'lucide-react-native';
 import { View, Text, StyleSheet } from 'react-native';
@@ -6,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUserApplications } from '@/lib/jobs';
+import { initUnreadMailListener, cleanupUnreadMailListener, subscribeUnreadCount } from '@/lib/unreadMail';
 
 function TabBarBadge({ count, type = 'count' }: { count: number; type?: 'count' | 'alert' }) {
   if (count === 0 && type === 'count') return null;
@@ -32,9 +34,23 @@ export default function TabLayout() {
     enabled: !!supabaseUserId,
   });
 
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    if (!supabaseUserId) {
+      cleanupUnreadMailListener();
+      return;
+    }
+    initUnreadMailListener(supabaseUserId);
+    const unsub = subscribeUnreadCount(setUnreadMessages);
+    return () => {
+      unsub();
+      cleanupUnreadMailListener();
+    };
+  }, [supabaseUserId]);
+
   const applicationsCount = applications.length;
   const isProfileIncomplete = (userProfile?.profileCompletion || 0) < 100;
-  const unreadMessages = 0;
   const jobsRemaining = Math.max(0, 20 - swipedJobIds.length);
   const favoriteCompaniesCount = userProfile?.favoriteCompanies?.length || 0;
 

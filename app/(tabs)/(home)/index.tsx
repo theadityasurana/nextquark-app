@@ -33,11 +33,10 @@ import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { getSubscriptionStatus, decrementApplicationCount, getSubscriptionDisplayName } from '@/lib/subscription';
 import { useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Sentry from '@sentry/react-native';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 
-const CARD_COLORS = ['Colors.surface'];
+const CARD_COLORS = [Colors.surface];
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -130,11 +129,6 @@ export default function HomeScreen() {
   const swipeCardAnim = useRef(new Animated.Value(0)).current;
 
   const loadingWords = ['Vibe', 'Check', 'Apply'];
-
-  // Test Sentry
-  useEffect(() => {
-    Sentry.captureException(new Error('Test error from HomeScreen'));
-  }, []);
 
   // Loading word animation
   useEffect(() => {

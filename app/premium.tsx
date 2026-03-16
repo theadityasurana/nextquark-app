@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Switch, Animated, Alert, ActivityIndicator, TextInput, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Crown, Check, X as XIcon, Zap, Sparkles, Shield, Star, Tag } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
@@ -29,6 +29,15 @@ const FEATURE_TAGS = [
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+
+  const navigateAfterSubscription = () => {
+    if (from === 'onboarding') {
+      router.replace('/onboarding');
+    } else {
+      router.back();
+    }
+  };
   const { supabaseUserId } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | 'premium'>('pro');
   const [isAnnual, setIsAnnual] = useState(false);
@@ -129,7 +138,7 @@ export default function PremiumScreen() {
           Alert.alert(
             'Subscription Activated! 🎉',
             `You are now subscribed to ${selectedPlan.toUpperCase()} plan for free!`,
-            [{ text: 'OK', onPress: () => router.back() }]
+            [{ text: 'OK', onPress: navigateAfterSubscription }]
           );
         } else {
           Alert.alert('Error', result.error || 'Failed to activate subscription');
@@ -153,7 +162,7 @@ export default function PremiumScreen() {
         Alert.alert(
           'Payment Page Opening',
           'Complete your payment in the browser. Your subscription will be activated once payment is confirmed.',
-          [{ text: 'OK', onPress: () => router.back() }]
+          [{ text: 'OK', onPress: navigateAfterSubscription }]
         );
       } else {
         Alert.alert('Error', result.error || 'Failed to initiate payment');

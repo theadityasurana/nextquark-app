@@ -14,7 +14,7 @@ import StepComplete from '@/components/onboarding/StepComplete';
 const TOTAL_PROGRESS_STEPS = 2;
 
 const STEP_BACKGROUNDS: Record<number, string> = {
-  1: '#F5F5F5',
+  1: '#111111',
   2: '#FFFFF0',
   3: '#FFFFFF',
 };
@@ -111,12 +111,12 @@ export default function OnboardingScreen() {
             <View style={styles.headerRow}>
               {showBackButton ? (
                 <Pressable onPress={handleBack} style={styles.backButton} testID="back-button">
-                  <ArrowLeft size={22} color="#111111" />
+                  <ArrowLeft size={22} color={currentStep === 1 ? '#FFFFFF' : '#111111'} />
                 </Pressable>
               ) : (
                 <View style={styles.backPlaceholder} />
               )}
-              <Text style={styles.stepLabel}>{STEP_LABELS[currentStep] || ''}</Text>
+              <Text style={[styles.stepLabel, currentStep === 1 && { color: '#9E9E9E' }]}>{STEP_LABELS[currentStep] || ''}</Text>
               <View style={styles.backPlaceholder} />
             </View>
 
@@ -131,6 +131,8 @@ export default function OnboardingScreen() {
                       styles.progressDot,
                       isCompleted && styles.progressDotCompleted,
                       isCurrent && styles.progressDotCurrent,
+                      currentStep === 1 && !isCompleted && !isCurrent && { backgroundColor: '#333333' },
+                      currentStep === 1 && (isCompleted || isCurrent) && { backgroundColor: '#FFFFFF' },
                     ]} />
                   </View>
                 );

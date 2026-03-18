@@ -2,9 +2,10 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Calendar, Clock, AlertTriangle } from 'lucide-react-native';
+import { ChevronRight, Calendar, Clock, AlertTriangle, KeyRound } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
 import { Application } from '@/types';
+import * as Clipboard from 'expo-clipboard';
 
 function getTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -26,21 +27,32 @@ interface ApplicationItemProps {
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Submitted', color: '#2E7D32' },
-  applied: { label: 'Submitted', color: '#2E7D32' },
-  under_review: { label: 'Need More Details', color: '#FF9800' },
-  interviewing: { label: 'Interview', color: '#1565C0' },
-  interview_scheduled: { label: 'Interview', color: '#1565C0' },
-  offer: { label: 'Offer Received', color: '#2E7D32' },
-  rejected: { label: 'Rejected', color: '#C62828' },
-  withdrawn: { label: 'Withdrawn', color: '#616161' },
+  pending: { label: 'AI is cooking 🔥', color: '#F59E0B' },
+  applied: { label: 'Submitted ✅', color: '#2E7D32' },
+  submitted: { label: 'Submitted, no cap ✅', color: '#2E7D32' },
+  completed: { label: "You're locked in 🎯", color: '#2E7D32' },
+  under_review: { label: 'They peeping your profile 👀', color: '#7C3AED' },
+  interviewing: { label: 'Interview incoming 🗓️', color: '#1565C0' },
+  interview_scheduled: { label: 'Interview incoming 🗓️', color: '#1565C0' },
+  offer: { label: 'W offer received 🏆', color: '#059669' },
+  rejected: { label: 'Not the vibe this time 💫', color: '#9CA3AF' },
+  withdrawn: { label: 'You dipped 🫡', color: '#616161' },
+  failed: { label: 'AI is cooking 🔥', color: '#F59E0B' },
 };
 
 export default function ApplicationItem({ application }: ApplicationItemProps) {
   const router = useRouter();
   const colors = useColors();
-  const status = statusConfig[application.status] || statusConfig.applied;
+  const effectiveStatus = (application.status as string) === 'failed' ? 'pending' : application.status;
+  const status = statusConfig[effectiveStatus] || statusConfig.applied;
   const timeAgo = useMemo(() => getTimeAgo(application.appliedDate), [application.appliedDate]);
+  const otp = application.verificationOtp;
+
+  const copyOtp = async () => {
+    if (otp) {
+      await Clipboard.setStringAsync(otp);
+    }
+  };
 
   const handlePress = () => {
     router.push({ pathname: '/application-details' as any, params: { id: application.id } });
@@ -65,6 +77,12 @@ export default function ApplicationItem({ application }: ApplicationItemProps) {
                 <AlertTriangle size={12} color="#E65100" />
                 <Text style={styles.alertText}>Action needed</Text>
               </View>
+            )}
+            {otp && (
+              <Pressable style={styles.otpRow} onPress={copyOtp}>
+                <KeyRound size={12} color="#4F46E5" />
+                <Text style={styles.otpText}>OTP: {otp}</Text>
+              </Pressable>
             )}
             {application.interviewDate && (
               <View style={styles.dateRow}>
@@ -164,5 +182,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#E65100',
     fontWeight: '700' as const,
+  },
+  otpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  otpText: {
+    fontSize: 12,
+    color: '#4F46E5',
+    fontWeight: '800' as const,
+    letterSpacing: 1,
   },
 });

@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, Bookmark, SlidersHorizontal, Sparkles, MapPin, Check, ChevronDown, Search, RefreshCw } from 'lucide-react-native';
+import { X, Heart, SlidersHorizontal, Sparkles, MapPin, Check, ChevronDown, Search, RefreshCw } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
@@ -126,84 +126,40 @@ export default function HomeScreen() {
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
   const position = useRef(new Animated.ValueXY()).current;
   const loadingWordOpacity = useRef(new Animated.Value(0)).current;
-  const swipeCardAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
 
   const loadingWords = ['Vibe', 'Check', 'Apply'];
 
-  // Loading word animation
+  // Floating bounce + loading word animation
   useEffect(() => {
     if (!isLoadingJobs) {
       setLoadingWordIndex(0);
       loadingWordOpacity.setValue(0);
-      swipeCardAnim.setValue(0);
+      floatAnim.setValue(0);
       return;
     }
 
-    // Swipe card animation
-    const swipeAnimation = Animated.loop(
+    const floatAnimation = Animated.loop(
       Animated.sequence([
-        // Swipe right
-        Animated.timing(swipeCardAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        // Pause
-        Animated.delay(200),
-        // Swipe left
-        Animated.timing(swipeCardAnim, {
-          toValue: -1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        // Pause
-        Animated.delay(200),
-        // Return to center
-        Animated.timing(swipeCardAnim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        // Pause before loop
-        Animated.delay(400),
+        Animated.timing(floatAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
       ])
     );
-    swipeAnimation.start();
+    floatAnimation.start();
 
     const animateWord = () => {
-      // Fade in
-      Animated.timing(loadingWordOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }).start(() => {
-        // Hold for a moment
+      Animated.timing(loadingWordOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start(() => {
         setTimeout(() => {
-          // Fade out
-          Animated.timing(loadingWordOpacity, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => {
-            // Move to next word
-            setLoadingWordIndex((prev) => {
-              const next = prev + 1;
-              if (next < loadingWords.length) {
-                return next;
-              }
-              return 0; // Loop back to start
-            });
+          Animated.timing(loadingWordOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => {
+            setLoadingWordIndex((prev) => (prev + 1) % loadingWords.length);
           });
         }, 600);
       });
     };
-
     animateWord();
 
-    return () => {
-      swipeAnimation.stop();
-    };
-  }, [isLoadingJobs, loadingWordIndex, loadingWordOpacity, swipeCardAnim, loadingWords.length]);
+    return () => { floatAnimation.stop(); };
+  }, [isLoadingJobs, loadingWordIndex, loadingWordOpacity, floatAnim, loadingWords.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -709,7 +665,7 @@ export default function HomeScreen() {
     Animated.timing(position, {
       toValue: { x, y },
       duration: 300,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start(() => handleSwipeComplete(direction));
   }, [position, handleSwipeComplete, isSwipeEnabled]);
 
@@ -717,10 +673,7 @@ export default function HomeScreen() {
     () => PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gesture) => {
-        if (!isSwipeEnabled) {
-          console.log('🚫 Gesture blocked - isSwipeEnabled:', isSwipeEnabled);
-          return false;
-        }
+        if (!isSwipeEnabled) return false;
         return Math.abs(gesture.dx) > 10 || Math.abs(gesture.dy) > 10;
       },
       onPanResponderMove: (_, gesture) => {
@@ -732,10 +685,7 @@ export default function HomeScreen() {
         else setSwipeDirection(null);
       },
       onPanResponderRelease: (_, gesture) => {
-        if (!isSwipeEnabled) {
-          console.log('🚫 Release blocked - isSwipeEnabled:', isSwipeEnabled);
-          return;
-        }
+        if (!isSwipeEnabled) return;
         if (gesture.dx > SWIPE_THRESHOLD) {
           forceSwipe('right');
         } else if (gesture.dx < -SWIPE_THRESHOLD) {
@@ -746,7 +696,7 @@ export default function HomeScreen() {
           Animated.spring(position, {
             toValue: { x: 0, y: 0 },
             friction: 5,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }).start();
           setSwipeDirection(null);
         }
@@ -1096,50 +1046,50 @@ export default function HomeScreen() {
       <View style={styles.cardsContainer}>
         {isLoadingJobs ? (
           <View style={styles.loadingContainer}>
-            <Animated.View
-              style={[
-                styles.swipeCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderLight,
-                  transform: [
-                    {
-                      translateX: swipeCardAnim.interpolate({
-                        inputRange: [-1, 0, 1],
-                        outputRange: [-80, 0, 80],
-                      }),
-                    },
-                    {
-                      rotate: swipeCardAnim.interpolate({
-                        inputRange: [-1, 0, 1],
-                        outputRange: ['-15deg', '0deg', '15deg'],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <View style={[styles.swipeCardInner, { backgroundColor: colors.background }]}>
-                <View style={styles.swipeCardHeader}>
-                  <View style={[styles.swipeCardLogo, { backgroundColor: colors.borderLight }]} />
-                  <View style={{ flex: 1 }}>
-                    <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '70%' }]} />
-                    <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '50%', marginTop: 6 }]} />
+            <View style={styles.floatWrapper}>
+              <Animated.View
+                style={[
+                  styles.floatCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.borderLight,
+                    transform: [
+                      { translateY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
+                    ],
+                  },
+                ]}
+              >
+                <View style={[styles.floatCardInner, { backgroundColor: colors.background }]}>
+                  <View style={styles.floatCardHeader}>
+                    <View style={[styles.floatCardLogo, { backgroundColor: '#D5F5E3' }]} />
+                    <View style={{ flex: 1 }}>
+                      <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '75%' }]} />
+                      <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '50%', marginTop: 6 }]} />
+                    </View>
+                  </View>
+                  <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '90%', height: 12, marginTop: 16 }]} />
+                  <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '60%', height: 8, marginTop: 8 }]} />
+                  <View style={styles.floatCardChips}>
+                    <View style={[styles.floatChip, { backgroundColor: colors.borderLight }]} />
+                    <View style={[styles.floatChip, { backgroundColor: colors.borderLight, width: 50 }]} />
+                    <View style={[styles.floatChip, { backgroundColor: colors.borderLight, width: 40 }]} />
                   </View>
                 </View>
-                <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '90%', height: 12, marginTop: 12 }]} />
-                <View style={[styles.swipeCardLine, { backgroundColor: colors.borderLight, width: '60%', height: 8, marginTop: 8 }]} />
-              </View>
-            </Animated.View>
-            <Animated.Text 
-              style={[
-                styles.loadingWordText, 
-                { 
-                  color: colors.textPrimary,
-                  opacity: loadingWordOpacity 
-                }
-              ]}
-            >
+              </Animated.View>
+              <Animated.View
+                style={[
+                  styles.floatShadow,
+                  {
+                    transform: [
+                      { scaleX: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }) },
+                      { scaleY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.6] }) },
+                    ],
+                    opacity: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.08] }),
+                  },
+                ]}
+              />
+            </View>
+            <Animated.Text style={[styles.loadingWordText, { color: colors.textPrimary, opacity: loadingWordOpacity }]}>
               {loadingWords[loadingWordIndex]}
             </Animated.Text>
           </View>
@@ -1200,19 +1150,6 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {currentIndex < jobs.length && subscriptionData && subscriptionData.applications_remaining > 0 && (
-        <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, 10) + 8, backgroundColor: colors.surface }]}>
-          <Pressable style={[styles.actionButton, styles.passButton, swipeDirection === 'left' && styles.activePass]} onPress={() => forceSwipe('left')}>
-            <X size={28} color={swipeDirection === 'left' ? Colors.textInverse : Colors.error} strokeWidth={2.5} />
-          </Pressable>
-          <Pressable style={[styles.actionButton, styles.saveActionButton, swipeDirection === 'up' && styles.activeSave]} onPress={() => forceSwipe('up')}>
-            <Bookmark size={22} color={swipeDirection === 'up' ? Colors.textInverse : Colors.textPrimary} strokeWidth={2.5} />
-          </Pressable>
-          <Pressable style={[styles.actionButton, styles.applyButton, swipeDirection === 'right' && styles.activeApply]} onPress={() => forceSwipe('right')}>
-            <Heart size={28} color={swipeDirection === 'right' ? Colors.textInverse : '#00C853'} fill={swipeDirection === 'right' ? Colors.textInverse : '#00C853'} strokeWidth={2.5} />
-          </Pressable>
-        </View>
-      )}
 
       <Modal visible={showFilters} animationType="slide" transparent>
         <View style={styles.filterOverlay}>
@@ -1610,7 +1547,7 @@ const styles = StyleSheet.create({
   activeSearchTagText: { fontSize: 13, fontWeight: '600' as const, color: '#000000' },
   clearSearchButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#000000', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#FFFFFF' },
   clearSearchText: { fontSize: 12, fontWeight: '600' as const, color: '#FFFFFF' },
-  cardsContainer: { flex: 1, paddingHorizontal: 12, paddingTop: 2 },
+  cardsContainer: { flex: 0.9, paddingHorizontal: 12, paddingTop: 2, paddingBottom: 8 },
   cardWrapper: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
   overlayLabel: { position: 'absolute' as const, zIndex: 10, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
   likeLabel: { top: 40, left: 24, backgroundColor: "#FFF", borderWidth: 2, borderColor: "#DDD" },
@@ -1694,11 +1631,15 @@ const styles = StyleSheet.create({
   notificationTitle: { fontSize: 11, fontWeight: '600' as const, color: "#000", textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 4 },
   notificationCompany: { fontSize: 17, fontWeight: '700' as const, color: "#000", marginBottom: 2 },
   notificationRole: { fontSize: 14, color: "#000", lineHeight: 18 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 40 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 32 },
   loadingWordText: { fontSize: 32, fontWeight: '800' as const, letterSpacing: 1 },
-  swipeCard: { width: 280, height: 180, borderRadius: 20, borderWidth: 2, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
-  swipeCardInner: { flex: 1, borderRadius: 16, padding: 16 },
-  swipeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  swipeCardLogo: { width: 40, height: 40, borderRadius: 10 },
-  swipeCardLine: { height: 10, borderRadius: 5 },
+  floatWrapper: { alignItems: 'center', gap: 12 },
+  floatCard: { width: 280, height: 190, borderRadius: 22, borderWidth: 2, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
+  floatCardInner: { flex: 1, borderRadius: 18, padding: 16 },
+  floatCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  floatCardLogo: { width: 44, height: 44, borderRadius: 12 },
+  floatCardLine: { height: 10, borderRadius: 5 },
+  floatCardChips: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  floatChip: { width: 60, height: 22, borderRadius: 6 },
+  floatShadow: { width: 200, height: 16, borderRadius: 100, backgroundColor: '#000' },
 });

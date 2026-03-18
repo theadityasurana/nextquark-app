@@ -1,26 +1,35 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TrendingUp, FileCheck, Clock, Award } from 'lucide-react-native';
+import { TrendingUp, FileCheck, Clock } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import ApplicationItem from '@/components/ApplicationItem';
 import { Application } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchUserApplications } from '@/lib/jobs';
+import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews } from '@/lib/jobs';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { Image } from 'expo-image';
+import { useCompletedApps } from '@/hooks/useCompletedApps';
 
 export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { supabaseUserId } = useAuth();
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'pending' | 'interviewing' | 'offer'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'cooking' | 'locked_in' | 'interviewing' | 'offer'>('all');
 
   const { data: applications = [], isLoading, refetch } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
-    queryFn: () => fetchUserApplications(supabaseUserId!),
+    queryFn: async () => {
+      if (!supabaseUserId) return [];
+      // Scan emails for OTPs and interview invites before fetching applications
+      await Promise.all([
+        scanEmailsForOtp(supabaseUserId),
+        scanEmailsForInterviews(supabaseUserId),
+      ]);
+      return fetchUserApplications(supabaseUserId);
+    },
     enabled: !!supabaseUserId,
   });
 
@@ -32,30 +41,38 @@ export default function ApplicationsScreen() {
     setRefreshing(false);
   };
 
+  const appIds = useMemo(() => applications.map((a: any) => a.id), [applications]);
+  const completedApps = useCompletedApps(appIds);
+
   const mappedApplications: Application[] = useMemo(() => {
     return applications.map((app: any) => {
-      // Use the same getCompanyLogoUrl logic from lib/jobs.ts
       const getCompanyLogoUrl = (companyName: string, logo?: string, logoUrl?: string): string => {
         const SUPABASE_URL = 'https://widujxpahzlpegzjjpqp.supabase.co';
         if (logoUrl && logoUrl.startsWith('http')) return logoUrl;
         if (logo && logo.startsWith('http')) return logo;
-        if (logoUrl) {
-          return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoUrl}`;
-        }
-        if (logo) {
-          return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logo}`;
-        }
+        if (logoUrl) return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoUrl}`;
+        if (logo) return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logo}`;
         const logoPath = `logos/${companyName.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
         return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoPath}`;
       };
 
       const companyLogo = getCompanyLogoUrl(app.company_name || '', app.company_logo, app.company_logo_url);
-      
+
+      // If local step progress reached the end, override status to 'completed'
+      const dbStatus = app.status || 'applied';
+      const effectiveStatus = completedApps.has(app.id) && (dbStatus === 'pending' || dbStatus === 'failed' || dbStatus === 'applied') ? 'completed' : dbStatus;
+
       return {
         id: app.id,
-        jobId: app.job_id,
         appliedDate: app.created_at,
-        status: app.status || 'pending',
+        status: effectiveStatus,
+        lastActivity: app.updated_at || app.created_at,
+        interviewDate: app.interview_date || null,
+        interviewTime: app.interview_time || null,
+        meetingLink: app.meeting_link || null,
+        meetingPlatform: app.meeting_platform || null,
+        verificationOtp: app.verification_otp || null,
+        otpReceivedAt: app.otp_received_at || null,
         job: {
           id: app.job_id,
           jobTitle: app.job_title,
@@ -63,22 +80,27 @@ export default function ApplicationsScreen() {
           companyLogo,
           location: app.location || '',
           salary: app.salary_min && app.salary_max ? `${app.salary_currency || '$'}${app.salary_min / 1000}k-${app.salary_max / 1000}k` : '',
-        },
-      };
+        } as any,
+      } as Application;
     });
-  }, [applications]);
+  }, [applications, completedApps]);
 
   const stats = useMemo(() => {
     const total = mappedApplications.length;
-    const pending = mappedApplications.filter((a) => a.status === 'pending').length;
-    const interviewing = mappedApplications.filter((a) => a.status === 'interviewing').length;
+    const cooking = mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed' as any).length;
+    const lockedIn = mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' as any || a.status === 'submitted' as any).length;
+    const interviewing = mappedApplications.filter((a) => a.status === 'interviewing' || a.status === 'interview_scheduled').length;
     const offers = mappedApplications.filter((a) => a.status === 'offer').length;
-    return { total, pending, interviewing, offers };
+    return { total, cooking, lockedIn, interviewing, offers };
   }, [mappedApplications]);
 
   const filteredApplications = useMemo(() => {
     if (selectedFilter === 'all') return mappedApplications;
-    return mappedApplications.filter((a) => a.status === selectedFilter);
+    if (selectedFilter === 'cooking') return mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed' as any);
+    if (selectedFilter === 'locked_in') return mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' as any || a.status === 'submitted' as any);
+    if (selectedFilter === 'interviewing') return mappedApplications.filter((a) => a.status === 'interviewing' || a.status === 'interview_scheduled');
+    if (selectedFilter === 'offer') return mappedApplications.filter((a) => a.status === 'offer');
+    return mappedApplications;
   }, [mappedApplications, selectedFilter]);
 
   const renderItem = ({ item }: { item: Application }) => (
@@ -113,15 +135,23 @@ export default function ApplicationsScreen() {
         >
           <TrendingUp size={18} color={colors.textPrimary} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.total}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Applied</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>All</Text>
         </Pressable>
         <Pressable 
-          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'pending' && styles.statCardActive]} 
-          onPress={() => setSelectedFilter('pending')}
+          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'cooking' && styles.statCardActive]} 
+          onPress={() => setSelectedFilter('cooking')}
         >
           <Clock size={18} color={colors.warning} />
-          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.pending}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
+          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.cooking}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Cooking</Text>
+        </Pressable>
+        <Pressable 
+          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'locked_in' && styles.statCardActive]} 
+          onPress={() => setSelectedFilter('locked_in')}
+        >
+          <FileCheck size={18} color={colors.accent} />
+          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.lockedIn}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Locked In</Text>
         </Pressable>
         <Pressable 
           style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'interviewing' && styles.statCardActive]} 
@@ -130,14 +160,6 @@ export default function ApplicationsScreen() {
           <FileCheck size={18} color={colors.statusInterview} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.interviewing}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Interviews</Text>
-        </Pressable>
-        <Pressable 
-          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'offer' && styles.statCardActive]} 
-          onPress={() => setSelectedFilter('offer')}
-        >
-          <Award size={18} color={colors.accent} />
-          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.offers}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Offers</Text>
         </Pressable>
       </View>
 

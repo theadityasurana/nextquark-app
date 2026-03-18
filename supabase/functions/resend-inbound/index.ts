@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? ''
+
 function extractEmail(raw: string): string {
   if (!raw) return ''
   const match = raw.match(/<(.+?)>/)
@@ -18,23 +20,6 @@ function extractName(raw: string): string {
   return match ? match[1].trim().replace(/^["']|["']$/g, '') : raw.split('@')[0]
 }
 
-async function fetchEmailContent(emailId: string, apiKey: string): Promise<{ text: string; html: string }> {
-  try {
-    const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
-    if (!res.ok) {
-      console.log('[resend-inbound] Failed to fetch email content:', res.status)
-      return { text: '', html: '' }
-    }
-    const data = await res.json()
-    return { text: data.text || '', html: data.html || '' }
-  } catch (e) {
-    console.log('[resend-inbound] Error fetching email content:', e)
-    return { text: '', html: '' }
-  }
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -45,10 +30,17 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-    const resendApiKey = Deno.env.get('RESEND_API_KEY') ?? ''
 
-    const payload = await req.json()
-    console.log('[resend-inbound] Webhook payload:', JSON.stringify(payload).slice(0, 500))
+    const rawBody = await req.text()
+    let payload: any
+    try {
+      payload = JSON.parse(rawBody)
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Handle proxy email creation requests from the app
     if (payload.action === 'create-proxy' && payload.user_id) {
@@ -65,7 +57,6 @@ serve(async (req) => {
         )
       }
 
-      // Build a name-based alias if user_name is provided
       const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
       const rand = Math.random().toString(36).slice(2, 6)
       let alias: string
@@ -99,18 +90,25 @@ serve(async (req) => {
       )
     }
 
-    // Only process email.received events
+    // Ignore non-email.received events
     if (payload.type && payload.type !== 'email.received') {
-      console.log('[resend-inbound] Ignoring event type:', payload.type)
       return new Response(
         JSON.stringify({ ignored: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Handle inbound email from Resend webhook
+    // --- Handle inbound email from Resend webhook ---
+    // Resend webhooks only include metadata (no body).
+    // We must call GET /emails/receiving/{email_id} to fetch the body.
     const emailData = payload.data || payload
+
     const emailId = emailData.email_id || ''
+    const messageId = emailData.message_id || ''
+    const fromRaw = emailData.from || ''
+    const fromEmail = extractEmail(fromRaw)
+    const fromName = extractName(fromRaw)
+    const subject = emailData.subject || '(no subject)'
 
     let toRaw = ''
     if (Array.isArray(emailData.to)) {
@@ -118,14 +116,7 @@ serve(async (req) => {
     } else {
       toRaw = emailData.to || ''
     }
-
     const toEmail = extractEmail(toRaw)
-    const fromRaw = emailData.from || ''
-    const fromEmail = extractEmail(fromRaw)
-    const fromName = extractName(fromRaw)
-    const subject = emailData.subject || '(no subject)'
-
-    console.log('[resend-inbound] from:', fromEmail, 'to:', toEmail, 'subject:', subject, 'email_id:', emailId)
 
     if (!toEmail) {
       return new Response(
@@ -134,6 +125,7 @@ serve(async (req) => {
       )
     }
 
+    // Look up the user for this proxy address
     const { data: proxy, error: proxyError } = await supabase
       .from('proxy_emails')
       .select('user_id')
@@ -141,23 +133,36 @@ serve(async (req) => {
       .single()
 
     if (proxyError || !proxy) {
-      console.log('[resend-inbound] No user for proxy:', toEmail, proxyError?.message)
       return new Response(
         JSON.stringify({ error: 'Unknown recipient' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Fetch email body from Resend API (webhooks don't include body)
+    // Fetch the full email content (body) from Resend Receiving API
     let bodyText = ''
     let bodyHtml = ''
-    if (emailId && resendApiKey) {
-      const content = await fetchEmailContent(emailId, resendApiKey)
-      bodyText = content.text
-      bodyHtml = content.html
+
+    if (emailId && RESEND_API_KEY) {
+      try {
+        const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+          headers: { 'Authorization': `Bearer ${RESEND_API_KEY}` },
+        })
+        if (res.ok) {
+          const full = await res.json()
+          bodyText = full.text || ''
+          bodyHtml = full.html || ''
+        } else {
+          console.error('[resend-inbound] Failed to fetch email content:', res.status, await res.text())
+        }
+      } catch (fetchErr) {
+        console.error('[resend-inbound] Error fetching email content:', fetchErr)
+      }
     }
 
-    const { error: insertError } = await supabase.from('inbound_emails').insert({
+    // Store in Supabase
+    const threadId = (subject || '(no subject)').replace(/^(Re:|Fwd:|Fw:)\s*/gi, '').trim().toLowerCase()
+    const { data: insertData, error: insertError } = await supabase.from('inbound_emails').insert({
       user_id: proxy.user_id,
       proxy_address: toEmail,
       from_email: fromEmail,
@@ -166,19 +171,20 @@ serve(async (req) => {
       subject,
       body_text: bodyText,
       body_html: bodyHtml,
-    })
+      message_id: messageId,
+      thread_id: threadId,
+    }).select('id')
 
     if (insertError) {
-      console.log('[resend-inbound] Insert error:', insertError.message)
+      console.error('[resend-inbound] Insert error:', insertError.message)
       return new Response(
-        JSON.stringify({ error: 'Failed to store email' }),
+        JSON.stringify({ error: 'Failed to store email', detail: insertError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('[resend-inbound] Stored email for user:', proxy.user_id)
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, id: insertData?.[0]?.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (e) {

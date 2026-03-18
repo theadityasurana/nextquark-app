@@ -74,12 +74,14 @@ export interface Job {
     id: string;
     job: Job;
     appliedDate: string;
-    status: 'applied' | 'under_review' | 'interview_scheduled' | 'offer' | 'rejected' | 'withdrawn';
+    status: 'pending' | 'applied' | 'under_review' | 'interviewing' | 'interview_scheduled' | 'offer' | 'rejected' | 'withdrawn';
     lastActivity: string;
     interviewDate: string | null;
     interviewTime: string | null;
     meetingLink: string | null;
     meetingPlatform: 'google_meet' | 'zoom' | 'microsoft_teams' | null;
+    verificationOtp: string | null;
+    otpReceivedAt: string | null;
   }
   
   export interface WorkExperience {

@@ -6,6 +6,7 @@ import { UserProfile } from '@/types';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
+import { getOrCreateProxyEmail } from '@/lib/resend';
 
 const AUTH_KEY = 'nextquark_auth';
 const ONBOARDING_KEY = 'nextquark_onboarding';
@@ -137,15 +138,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (error && error.code === 'PGRST116') {
         console.log('No profile found, creating new one for user:', userId);
-        const email = session.user.email || '';
         const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
         const parts = name.split(' ');
         const firstName = parts[0] || '';
         const lastName = parts.slice(1).join(' ') || '';
 
+        // Create proxy email and use it as the profile email
+        const proxyEmail = await getOrCreateProxyEmail(userId, name);
+        const profileEmail = proxyEmail || session.user.email || '';
+        console.log('[AUTH] Proxy email for new profile:', profileEmail);
+
         const newProfile = {
           id: userId,
-          email,
+          email: profileEmail,
           full_name: name,
           first_name: firstName,
           last_name: lastName,
@@ -161,7 +166,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const newAuthState: AuthState = {
           isAuthenticated: true,
           isOnboardingComplete: false,
-          userEmail: email,
+          userEmail: profileEmail,
           userName: name,
           authMethod: 'email',
         };
@@ -320,13 +325,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       console.log('Supabase signUp success, user:', data.user.id);
       setSupabaseUserId(data.user.id);
 
+      // Create proxy email and use it as the profile email
+      const proxyEmail = await getOrCreateProxyEmail(data.user.id, name);
+      const profileEmail = proxyEmail || email;
+      console.log('[AUTH] Proxy email for profile:', profileEmail);
+
       const parts = name.split(' ');
       const firstName = parts[0] || '';
       const lastName = parts.slice(1).join(' ') || '';
 
       const newProfile = {
         id: data.user.id,
-        email,
+        email: profileEmail,
         full_name: name,
         first_name: firstName,
         last_name: lastName,
@@ -459,12 +469,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           }
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        const userEmail = session?.user?.email || authState.userEmail;
+        // Use the proxy email already stored in the profile, not the auth email
+        const profileEmail = userProfile?.email || authState.userEmail;
 
         const profileData = {
           id: supabaseUserId,
-          email: userEmail,
+          email: profileEmail,
           first_name: data.firstName,
           last_name: data.lastName,
           full_name: `${data.firstName} ${data.lastName}`.trim(),
@@ -505,12 +515,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         // Send welcome email
         try {
           const userName = `${data.firstName} ${data.lastName}`.trim();
-          console.log('Sending welcome email to:', userEmail, 'for user:', userName);
+          console.log('Sending welcome email to:', profileEmail, 'for user:', userName);
           
           const response = await fetch('/api/send-welcome-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userEmail, userName }),
+            body: JSON.stringify({ userEmail: profileEmail, userName }),
           });
           
           const result = await response.json();

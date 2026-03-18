@@ -621,3 +621,190 @@ export async function saveJob(userId: string, jobId: string): Promise<boolean> {
     return false;
   }
 }
+
+// --- OTP Extraction & Matching ---
+
+const OTP_KEYWORDS = [
+  'verification code', 'verify your email', 'otp', 'one-time',
+  'confirmation code', 'security code', 'passcode', 'pin code',
+  'verify your account', 'enter the code', 'enter this code',
+  'your code is', 'your code:', 'code is:',
+];
+
+export function extractOtp(text: string): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const hasKeyword = OTP_KEYWORDS.some((kw) => lower.includes(kw));
+  if (!hasKeyword) return null;
+
+  // Match 4-8 digit standalone codes (most common OTP formats)
+  const matches = text.match(/\b(\d{4,8})\b/g);
+  if (!matches) return null;
+
+  // Filter out likely non-OTP numbers (years, zip codes in context, etc.)
+  for (const m of matches) {
+    const n = parseInt(m, 10);
+    if (m.length >= 4 && m.length <= 8 && n >= 1000 && !(n >= 1900 && n <= 2100)) {
+      return m;
+    }
+  }
+  return null;
+}
+
+function domainFromEmail(email: string): string {
+  return (email.split('@')[1] || '').toLowerCase();
+}
+
+function companyMatchesEmail(companyName: string, fromEmail: string, subject: string): boolean {
+  const company = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const domain = domainFromEmail(fromEmail).replace(/[^a-z0-9]/g, '');
+  const subjectLower = subject.toLowerCase();
+  return domain.includes(company) || company.includes(domain.split('.')[0]) || subjectLower.includes(companyName.toLowerCase());
+}
+
+// --- Interview Detection ---
+
+const INTERVIEW_KEYWORDS = [
+  'interview', 'schedule a call', 'schedule a chat',
+  'we\'d like to speak', 'we would like to speak',
+  'invite you to interview', 'interview invitation',
+  'next round', 'phone screen', 'technical screen',
+  'on-site interview', 'virtual interview', 'video interview',
+  'meet the team', 'hiring manager', 'interview slot',
+  'book a time', 'calendar invite', 'interview scheduled',
+  'we are pleased to invite', 'pleased to inform you',
+  'move forward with your application', 'moving forward',
+  'like to invite you', 'selected for an interview',
+  'shortlisted', 'next steps in the process',
+];
+
+function emailContainsInterview(subject: string, bodyText: string): boolean {
+  const combined = `${subject} ${bodyText}`.toLowerCase();
+  return INTERVIEW_KEYWORDS.some((kw) => combined.includes(kw));
+}
+
+export async function scanEmailsForInterviews(userId: string): Promise<number> {
+  try {
+    // Fetch applications that are in submitted/completed/applied status (not already interview_scheduled)
+    const { data: apps, error: appsErr } = await supabase
+      .from('live_application_queue')
+      .select('id, company_name, status, created_at')
+      .eq('user_id', userId)
+      .in('status', ['completed', 'applied', 'submitted', 'under_review'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (appsErr || !apps || apps.length === 0) return 0;
+
+    // Fetch recent inbound emails (last 30 days for interview emails)
+    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: emails, error: emailsErr } = await supabase
+      .from('inbound_emails')
+      .select('id, from_email, subject, body_text')
+      .eq('user_id', userId)
+      .gte('received_at', monthAgo)
+      .order('received_at', { ascending: false })
+      .limit(200);
+
+    if (emailsErr || !emails || emails.length === 0) return 0;
+
+    let updated = 0;
+
+    for (const email of emails) {
+      const subject = email.subject || '';
+      const bodyText = email.body_text || '';
+
+      if (!emailContainsInterview(subject, bodyText)) continue;
+
+      // Find matching application by company
+      const matchedApp = apps.find((app) =>
+        companyMatchesEmail(app.company_name || '', email.from_email || '', subject)
+      );
+
+      if (matchedApp) {
+        const { error: updateErr } = await supabase
+          .from('live_application_queue')
+          .update({ status: 'interview_scheduled' })
+          .eq('id', matchedApp.id);
+
+        if (!updateErr) {
+          updated++;
+          console.log(`Interview detected for application ${matchedApp.id} (${matchedApp.company_name}) from email: "${subject}"`);
+          // Remove from apps list so we don't double-match
+          const idx = apps.indexOf(matchedApp);
+          if (idx !== -1) apps.splice(idx, 1);
+        }
+      }
+    }
+
+    if (updated > 0) {
+      console.log(`Updated ${updated} application(s) to interview_scheduled`);
+    }
+    return updated;
+  } catch (e) {
+    console.log('scanEmailsForInterviews error:', e);
+    return 0;
+  }
+}
+
+export async function scanEmailsForOtp(userId: string): Promise<number> {
+  try {
+    // Fetch pending/recent applications
+    const { data: apps, error: appsErr } = await supabase
+      .from('live_application_queue')
+      .select('id, company_name, verification_otp, created_at')
+      .eq('user_id', userId)
+      .is('verification_otp', null)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (appsErr || !apps || apps.length === 0) return 0;
+
+    // Fetch recent inbound emails (last 7 days)
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: emails, error: emailsErr } = await supabase
+      .from('inbound_emails')
+      .select('id, from_email, subject, body_text')
+      .eq('user_id', userId)
+      .gte('received_at', weekAgo)
+      .order('received_at', { ascending: false })
+      .limit(100);
+
+    if (emailsErr || !emails || emails.length === 0) return 0;
+
+    let updated = 0;
+
+    for (const email of emails) {
+      const otp = extractOtp(`${email.subject || ''} ${email.body_text || ''}`);
+      if (!otp) continue;
+
+      // Find matching application by company
+      const matchedApp = apps.find((app) =>
+        companyMatchesEmail(app.company_name || '', email.from_email || '', email.subject || '')
+      );
+
+      if (matchedApp) {
+        const { error: updateErr } = await supabase
+          .from('live_application_queue')
+          .update({
+            verification_otp: otp,
+            otp_received_at: new Date().toISOString(),
+          })
+          .eq('id', matchedApp.id);
+
+        if (!updateErr) {
+          updated++;
+          console.log(`OTP "${otp}" linked to application ${matchedApp.id} (${matchedApp.company_name})`);
+          // Remove from apps list so we don't double-match
+          const idx = apps.indexOf(matchedApp);
+          if (idx !== -1) apps.splice(idx, 1);
+        }
+      }
+    }
+
+    return updated;
+  } catch (e) {
+    console.log('scanEmailsForOtp error:', e);
+    return 0;
+  }
+}

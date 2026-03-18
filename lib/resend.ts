@@ -13,6 +13,8 @@ export interface InboundEmail {
   subject: string | null;
   body_text: string | null;
   body_html: string | null;
+  message_id?: string | null;
+  thread_id?: string | null;
   is_starred?: boolean;
   is_archived?: boolean;
   is_read?: boolean;
@@ -26,9 +28,15 @@ export interface SentEmail {
   to_email: string;
   subject: string | null;
   body_text: string | null;
+  thread_id?: string | null;
+  in_reply_to?: string | null;
   is_starred?: boolean;
   is_archived?: boolean;
   sent_at: string;
+}
+
+export function computeThreadId(subject: string | null): string {
+  return (subject || '(no subject)').replace(/^(Re:|Fwd:|Fw:)\s*/gi, '').trim().toLowerCase();
 }
 
 const featureCache = {
@@ -181,10 +189,10 @@ export async function sendEmailViaResend(
   subject: string,
   body: string,
   userId: string,
-  isHtml: boolean = false
+  isHtml: boolean = false,
+  inReplyToMessageId?: string
 ): Promise<boolean> {
   try {
-    // Resend requires "Name <email>" or just email, and domain must be verified
     const fromFormatted = from.includes('<') ? from : `NextQuark Mail <${from}>`;
 
     const emailPayload: Record<string, any> = {
@@ -194,10 +202,17 @@ export async function sendEmailViaResend(
     };
     if (isHtml) {
       emailPayload.html = body;
-      // Also set a plain text fallback
       emailPayload.text = body.replace(/<[^>]*>/g, '');
     } else {
       emailPayload.text = body;
+    }
+
+    // Set threading headers per Resend docs
+    if (inReplyToMessageId) {
+      emailPayload.headers = {
+        'In-Reply-To': inReplyToMessageId,
+        'References': inReplyToMessageId,
+      };
     }
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -215,15 +230,22 @@ export async function sendEmailViaResend(
       return false;
     }
 
-    // If sent_emails table isn't installed yet, don't fail the send.
+    // Store in sent_emails
     if (await tableExists('sent_emails')) {
-      const { error } = await supabase.from('sent_emails').insert({
+      const row: Record<string, any> = {
         user_id: userId,
         from_email: from,
         to_email: to,
         subject,
         body_text: isHtml ? body.replace(/<[^>]*>/g, '') : body,
-      });
+      };
+      if (await columnExists('sent_emails', 'thread_id')) {
+        row.thread_id = computeThreadId(subject);
+      }
+      if (await columnExists('sent_emails', 'in_reply_to')) {
+        row.in_reply_to = inReplyToMessageId || null;
+      }
+      const { error } = await supabase.from('sent_emails').insert(row);
       if (error) console.log('Error inserting sent email:', error.message);
     }
 
@@ -282,6 +304,46 @@ export async function deleteSentEmail(emailId: string): Promise<boolean> {
   return !error;
 }
 
+export async function fetchThreadMessages(userId: string, threadId: string): Promise<Array<(InboundEmail | SentEmail) & { _kind: 'inbound' | 'sent' }>> {
+  const messages: Array<(InboundEmail | SentEmail) & { _kind: 'inbound' | 'sent' }> = [];
+  try {
+    const hasThreadCol = await columnExists('inbound_emails', 'thread_id');
+    const hasSentTable = await tableExists('sent_emails');
+    const hasSentThread = hasSentTable ? await columnExists('sent_emails', 'thread_id') : false;
+
+    const [inboundRes, sentRes] = await Promise.all([
+      hasThreadCol
+        ? supabase.from('inbound_emails').select('*').eq('user_id', userId).eq('thread_id', threadId).order('received_at', { ascending: true })
+        : supabase.from('inbound_emails').select('*').eq('user_id', userId).order('received_at', { ascending: true }),
+      hasSentThread
+        ? supabase.from('sent_emails').select('*').eq('user_id', userId).eq('thread_id', threadId).order('sent_at', { ascending: true })
+        : hasSentTable
+          ? supabase.from('sent_emails').select('*').eq('user_id', userId).order('sent_at', { ascending: true })
+          : { data: [], error: null } as any,
+    ]);
+
+    for (const row of (inboundRes.data || [])) {
+      const normalized = computeThreadId(row.subject);
+      if (!hasThreadCol && normalized !== threadId) continue;
+      messages.push({ ...row, is_starred: normalizeMaybeBool(row.is_starred), is_archived: normalizeMaybeBool(row.is_archived), is_read: normalizeMaybeBool(row.is_read), _kind: 'inbound' });
+    }
+    for (const row of (sentRes.data || [])) {
+      const normalized = computeThreadId(row.subject);
+      if (!hasSentThread && normalized !== threadId) continue;
+      messages.push({ ...row, is_starred: normalizeMaybeBool(row.is_starred), is_archived: normalizeMaybeBool(row.is_archived), _kind: 'sent' });
+    }
+
+    messages.sort((a, b) => {
+      const aDate = '_kind' in a && a._kind === 'inbound' ? (a as InboundEmail).received_at : (a as SentEmail).sent_at;
+      const bDate = '_kind' in b && b._kind === 'inbound' ? (b as InboundEmail).received_at : (b as SentEmail).sent_at;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
+  } catch (e) {
+    console.log('fetchThreadMessages error:', e);
+  }
+  return messages;
+}
+
 export function subscribeToMailChanges(
   userId: string,
   onUpdate: () => void
@@ -303,6 +365,52 @@ export function subscribeToMailChanges(
   return () => {
     supabase.removeChannel(channel);
   };
+}
+
+export async function forwardEmail(
+  emailId: string,
+  userId: string,
+  forwardTo: string
+): Promise<boolean> {
+  try {
+    const { data: email, error } = await supabase
+      .from('inbound_emails')
+      .select('*')
+      .eq('id', emailId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !email) return false;
+
+    const { data: proxy } = await supabase
+      .from('proxy_emails')
+      .select('proxy_address')
+      .eq('user_id', userId)
+      .single();
+
+    const fromAddr = proxy?.proxy_address || `noreply@${PROXY_DOMAIN}`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `NextQuark Mail <${fromAddr}>`,
+        to: [forwardTo],
+        subject: `Fwd: ${email.subject || '(no subject)'}`,
+        ...(email.body_html ? { html: email.body_html } : {}),
+        text: email.body_text || '(no content)',
+        reply_to: email.from_email,
+      }),
+    });
+
+    return res.ok;
+  } catch (e) {
+    console.log('forwardEmail error:', e);
+    return false;
+  }
 }
 
 export function getAvatarUrl(email: string): string {

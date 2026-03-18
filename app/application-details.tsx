@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +32,6 @@ import {
   Wifi,
   Building2,
   Users,
-  Camera,
   Sparkles,
   Key,
   Eye,
@@ -40,22 +40,25 @@ import {
   ChevronRight,
   X,
   Check,
-  AlertTriangle,
-  MessageCircle,
+
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pending', color: "#000", bg: '#EEEEEE' },
-  applied: { label: 'Applied', color: "#000", bg: '#EEEEEE' },
-  under_review: { label: 'Under Review', color: "#000", bg: '#FFF3E0' },
-  interviewing: { label: 'Interview Scheduled', color: "#000", bg: '#FFF3E0' },
-  interview_scheduled: { label: 'Interview Scheduled', color: "#000", bg: '#FFF3E0' },
-  offer: { label: 'Offer Received', color: "#000", bg: '#E8F5E9' },
-  rejected: { label: 'Not Selected', color: "#000", bg: '#FFEBEE' },
-  withdrawn: { label: 'Withdrawn', color: "#000", bg: '#F0F2F5' },
+  pending: { label: 'AI is cooking 🔥', color: '#92400E', bg: '#FEF3C7' },
+  applied: { label: 'Submitted, no cap ✅', color: '#065F46', bg: '#D1FAE5' },
+  submitted: { label: 'Submitted, no cap ✅', color: '#065F46', bg: '#D1FAE5' },
+  completed: { label: "You're locked in 🎯", color: '#065F46', bg: '#D1FAE5' },
+  under_review: { label: 'They peeping your profile 👀', color: '#5B21B6', bg: '#EDE9FE' },
+  interviewing: { label: 'Interview incoming 🗓️', color: '#1E40AF', bg: '#DBEAFE' },
+  interview_scheduled: { label: 'Interview incoming 🗓️', color: '#1E40AF', bg: '#DBEAFE' },
+  offer: { label: 'W offer received 🏆', color: '#065F46', bg: '#D1FAE5' },
+  rejected: { label: 'Not the vibe this time 💫', color: '#6B7280', bg: '#F3F4F6' },
+  withdrawn: { label: 'You dipped 🫡', color: '#6B7280', bg: '#F3F4F6' },
+  failed: { label: 'AI is cooking 🔥', color: '#92400E', bg: '#FEF3C7' },
 };
 
 const platformLabels: Record<string, { label: string; color: string }> = {
@@ -71,61 +74,20 @@ interface FlowStep {
   description?: string;
 }
 
-function getFlowSteps(appStatus: string, hasActionNeeded: boolean): FlowStep[] {
-  const base: FlowStep[] = [
-    { label: 'You swiped right', date: 'Yesterday', status: 'completed' },
-    { label: 'AI started filling application', date: 'Yesterday', status: 'completed' },
+function getFlowSteps(): FlowStep[] {
+  return [
+    { label: 'You swiped right 👍', date: 'Just now', status: 'completed' },
+    { label: 'AI started filling the application 🤖', date: 'Just now', status: 'completed' },
+    { label: 'AI is opening the job portal 🌐', date: '', status: 'pending', description: 'Navigating to the application page...' },
+    { label: 'AI is filling out your name & contact info ✍️', date: '', status: 'pending', description: 'Entering your personal details...' },
+    { label: 'AI is entering your education details 🎓', date: '', status: 'pending', description: 'Adding your school & degree info...' },
+    { label: 'AI is adding your work experience 💼', date: '', status: 'pending', description: 'Filling in your past roles & achievements...' },
+    { label: 'AI is uploading your resume 📄', date: '', status: 'pending', description: 'Attaching your resume to the application...' },
+    { label: 'AI is answering screening questions 🧠', date: '', status: 'pending', description: 'Answering those tricky questions for you...' },
+    { label: 'AI is filling out equal opportunity fields 📋', date: '', status: 'pending', description: 'Handling the demographic section...' },
+    { label: 'AI is reviewing everything one last time 🔍', date: '', status: 'pending', description: 'Double-checking all the fields before submitting...' },
+    { label: 'Application submitted 🚀', date: '', status: 'pending', description: "You're locked in 🎯" },
   ];
-
-  if (hasActionNeeded) {
-    return [
-      ...base,
-      { label: 'Employer asked additional questions', date: 'Today', status: 'action_needed', description: 'The AI needs your input to answer some questions on the application form.' },
-      { label: 'Application form submitted', date: '', status: 'pending' },
-      { label: 'Waiting for employer review', date: '', status: 'pending' },
-    ];
-  }
-
-  const submitted: FlowStep = { label: 'Application form submitted', date: 'Yesterday', status: 'completed' };
-
-  if (appStatus === 'applied') {
-    return [
-      ...base,
-      submitted,
-      { label: 'Waiting for employer review', date: 'Today', status: 'current', description: 'AI has submitted your application. Waiting for response.' },
-    ];
-  }
-  if (appStatus === 'under_review') {
-    return [
-      ...base,
-      { label: 'Employer reviewing application', date: 'Today', status: 'current', description: 'The recruiter is reviewing your profile.' },
-      { label: 'Interview request', date: '', status: 'pending' },
-    ];
-  }
-  if (appStatus === 'interview_scheduled') {
-    return [
-      ...base,
-      { label: 'Employer reviewed application', date: 'Yesterday', status: 'completed' },
-      { label: 'Assessment completed', date: 'Yesterday', status: 'completed' },
-      { label: 'Interview request received', date: 'Today', status: 'completed' },
-      { label: 'Interview scheduled', date: 'Today', status: 'current', description: 'Your interview is confirmed.' },
-    ];
-  }
-  if (appStatus === 'offer') {
-    return [
-      ...base,
-      { label: 'Employer reviewed application', date: '3 days ago', status: 'completed' },
-      { label: 'Interview completed', date: '2 days ago', status: 'completed' },
-      { label: 'Offer received', date: 'Today', status: 'current', description: 'Congratulations! Review the offer details.' },
-    ];
-  }
-  if (appStatus === 'rejected') {
-    return [
-      ...base,
-      { label: 'Application not selected', date: 'Today', status: 'current', description: 'Unfortunately, the employer chose another candidate.' },
-    ];
-  }
-  return base;
 }
 
 export default function ApplicationDetailsScreen() {
@@ -144,17 +106,25 @@ export default function ApplicationDetailsScreen() {
         .single();
       if (appError) throw appError;
 
-      const { data: jobData } = await supabase
-        .from('jobs')
-        .select('description, location, requirements, skills, title, benefits, employment_type, location_type, experience_level, salary_min, salary_max, salary_currency')
-        .eq('id', appData.job_id)
-        .single();
+      let jobData = null;
+      if (appData.job_id) {
+        const { data } = await supabase
+          .from('jobs')
+          .select('description, location, requirements, skills, title, benefits, employment_type, location_type, experience_level, salary_min, salary_max, salary_currency, company_description, detailed_requirements, culture_photos, deadline, portal, portal_url, company_website, applicants_count')
+          .eq('id', appData.job_id)
+          .single();
+        jobData = data;
+      }
 
-      const { data: companyData } = await supabase
-        .from('companies')
-        .select('description, logo, logo_url')
-        .ilike('name', appData.company_name)
-        .single();
+      let companyData = null;
+      if (appData.company_name) {
+        const { data } = await supabase
+          .from('companies')
+          .select('description, logo, logo_url, website, size, industry')
+          .ilike('name', appData.company_name)
+          .single();
+        companyData = data;
+      }
 
       return { ...appData, jobData, companyData };
     },
@@ -184,31 +154,43 @@ export default function ApplicationDetailsScreen() {
       appData.companyData?.logo_url
     );
 
+    const jd = appData.jobData;
+    const cd = appData.companyData;
+
     return {
       id: appData.id,
       jobId: appData.job_id,
       appliedDate: new Date(appData.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       status: appData.status || 'pending',
+      verificationOtp: appData.verification_otp || null,
+      otpReceivedAt: appData.otp_received_at || null,
       job: {
         id: appData.job_id,
-        jobTitle: appData.jobData?.title || appData.job_title,
+        jobTitle: jd?.title || appData.job_title,
         companyName: appData.company_name,
         companyLogo,
-        location: appData.jobData?.location || appData.location || 'Remote',
-        locationType: (appData.jobData?.location_type || 'remote') as 'remote' | 'onsite' | 'hybrid',
-        employmentType: appData.jobData?.employment_type || 'Full-time',
-        experienceLevel: appData.jobData?.experience_level || 'Not specified',
-        salaryMin: appData.jobData?.salary_min || appData.salary_min || 0,
-        salaryMax: appData.jobData?.salary_max || appData.salary_max || 0,
-        salaryCurrency: appData.jobData?.salary_currency || 'USD',
+        location: jd?.location || appData.location || 'Remote',
+        locationType: (jd?.location_type || 'remote') as 'remote' | 'onsite' | 'hybrid',
+        employmentType: jd?.employment_type || 'Full-time',
+        experienceLevel: jd?.experience_level || 'Not specified',
+        salaryMin: jd?.salary_min || appData.salary_min || 0,
+        salaryMax: jd?.salary_max || appData.salary_max || 0,
+        salaryCurrency: jd?.salary_currency || 'USD',
         salaryPeriod: 'year',
-        applicantsCount: 0,
-        description: appData.jobData?.description || 'No description available',
-        companyDescription: appData.companyData?.description || `${appData.company_name} is hiring for this position.`,
-        requirements: appData.jobData?.requirements || [],
-        skills: appData.jobData?.skills || [],
-        benefits: appData.jobData?.benefits || [],
-        culturePhotos: [],
+        applicantsCount: jd?.applicants_count || 0,
+        description: jd?.description || 'No description available',
+        companyDescription: cd?.description || jd?.company_description || `${appData.company_name} is hiring for this position.`,
+        detailedRequirements: jd?.detailed_requirements || '',
+        requirements: Array.isArray(jd?.requirements) ? jd.requirements : [],
+        skills: Array.isArray(jd?.skills) ? jd.skills : [],
+        benefits: Array.isArray(jd?.benefits) ? jd.benefits : [],
+        culturePhotos: Array.isArray(jd?.culture_photos) ? jd.culture_photos : [],
+        deadline: jd?.deadline || null,
+        portal: jd?.portal || null,
+        portalUrl: jd?.portal_url || null,
+        companyWebsite: jd?.company_website || cd?.website || null,
+        companySize: cd?.size || null,
+        companyIndustry: cd?.industry || null,
       },
     };
   }, [appData]);
@@ -217,18 +199,66 @@ export default function ApplicationDetailsScreen() {
   const [portalEmail, setPortalEmail] = useState('');
   const [portalPassword, setPortalPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showAdditionalQuestions, setShowAdditionalQuestions] = useState(false);
-  const [additionalAnswers, setAdditionalAnswers] = useState<Record<string, string>>({});
+
   const [showVideoModal, setShowVideoModal] = useState(false);
 
-  const needsAction = application?.status === 'applied' || application?.status === 'under_review';
-  const hasActionNeeded = needsAction && Object.keys(additionalAnswers).length === 0;
+  // Animated pulsing dot + auto-advance — always runs regardless of DB status
+  const pendingStepCount = 11; // 2 base completed + 9 animated steps
+  const [activeStepOffset, setActiveStepOffset] = useState(0);
+  const [reachedEnd, setReachedEnd] = useState(false);
+  const [stepLoaded, setStepLoaded] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const storageKey = `app_step_${id}`;
 
-  const additionalQuestions = [
-    { id: 'q1', question: 'Where did you hear about us?', options: ['LinkedIn', 'Google', 'YouTube', 'Twitter', 'Friend/Referral', 'Job Board', 'Other'] },
-    { id: 'q2', question: 'Are you authorized to work in this country?', options: ['Yes', 'No', 'Need Sponsorship'] },
-    { id: 'q3', question: 'What is your earliest start date?', options: ['Immediately', '2 weeks', '1 month', '2+ months'] },
-  ];
+  // Restore saved step offset on mount
+  useEffect(() => {
+    if (!id) return;
+    AsyncStorage.getItem(storageKey).then((val) => {
+      if (val !== null) {
+        const saved = parseInt(val, 10);
+        if (!isNaN(saved)) {
+          setActiveStepOffset(saved);
+          if (saved >= pendingStepCount - 2 - 1) setReachedEnd(true);
+        }
+      }
+      setStepLoaded(true);
+    });
+  }, [id]);
+
+  // Persist step offset whenever it changes
+  useEffect(() => {
+    if (!stepLoaded || !id) return;
+    AsyncStorage.setItem(storageKey, String(activeStepOffset));
+  }, [activeStepOffset, stepLoaded, id]);
+
+  useEffect(() => {
+    if (reachedEnd || !stepLoaded) return;
+    const interval = setInterval(() => {
+      setActiveStepOffset((prev) => {
+        const next = prev + 1;
+        if (next >= pendingStepCount - 2 - 1) {
+          // pendingStepCount - 2 base steps - 1 for zero-index = last animated step
+          setReachedEnd(true);
+          return pendingStepCount - 2 - 1;
+        }
+        return next;
+      });
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [reachedEnd, stepLoaded]);
+
+  useEffect(() => {
+    if (reachedEnd) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reachedEnd]);
+
 
   if (isLoading) {
     return (
@@ -252,9 +282,10 @@ export default function ApplicationDetailsScreen() {
   }
 
   const job = application.job;
-  const status = statusConfig[application.status] || statusConfig.applied;
+  const displayStatus = reachedEnd ? 'completed' : 'pending';
+  const status = statusConfig[displayStatus];
   const LocationIcon = job.locationType === 'remote' ? Wifi : job.locationType === 'hybrid' ? Building2 : MapPin;
-  const flowSteps = getFlowSteps(application.status, hasActionNeeded);
+  const flowSteps = getFlowSteps();
 
   const handleSaveCredentials = () => {
     Alert.alert('Saved', 'Portal credentials saved. AI will use these to apply on your behalf.');
@@ -304,29 +335,46 @@ export default function ApplicationDetailsScreen() {
         <View style={styles.progressCard}>
           <Text style={styles.progressSectionTitle}>Application Progress</Text>
           {flowSteps.map((step, idx) => {
-            const isCompleted = step.status === 'completed';
-            const isCurrent = step.status === 'current';
-            const isActionNeeded = step.status === 'action_needed';
+            let isCompleted = step.status === 'completed';
+            let isCurrent = false;
+
+            if (idx >= 2) {
+              const pendingIdx = idx - 2;
+              if (reachedEnd) {
+                isCompleted = true;
+              } else if (pendingIdx < activeStepOffset) {
+                isCompleted = true;
+              } else if (pendingIdx === activeStepOffset) {
+                isCurrent = true;
+              } else {
+                return null;
+              }
+            }
+
+            let isLastVisible = idx === flowSteps.length - 1;
+            if (!reachedEnd && idx >= 2) {
+              const pendingIdx = idx - 2;
+              isLastVisible = pendingIdx === activeStepOffset;
+            }
+
             return (
               <View key={idx} style={styles.flowStep}>
                 <View style={styles.flowIndicator}>
                   {isCompleted ? (
                     <CheckCircle2 size={20} color="#10B981" />
                   ) : isCurrent ? (
-                    <View style={styles.flowDotCurrent} />
-                  ) : isActionNeeded ? (
-                    <XCircle size={20} color="#FF8F00" />
+                    <Animated.View style={[styles.flowDotCurrent, { opacity: pulseAnim }]} />
                   ) : (
                     <Circle size={20} color="rgba(255,255,255,0.2)" />
                   )}
-                  {idx < flowSteps.length - 1 && (
+                  {!isLastVisible && (
                     <View style={[styles.flowLine, isCompleted && styles.flowLineCompleted]} />
                   )}
                 </View>
                 <View style={styles.flowContent}>
                   <View style={styles.flowLabelRow}>
                     <Text style={[styles.flowLabel, isCurrent && styles.flowLabelActive]}>{step.label}</Text>
-                    {step.date ? <Text style={styles.flowDate}>{step.date}</Text> : null}
+                    {isCompleted && idx >= 2 ? <Text style={styles.flowDate}>Done</Text> : step.date ? <Text style={styles.flowDate}>{step.date}</Text> : null}
                   </View>
                   {step.description && isCurrent ? (
                     <Text style={styles.flowDesc}>{step.description}</Text>
@@ -337,17 +385,24 @@ export default function ApplicationDetailsScreen() {
           })}
         </View>
 
-        {hasActionNeeded && (
-          <Pressable style={styles.actionNeededCard} onPress={() => setShowAdditionalQuestions(true)}>
-            <View style={styles.actionNeededIcon}>
-              <AlertTriangle size={20} color="#E65100" />
+
+
+        {application.verificationOtp && (
+          <View style={styles.otpCard}>
+            <View style={styles.otpIcon}>
+              <Key size={18} color="#7B1FA2" />
             </View>
-            <View style={styles.actionNeededContent}>
-              <Text style={styles.actionNeededTitle}>Action Required</Text>
-              <Text style={styles.actionNeededText}>The AI needs your input to complete this application</Text>
+            <View style={styles.otpContent}>
+              <Text style={styles.otpTitle}>OTP Received</Text>
+              <Text style={styles.otpCode}>{application.verificationOtp}</Text>
+              {application.otpReceivedAt && (
+                <Text style={styles.otpTime}>
+                  Received {new Date(application.otpReceivedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </Text>
+              )}
             </View>
-            <ChevronRight size={18} color="#E65100" />
-          </Pressable>
+            <Sparkles size={16} color="#7B1FA2" />
+          </View>
         )}
 
         {appData?.live_url && (
@@ -360,153 +415,12 @@ export default function ApplicationDetailsScreen() {
           </Pressable>
         )}
 
-        <View style={styles.infoCards}>
-          <View style={styles.infoCard}>
-            <Briefcase size={18} color={Colors.textPrimary} />
-            <Text style={styles.infoLabel}>Type</Text>
-            <Text style={styles.infoValue}>{job.employmentType}</Text>
-          </View>
-          <View style={styles.infoCard}>
-            <LocationIcon size={18} color={Colors.primary} />
-            <Text style={styles.infoLabel}>Mode</Text>
-            <Text style={styles.infoValue}>{job.locationType}</Text>
-          </View>
-          <View style={styles.infoCard}>
-            <Clock size={18} color={Colors.warning} />
-            <Text style={styles.infoLabel}>Applied</Text>
-            <Text style={styles.infoValue}>{application.appliedDate}</Text>
-          </View>
-        </View>
 
-        <View style={styles.infoCards}>
-          <View style={styles.infoCard}>
-            <Users size={18} color={Colors.accent} />
-            <Text style={styles.infoLabel}>Experience</Text>
-            <Text style={styles.infoValue}>{job.experienceLevel}</Text>
-          </View>
-        </View>
 
-        <View style={styles.salaryCard}>
-          <Text style={styles.salaryLabel}>Salary Range</Text>
-          <Text style={styles.salaryValue}>
-            {formatSalary(job.salaryMin, job.salaryMax)}
-            <Text style={styles.salaryPeriod}> /{job.salaryPeriod}</Text>
-          </Text>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About the Role</Text>
-          <Text style={styles.descriptionText}>{job.description}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About {job.companyName}</Text>
-          <Text style={styles.descriptionText}>{job.companyDescription}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Key Requirements</Text>
-          {job.requirements.map((req, idx) => (
-            <View key={idx} style={styles.reqRow}>
-              <View style={styles.reqBullet} />
-              <Text style={styles.reqText}>{req}</Text>
-            </View>
-          ))}
-        </View>
-
-        {job.culturePhotos && job.culturePhotos.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.cultureHeader}>
-              <Camera size={18} color={Colors.secondary} />
-              <Text style={styles.sectionTitle}>Work Culture</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {job.culturePhotos.map((photo, idx) => (
-                <Image key={idx} source={{ uri: photo }} style={styles.culturePhoto} contentFit="cover" />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Skills Required</Text>
-          <View style={styles.tagsWrap}>
-            {job.skills.length > 0 ? (
-              job.skills.map((skill, idx) => (
-                <View key={idx} style={styles.skillTag}>
-                  <Text style={styles.skillTagText}>{skill}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.descriptionText}>No specific skills listed</Text>
-            )}
-          </View>
-        </View>
-
-        {job.benefits && job.benefits.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Benefits</Text>
-            <View style={styles.tagsWrap}>
-              {job.benefits.map((benefit, idx) => (
-                <View key={idx} style={styles.benefitTag}>
-                  <Text style={styles.benefitTagText}>{benefit}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      <Modal visible={showAdditionalQuestions} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Additional Questions</Text>
-              <Pressable onPress={() => setShowAdditionalQuestions(false)} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtext}>The AI encountered these questions while filling out your application. Please provide your answers so it can continue.</Text>
-            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
-              {additionalQuestions.map((q) => (
-                <View key={q.id} style={styles.questionBlock}>
-                  <View style={styles.questionHeader}>
-                    <MessageCircle size={14} color="#1565C0" />
-                    <Text style={styles.questionText}>{q.question}</Text>
-                  </View>
-                  <View style={styles.optionsWrap}>
-                    {q.options.map((opt) => (
-                      <Pressable
-                        key={opt}
-                        style={[styles.optionChip, additionalAnswers[q.id] === opt && styles.optionChipSelected]}
-                        onPress={() => setAdditionalAnswers(prev => ({ ...prev, [q.id]: opt }))}
-                      >
-                        <Text style={[styles.optionChipText, additionalAnswers[q.id] === opt && styles.optionChipTextSelected]}>{opt}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            <Pressable
-              style={[styles.saveCredBtn, Object.keys(additionalAnswers).length < additionalQuestions.length && { opacity: 0.5 }]}
-              onPress={() => {
-                if (Object.keys(additionalAnswers).length >= additionalQuestions.length) {
-                  setShowAdditionalQuestions(false);
-                  Alert.alert('Submitted', 'Your answers have been sent to the AI agent. It will now continue filling out your application.');
-                } else {
-                  Alert.alert('Incomplete', 'Please answer all questions before submitting.');
-                }
-              }}
-            >
-              <Check size={18} color="#FFFFFF" />
-              <Text style={styles.saveCredBtnText}>Submit Answers</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={showVideoModal} animationType="slide" presentationStyle="fullScreen">
         <View style={styles.videoModalOverlay}>
@@ -635,6 +549,12 @@ const styles = StyleSheet.create({
   actionNeededContent: { flex: 1, marginLeft: 12 },
   actionNeededTitle: { fontSize: 14, fontWeight: '700' as const, color: '#E65100' },
   actionNeededText: { fontSize: 12, color: '#F57C00', marginTop: 2 },
+  otpCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E8FF', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#CE93D8' },
+  otpIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#E1BEE7', justifyContent: 'center', alignItems: 'center' },
+  otpContent: { flex: 1, marginLeft: 12 },
+  otpTitle: { fontSize: 12, fontWeight: '600' as const, color: '#7B1FA2' },
+  otpCode: { fontSize: 22, fontWeight: '800' as const, color: '#4A148C', letterSpacing: 4, marginTop: 2 },
+  otpTime: { fontSize: 11, color: '#9C27B0', marginTop: 2 },
   questionBlock: { marginBottom: 16 },
   questionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   questionText: { fontSize: 14, fontWeight: '600' as const, color: "#000", flex: 1 },

@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,20 +24,26 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Swipeable } from 'react-native-gesture-handler';
 import {
   Archive,
-  Paperclip,
+  ArrowLeft,
   Copy,
+  Forward,
   Inbox,
+  Mail,
+  MailOpen,
   Menu,
+  Paperclip,
   Plus,
   RefreshCw,
+  Reply,
   Send,
   Star,
   Strikethrough,
-  Underline,
   Trash2,
+  Underline,
   X,
 } from 'lucide-react-native';
 
+import { WebView } from 'react-native-webview';
 import Colors, { darkColors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useColors } from '@/contexts/useColors';
@@ -43,11 +52,13 @@ import DraggableBottomSheet from '@/components/DraggableBottomSheet';
 import {
   archiveInbound,
   archiveSent,
+  computeThreadId,
   deleteInboundEmail,
   deleteSentEmail,
   fetchInboundEmails,
   fetchSentEmails,
   fetchStarredEmails,
+  fetchThreadMessages,
   getOrCreateProxyEmail,
   markInboundRead,
   sendEmailViaResend,
@@ -62,6 +73,18 @@ type SidebarView = 'inbox' | 'starred' | 'sent' | 'archived';
 type MailItem =
   | { kind: 'inbound'; data: InboundEmail }
   | { kind: 'sent'; data: SentEmail };
+
+function computeThreadIdLocal(subject: string | null): string {
+  return (subject || '(no subject)').replace(/^(Re:|Fwd:|Fw:)\s*/gi, '').trim().toLowerCase();
+}
+
+interface ThreadGroup {
+  threadId: string;
+  latestItem: MailItem;
+  count: number;
+  hasUnread: boolean;
+  isStarred: boolean;
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -94,6 +117,21 @@ function getDisplayName(nameOrEmail: string): string {
   if (!v.includes('@')) return v;
   const local = v.split('@')[0] || v;
   return local.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim() || v;
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const AVATAR_COLORS = ['#4F46E5','#7C3AED','#2563EB','#0891B2','#059669','#D97706','#DC2626','#DB2777','#4338CA','#0D9488'];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 function getPreviewText(body: string, max = 90): string {
@@ -136,6 +174,9 @@ function MessagesScreen() {
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
+  const [composeMode, setComposeMode] = useState<'new' | 'reply' | 'forward'>('new');
+  const [composeReplyMessageId, setComposeReplyMessageId] = useState<string | null>(null);
+  const [forwardedHeader, setForwardedHeader] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [composeBold, setComposeBold] = useState(false);
   const [composeItalic, setComposeItalic] = useState(false);
@@ -147,6 +188,12 @@ function MessagesScreen() {
   const [fileAttachments, setFileAttachments] = useState<{ name: string; uri: string; size?: number | null }[]>([]);
 
   const [activeItem, setActiveItem] = useState<MailItem | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [threadMessages, setThreadMessages] = useState<Array<(InboundEmail | SentEmail) & { _kind: 'inbound' | 'sent' }>>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+
+
+
 
   useEffect(() => {
     if (!supabaseUserId) return;
@@ -169,10 +216,13 @@ function MessagesScreen() {
     setTimeout(() => setCopiedProxy(false), 2000);
   }, [proxyEmail]);
 
-  const openCompose = useCallback((to = '', subject = '', body = '') => {
+  const openCompose = useCallback((to = '', subject = '', body = '', mode: 'new' | 'reply' | 'forward' = 'new', fwdHeader = '', replyMessageId: string | null = null) => {
     setComposeTo(to);
     setComposeSubject(subject);
     setComposeBody(body);
+    setComposeMode(mode);
+    setComposeReplyMessageId(replyMessageId);
+    setForwardedHeader(fwdHeader);
     setComposeBold(false);
     setComposeItalic(false);
     setComposeUnderline(false);
@@ -189,6 +239,9 @@ function MessagesScreen() {
     setComposeTo('');
     setComposeSubject('');
     setComposeBody('');
+    setComposeMode('new');
+    setComposeReplyMessageId(null);
+    setForwardedHeader('');
     setComposeBold(false);
     setComposeItalic(false);
     setComposeUnderline(false);
@@ -237,10 +290,19 @@ function MessagesScreen() {
         });
       }
 
-      // inbox
-      const inbound = await fetchInboundEmails(uid);
+      // inbox: fetch both inbound + sent, return all for thread grouping
+      const [inbound, sent] = await Promise.all([fetchInboundEmails(uid), fetchSentEmails(uid)]);
       const inboundFiltered = inbound.filter((x) => !x.is_archived);
-      return inboundFiltered.map((x) => ({ kind: 'inbound' as const, data: x }));
+      const sentFiltered = sent.filter((x) => !x.is_archived);
+      const all: MailItem[] = [
+        ...inboundFiltered.map((x) => ({ kind: 'inbound' as const, data: x })),
+        ...sentFiltered.map((x) => ({ kind: 'sent' as const, data: x })),
+      ];
+      return all.sort((a, b) => {
+        const aDate = a.kind === 'inbound' ? a.data.received_at : a.data.sent_at;
+        const bDate = b.kind === 'inbound' ? b.data.received_at : b.data.sent_at;
+        return new Date(bDate).getTime() - new Date(aDate).getTime();
+      });
     },
   });
 
@@ -252,28 +314,80 @@ function MessagesScreen() {
     }, 0);
   }, [listQuery.data]);
 
-  const filteredItems = useMemo(() => {
+
+
+  // Group items into threads for inbox view
+  const threadGroups = useMemo((): ThreadGroup[] => {
     const items = listQuery.data || [];
+    if (sidebarView !== 'inbox') return [];
+    const map = new Map<string, { items: MailItem[]; hasUnread: boolean; isStarred: boolean }>();
+    for (const item of items) {
+      const tid = item.data.thread_id || computeThreadIdLocal(item.data.subject);
+      if (!map.has(tid)) map.set(tid, { items: [], hasUnread: false, isStarred: false });
+      const group = map.get(tid)!;
+      group.items.push(item);
+      if (item.kind === 'inbound' && !item.data.is_read) group.hasUnread = true;
+      if (item.data.is_starred) group.isStarred = true;
+    }
+    const groups: ThreadGroup[] = [];
+    Array.from(map.entries()).forEach(([threadId, group]) => {
+      groups.push({
+        threadId,
+        latestItem: group.items[0],
+        count: group.items.length,
+        hasUnread: group.hasUnread,
+        isStarred: group.isStarred,
+      });
+    });
+    return groups;
+  }, [listQuery.data, sidebarView]);
+
+  const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      if (item.kind === 'inbound') {
+
+    // For inbox, use thread groups
+    if (sidebarView === 'inbox') {
+      let groups = threadGroups;
+      if (q) {
+        groups = groups.filter((g) => {
+          const item = g.latestItem;
+          const subject = (item.data.subject || '').toLowerCase();
+          const bodyText = (item.data.body_text || '').toLowerCase();
+          if (item.kind === 'inbound') {
+            return (item.data.from_name || '').toLowerCase().includes(q) ||
+              item.data.from_email.toLowerCase().includes(q) ||
+              subject.includes(q) || bodyText.includes(q);
+          }
+          return item.data.to_email.toLowerCase().includes(q) ||
+            subject.includes(q) || bodyText.includes(q);
+        });
+      }
+      return groups;
+    }
+
+    // For other views, return flat list
+    let items = listQuery.data || [];
+    if (q) {
+      items = items.filter((item) => {
+        if (item.kind === 'inbound') {
+          const x = item.data;
+          return (
+            (x.from_name || '').toLowerCase().includes(q) ||
+            x.from_email.toLowerCase().includes(q) ||
+            (x.subject || '').toLowerCase().includes(q) ||
+            (x.body_text || '').toLowerCase().includes(q)
+          );
+        }
         const x = item.data;
         return (
-          (x.from_name || '').toLowerCase().includes(q) ||
-          x.from_email.toLowerCase().includes(q) ||
+          x.to_email.toLowerCase().includes(q) ||
           (x.subject || '').toLowerCase().includes(q) ||
           (x.body_text || '').toLowerCase().includes(q)
         );
-      }
-      const x = item.data;
-      return (
-        x.to_email.toLowerCase().includes(q) ||
-        (x.subject || '').toLowerCase().includes(q) ||
-        (x.body_text || '').toLowerCase().includes(q)
-      );
-    });
-  }, [listQuery.data, searchQuery]);
+      });
+    }
+    return items;
+  }, [listQuery.data, searchQuery, sidebarView, threadGroups]);
 
   const refetchAll = useCallback(() => {
     listQuery.refetch();
@@ -331,12 +445,20 @@ function MessagesScreen() {
     }
 
     setIsSending(true);
+    let fullBody = composeBody.trim();
+    if (forwardedHeader) {
+      fullBody = fullBody
+        ? `${fullBody}\n\n---------- Forwarded message ----------\n${forwardedHeader}`
+        : `---------- Forwarded message ----------\n${forwardedHeader}`;
+    }
     const ok = await sendEmailViaResend(
       proxyEmail,
       composeTo.trim(),
       composeSubject.trim(),
-      composeBody.trim(),
-      supabaseUserId
+      fullBody,
+      supabaseUserId,
+      false,
+      composeReplyMessageId || undefined
     );
     setIsSending(false);
 
@@ -347,7 +469,7 @@ function MessagesScreen() {
     } else {
       Alert.alert('Error', 'Failed to send email. Please try again.');
     }
-  }, [composeBody, composeSubject, composeTo, proxyEmail, supabaseUserId, closeCompose, queryClient]);
+  }, [composeBody, composeSubject, composeTo, proxyEmail, supabaseUserId, composeReplyMessageId, closeCompose, queryClient]);
 
   const handlePickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -387,16 +509,30 @@ function MessagesScreen() {
   }, [filteredItems.length, listQuery.isError, listQuery.isLoading, supabaseUserId]);
 
   const openItem = useCallback(
-    (item: MailItem) => {
+    (item: MailItem, threadId?: string) => {
       setActiveItem(item);
       if (item.kind === 'inbound' && !item.data.is_read) {
         markReadMutation.mutate({ emailId: item.data.id, read: true });
       }
+      // Load full thread if we have a threadId
+      const tid = threadId || item.data.thread_id || computeThreadIdLocal(item.data.subject);
+      setActiveThreadId(tid);
+      if (supabaseUserId && tid) {
+        setThreadLoading(true);
+        fetchThreadMessages(supabaseUserId, tid).then((msgs) => {
+          setThreadMessages(msgs);
+          setThreadLoading(false);
+        });
+      }
     },
-    [markReadMutation]
+    [markReadMutation, supabaseUserId]
   );
 
-  const closeItem = useCallback(() => setActiveItem(null), []);
+  const closeItem = useCallback(() => {
+    setActiveItem(null);
+    setActiveThreadId(null);
+    setThreadMessages([]);
+  }, []);
 
   const confirmDelete = useCallback(
     (item: MailItem) => {
@@ -408,11 +544,10 @@ function MessagesScreen() {
     [deleteMutation]
   );
 
-  const MailRow = useCallback(
-    ({ item }: { item: MailItem }) => {
+  const MailRowInner = useCallback(
+    ({ item, threadCount, isThread }: { item: MailItem; threadCount: number; isThread: boolean; threadId?: string }) => {
       const isStarred = item.data.is_starred;
       const isUnread = item.kind === 'inbound' ? !item.data.is_read : false;
-      const fromEmail = item.kind === 'inbound' ? item.data.from_email : item.data.to_email;
       const fromName =
         item.kind === 'inbound'
           ? parseDisplayName(item.data.from_name, item.data.from_email)
@@ -454,22 +589,17 @@ function MessagesScreen() {
               pressed && { opacity: 0.8 },
               isUnread && { backgroundColor: colors.surfaceElevated },
             ]}
-            onPress={() => openItem(item)}
+            onPress={() => openItem(item, isThread ? (item.data.thread_id || computeThreadIdLocal(item.data.subject)) : undefined)}
             onLongPress={() => {
               const archiveLabel = item.data.is_archived ? 'Unarchive' : 'Archive';
               Alert.alert(fromName, subject, [
                 ...(item.kind === 'inbound'
-                  ? [
-                      {
-                        text: isUnread ? 'Mark as read' : 'Mark as unread',
-                        onPress: () => markReadMutation.mutate({ emailId: item.data.id, read: isUnread }),
-                      },
-                    ]
+                  ? [{
+                      text: isUnread ? 'Mark as read' : 'Mark as unread',
+                      onPress: () => markReadMutation.mutate({ emailId: item.data.id, read: isUnread }),
+                    }]
                   : []),
-                {
-                  text: isStarred ? 'Unstar' : 'Star',
-                  onPress: () => toggleStarMutation.mutate({ item, starred: !isStarred }),
-                },
+                { text: isStarred ? 'Unstar' : 'Star', onPress: () => toggleStarMutation.mutate({ item, starred: !isStarred }) },
                 { text: archiveLabel, onPress: () => archiveMutation.mutate({ item, archived: !item.data.is_archived }) },
                 { text: 'Delete', style: 'destructive', onPress: () => confirmDelete(item) },
                 { text: 'Cancel', style: 'cancel' },
@@ -477,11 +607,9 @@ function MessagesScreen() {
             }}
             testID={`mail-item-${getItemId(item)}`}
           >
-            <Image
-              source={require('@/assets/images/applogo.jpg')}
-              style={styles.logoAvatar}
-              contentFit="cover"
-            />
+            <View style={[styles.logoAvatar, { backgroundColor: getAvatarColor(fromName) }]}>
+              <Text style={styles.avatarInitials}>{getInitials(fromName)}</Text>
+            </View>
 
             <View style={styles.emailContent}>
               <View style={styles.emailTopRow}>
@@ -489,8 +617,11 @@ function MessagesScreen() {
                   style={[styles.emailSender, { color: colors.textPrimary }, isUnread && styles.emailSenderUnread]}
                   numberOfLines={1}
                 >
-                  {fromName}
+                  {item.kind === 'sent' ? `To: ${fromName}` : fromName}
                 </Text>
+                {threadCount > 1 && (
+                  <Text style={[styles.threadCountBadge, { color: colors.textTertiary }]}>{threadCount}</Text>
+                )}
                 <Text style={[styles.emailTime, { color: colors.textTertiary }]}>{time}</Text>
               </View>
               <Text
@@ -529,94 +660,309 @@ function MessagesScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: MailItem }) => {
-      return <MailRow item={item} />;
+    ({ item }: { item: ThreadGroup | MailItem }) => {
+      // Inbox view: item is ThreadGroup
+      if (sidebarView === 'inbox' && 'threadId' in item) {
+        const group = item as ThreadGroup;
+        return <MailRowInner item={group.latestItem} threadCount={group.count} isThread />
+      }
+      // Other views: item is MailItem
+      return <MailRowInner item={item as MailItem} threadCount={1} isThread={false} />;
     },
-    [MailRow]
+    [MailRowInner, sidebarView]
   );
 
-  const DetailModal = () => {
-    const item = activeItem;
-    if (!item) return null;
-    const isInbound = item.kind === 'inbound';
-    const fromName = isInbound ? item.data.from_name || item.data.from_email : proxyEmail || '(your proxy)';
-    const fromEmail = isInbound ? item.data.from_email : proxyEmail || '';
-    const toEmail = isInbound ? item.data.to_email : item.data.to_email;
-    const subject = item.data.subject || '(no subject)';
-    const body =
-      item.data.body_text?.trim() ||
-      (item.kind === 'inbound' ? stripHtmlToText(item.data.body_html || '') : '') ||
-      '';
-    const isStarred = item.data.is_starred;
+  const [inlineReplyMode, setInlineReplyMode] = useState<'none' | 'reply' | 'forward'>('none');
+  const [inlineReplyText, setInlineReplyText] = useState('');
+  const [inlineSending, setInlineSending] = useState(false);
+  const inlineReplyRef = useRef<TextInput>(null);
+  const detailScrollRef = useRef<ScrollView>(null);
 
-    return (
-      <DraggableBottomSheet visible={!!activeItem} onClose={closeItem} initialHeight={Math.round(760)} minHeight={Math.round(420)}>
-        <View style={[styles.detailContainer, { paddingTop: 4 }]}>
-          <View style={[styles.detailToolbar, { borderBottomColor: colors.border }]}>
-            <View style={styles.detailToolbarLeft}>
-              {isInbound ? (
+  const closeInlineReply = useCallback(() => {
+    setInlineReplyMode('none');
+    setInlineReplyText('');
+  }, []);
+
+  const handleInlineSend = useCallback(async (item: MailItem) => {
+    if (!supabaseUserId || !proxyEmail || !inlineReplyText.trim()) return;
+    const isInbound = item.kind === 'inbound';
+
+    // Find the last inbound message in thread for reply-to
+    const lastInbound = [...threadMessages].reverse().find((m) => m._kind === 'inbound') as (InboundEmail & { _kind: 'inbound' }) | undefined;
+    const toAddr = lastInbound?.from_email || (isInbound ? item.data.from_email : item.data.to_email);
+    const subject = item.data.subject || '(no subject)';
+    const replySubject = `Re: ${subject.replace(/^Re:\s*/i, '')}`;
+    const messageId = lastInbound?.message_id || (isInbound ? (item.data as InboundEmail).message_id : undefined);
+
+    setInlineSending(true);
+    const ok = await sendEmailViaResend(
+      proxyEmail,
+      toAddr,
+      replySubject,
+      inlineReplyText.trim(),
+      supabaseUserId,
+      false,
+      messageId || undefined
+    );
+    setInlineSending(false);
+
+    if (ok) {
+      closeInlineReply();
+      queryClient.invalidateQueries({ queryKey: ['nextquark-mail'] });
+      // Reload thread messages to show the sent reply
+      const tid = activeThreadId || item.data.thread_id || computeThreadIdLocal(item.data.subject);
+      if (tid) {
+        fetchThreadMessages(supabaseUserId, tid).then(setThreadMessages);
+      }
+      Alert.alert('Sent', 'Your reply has been sent.');
+    } else {
+      Alert.alert('Error', 'Failed to send. Please try again.');
+    }
+  }, [supabaseUserId, proxyEmail, inlineReplyText, threadMessages, activeThreadId, closeInlineReply, queryClient]);
+
+  const closeItemAndReply = useCallback(() => {
+    closeInlineReply();
+    setActiveItem(null);
+  }, [closeInlineReply]);
+
+  const detailItem = activeItem;
+  const detailIsInbound = detailItem?.kind === 'inbound';
+  const detailSubject = detailItem?.data.subject || '(no subject)';
+  const detailIsStarred = detailItem?.data.is_starred ?? false;
+  const detailIsRead = detailIsInbound ? (detailItem?.data as InboundEmail).is_read : true;
+  const detailHasThread = threadMessages.length > 1;
+  const detailShowingInlineReply = inlineReplyMode !== 'none';
+  const detailLastInbound = useMemo(() => {
+    return [...threadMessages].reverse().find((m) => m._kind === 'inbound') as (InboundEmail & { _kind: 'inbound' }) | undefined;
+  }, [threadMessages]);
+  const detailReplyToEmail = detailLastInbound?.from_email || (detailIsInbound ? (detailItem?.data as InboundEmail)?.from_email : '') || '';
+  const detailReplyToName = detailLastInbound
+    ? parseDisplayName(detailLastInbound.from_name, detailLastInbound.from_email)
+    : (detailIsInbound ? parseDisplayName((detailItem?.data as InboundEmail)?.from_name, (detailItem?.data as InboundEmail)?.from_email) : '');
+
+  const detailModal = (
+      <Modal visible={!!activeItem} animationType="slide" transparent={false}>
+        <KeyboardAvoidingView
+          style={[styles.gmailDetailContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {/* Fixed top bar */}
+          {detailItem && <View style={[styles.gmailTopBar, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={closeItemAndReply} hitSlop={10} style={styles.gmailBackBtn}>
+              <ArrowLeft size={22} color={colors.textPrimary} />
+            </Pressable>
+            <View style={styles.gmailTopBarActions}>
+              {detailIsInbound && (
                 <Pressable
-                  style={styles.detailIconBtn}
                   onPress={() => {
-                    closeItem();
-                    openCompose(
-                      item.data.from_email,
-                      `Re: ${subject}`,
-                      `\n\n--- Original Message ---\nFrom: ${item.data.from_name || item.data.from_email}\n\n${body}`
-                    );
+                    markReadMutation.mutate({ emailId: detailItem.data.id, read: !detailIsRead });
+                    closeItemAndReply();
                   }}
                   hitSlop={8}
+                  style={styles.gmailTopBarIcon}
                 >
-                  <Send size={18} color={colors.textPrimary} />
+                  {detailIsRead ? <MailOpen size={20} color={colors.textPrimary} /> : <Mail size={20} color={colors.textPrimary} />}
                 </Pressable>
-              ) : null}
-              <Pressable
-                style={styles.detailIconBtn}
-                onPress={() => archiveMutation.mutate({ item, archived: !item.data.is_archived })}
-                hitSlop={8}
-              >
-                <Archive size={18} color={colors.textPrimary} />
-              </Pressable>
-              <Pressable style={styles.detailIconBtn} onPress={() => confirmDelete(item)} hitSlop={8}>
-                <Trash2 size={18} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.detailToolbarRight}>
-              <Pressable onPress={() => toggleStarMutation.mutate({ item, starred: !isStarred })} hitSlop={8} style={styles.detailIconBtn}>
-                <Star size={18} color={isStarred ? '#F59E0B' : colors.textTertiary} fill={isStarred ? '#F59E0B' : 'transparent'} />
-              </Pressable>
-              <Pressable onPress={closeItem} hitSlop={8} style={styles.detailIconBtn}>
-                <X size={20} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.detailTop}>
-            <View style={styles.detailMetaBlock}>
-              <Text style={[styles.detailSubject, { color: colors.textPrimary }]} numberOfLines={2}>
-                {subject}
-              </Text>
-              <Text style={[styles.detailFromName, { color: colors.textPrimary }]} numberOfLines={1}>
-                {isInbound ? parseDisplayName(item.data.from_name, item.data.from_email) : getDisplayName(fromName)}
-              </Text>
-              {!!fromEmail && (
-                <Text style={[styles.detailMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                  From: {fromEmail}
-                </Text>
               )}
-              <Text style={[styles.detailMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                To: {toEmail}
-              </Text>
+              <Pressable
+                onPress={() => { closeItemAndReply(); confirmDelete(detailItem); }}
+                hitSlop={8}
+                style={styles.gmailTopBarIcon}
+              >
+                <Trash2 size={20} color={colors.textPrimary} />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  archiveMutation.mutate({ item: detailItem, archived: !detailItem.data.is_archived });
+                  closeItemAndReply();
+                }}
+                hitSlop={8}
+                style={styles.gmailTopBarIcon}
+              >
+                <Archive size={20} color={colors.textPrimary} />
+              </Pressable>
+              <Pressable
+                onPress={() => toggleStarMutation.mutate({ item: detailItem, starred: !detailIsStarred })}
+                hitSlop={8}
+                style={styles.gmailTopBarIcon}
+              >
+                <Star size={20} color={detailIsStarred ? '#F59E0B' : colors.textTertiary} fill={detailIsStarred ? '#F59E0B' : 'transparent'} />
+              </Pressable>
             </View>
-          </View>
+          </View>}
 
-          <View style={[styles.detailBodyWrap, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-            <Text style={[styles.detailBody, { color: colors.textPrimary }]}>{body}</Text>
-          </View>
-        </View>
-      </DraggableBottomSheet>
-    );
-  };
+          {/* Scrollable content */}
+          <ScrollView
+            ref={detailScrollRef}
+            style={styles.gmailBodyWrap}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => {
+              if (detailShowingInlineReply) {
+                setTimeout(() => detailScrollRef.current?.scrollToEnd({ animated: true }), 150);
+              }
+            }}
+          >
+            {/* Subject */}
+            <View style={styles.gmailSubjectRow}>
+              <Text style={[styles.gmailSubject, { color: colors.textPrimary }]}>{detailSubject}</Text>
+            </View>
+
+            {/* Thread messages or single message */}
+            {threadLoading ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.textTertiary} />
+              </View>
+            ) : detailHasThread ? (
+              threadMessages.map((msg, idx) => {
+                const isSent = msg._kind === 'sent';
+                const msgName = isSent ? 'You' : parseDisplayName((msg as InboundEmail).from_name, isSent ? (msg as SentEmail).to_email : (msg as InboundEmail).from_email);
+                const msgEmail = isSent ? proxyEmail || '' : (msg as InboundEmail).from_email;
+                const msgDate = new Date(isSent ? (msg as SentEmail).sent_at : (msg as InboundEmail).received_at);
+                const msgDateStr = !isNaN(msgDate.getTime())
+                  ? `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${pad2(msgDate.getHours())}:${pad2(msgDate.getMinutes())}`
+                  : '';
+                const msgBody = msg.body_text?.trim() || (msg._kind === 'inbound' ? stripHtmlToText((msg as InboundEmail).body_html || '') : '') || '';
+                const msgToEmail = isSent ? (msg as SentEmail).to_email : (msg as InboundEmail).to_email;
+
+                return (
+                  <View key={msg.id} style={idx > 0 ? [styles.threadMsgSeparator, { borderTopColor: colors.border }] : undefined}>
+                    <View style={styles.gmailSenderRow}>
+                      <View style={[styles.gmailSenderAvatar, { backgroundColor: isSent ? '#4F46E5' : getAvatarColor(msgName) }]}>
+                        <Text style={styles.gmailSenderInitials}>{isSent ? 'You' : getInitials(msgName)}</Text>
+                      </View>
+                      <View style={styles.gmailSenderInfo}>
+                        <View style={styles.gmailSenderNameRow}>
+                          <Text style={[styles.gmailSenderName, { color: colors.textPrimary }]} numberOfLines={1}>{msgName}</Text>
+                          <Text style={[styles.gmailDate, { color: colors.textTertiary }]}>{msgDateStr}</Text>
+                        </View>
+                        <Text style={[styles.gmailToMe, { color: colors.textSecondary }]} numberOfLines={1}>
+                          to {msgToEmail?.split('@')[0] || 'me'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.gmailBody, { color: colors.textPrimary }]} selectable>{msgBody}</Text>
+                  </View>
+                );
+              })
+            ) : detailItem ? (
+              <>
+                {/* Single message fallback */}
+                {(() => {
+                  const displayName = detailIsInbound
+                    ? parseDisplayName((detailItem.data as InboundEmail).from_name, (detailItem.data as InboundEmail).from_email)
+                    : 'You';
+                  const toEmail = detailItem.data.to_email;
+                  const dateStr = detailIsInbound ? (detailItem.data as InboundEmail).received_at : (detailItem.data as SentEmail).sent_at;
+                  const dateObj = new Date(dateStr);
+                  const formattedDate = !isNaN(dateObj.getTime())
+                    ? `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${pad2(dateObj.getHours())}:${pad2(dateObj.getMinutes())}`
+                    : '';
+                  const body = detailItem.data.body_text?.trim() || (detailItem.kind === 'inbound' ? stripHtmlToText((detailItem.data as InboundEmail).body_html || '') : '') || '';
+                  return (
+                    <>
+                      <View style={styles.gmailSenderRow}>
+                        <View style={[styles.gmailSenderAvatar, { backgroundColor: detailIsInbound ? getAvatarColor(displayName) : '#4F46E5' }]}>
+                          <Text style={styles.gmailSenderInitials}>{detailIsInbound ? getInitials(displayName) : 'You'}</Text>
+                        </View>
+                        <View style={styles.gmailSenderInfo}>
+                          <View style={styles.gmailSenderNameRow}>
+                            <Text style={[styles.gmailSenderName, { color: colors.textPrimary }]} numberOfLines={1}>{displayName}</Text>
+                            <Text style={[styles.gmailDate, { color: colors.textTertiary }]}>{formattedDate}</Text>
+                          </View>
+                          <Text style={[styles.gmailToMe, { color: colors.textSecondary }]} numberOfLines={1}>to {toEmail?.split('@')[0] || 'me'}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.gmailBody, { color: colors.textPrimary }]} selectable>{body}</Text>
+                    </>
+                  );
+                })()}
+              </>
+            ) : null}
+
+            {/* Inline reply card */}
+            {detailShowingInlineReply && detailItem && (
+              <View style={[styles.inlineReplyCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                <View style={styles.inlineReplyHeader}>
+                  <View style={styles.inlineReplyHeaderLeft}>
+                    <Reply size={14} color={colors.textTertiary} />
+                    <Text style={[styles.inlineReplyTo, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {detailReplyToName} &lt;{detailReplyToEmail}&gt;
+                    </Text>
+                  </View>
+                  <Pressable onPress={closeInlineReply} hitSlop={8}>
+                    <X size={16} color={colors.textTertiary} />
+                  </Pressable>
+                </View>
+                <TextInput
+                  ref={inlineReplyRef}
+                  style={[styles.inlineReplyInput, { color: colors.textPrimary }]}
+                  placeholder="Write your reply\u2026"
+                  placeholderTextColor={colors.textTertiary}
+                  value={inlineReplyText}
+                  onChangeText={setInlineReplyText}
+                  multiline
+                  textAlignVertical="top"
+                  autoFocus
+                  onFocus={() => {
+                    setTimeout(() => detailScrollRef.current?.scrollToEnd({ animated: true }), 200);
+                  }}
+                />
+                <View style={styles.inlineReplySendRow}>
+                  <Pressable
+                    style={[styles.inlineReplySendBtn, inlineReplyText.trim() ? styles.inlineReplySendBtnActive : null]}
+                    onPress={() => handleInlineSend(detailItem!)}
+                    disabled={!inlineReplyText.trim() || inlineSending}
+                  >
+                    {inlineSending ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Send size={16} color={inlineReplyText.trim() ? '#FFF' : colors.textTertiary} />
+                    )}
+                    <Text style={[styles.inlineReplySendText, inlineReplyText.trim() && { color: '#FFF' }]}>
+                      {inlineSending ? 'Sending\u2026' : 'Send'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Fixed bottom bar: Reply + Forward */}
+          {!detailShowingInlineReply && detailItem && (detailIsInbound || detailHasThread) && (
+            <View style={[styles.gmailBottomBar, { paddingBottom: Math.max(insets.bottom, 12), borderTopColor: colors.border, backgroundColor: colors.background }]}>
+              <Pressable
+                style={[styles.gmailBottomBtn, { borderColor: colors.border }]}
+                onPress={() => {
+                  setInlineReplyMode('reply');
+                  setTimeout(() => {
+                    inlineReplyRef.current?.focus();
+                    detailScrollRef.current?.scrollToEnd({ animated: true });
+                  }, 200);
+                }}
+              >
+                <Reply size={18} color={colors.textSecondary} />
+                <Text style={[styles.gmailBottomBtnText, { color: colors.textPrimary }]}>Reply</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.gmailBottomBtn, { borderColor: colors.border }]}
+                onPress={() => {
+                  const lastBody = detailHasThread
+                    ? (threadMessages[threadMessages.length - 1]?.body_text || '').trim()
+                    : (detailItem!.data.body_text?.trim() || '');
+                  const fwdMeta = `From: ${detailReplyToName} <${detailReplyToEmail}>\nSubject: ${detailSubject}`;
+                  closeItemAndReply();
+                  openCompose('', `Fwd: ${detailSubject}`, '', 'forward', `${fwdMeta}\n\n${lastBody}`);
+                }}
+              >
+                <Forward size={18} color={colors.textSecondary} />
+                <Text style={[styles.gmailBottomBtnText, { color: colors.textPrimary }]}>Forward</Text>
+              </Pressable>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </Modal>
+  );
 
   return (
     <TabTransitionWrapper routeName="messages">
@@ -657,10 +1003,15 @@ function MessagesScreen() {
           />
         </View>
 
+
+
         <FlatList
-          data={filteredItems}
-          renderItem={renderItem}
-          keyExtractor={getItemId}
+          data={filteredItems as any[]}
+          renderItem={renderItem as any}
+          keyExtractor={(item: any) => {
+            if ('threadId' in item) return `thread:${item.threadId}`;
+            return getItemId(item);
+          }}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={showEmptyState ? styles.emptyContainer : undefined}
@@ -735,7 +1086,9 @@ function MessagesScreen() {
               <Pressable onPress={closeCompose} style={styles.composeIconBtn} hitSlop={8}>
                 <X size={20} color={colors.textPrimary} />
               </Pressable>
-              <Text style={[styles.composeTitle, { color: colors.textPrimary }]}>Compose</Text>
+              <Text style={[styles.composeTitle, { color: colors.textPrimary }]}>
+                {composeMode === 'forward' ? 'Forward' : composeMode === 'reply' ? 'Reply' : 'Compose'}
+              </Text>
               <Pressable
                 style={[styles.sendBtn, (!composeTo.trim() || !composeSubject.trim() || isSending) && styles.sendBtnDisabled]}
                 onPress={handleSendEmail}
@@ -869,15 +1222,24 @@ function MessagesScreen() {
                   fontStyle: composeItalic ? 'italic' : 'normal',
                   textDecorationLine: composeDecoration,
                   color: colors.textPrimary,
+                  ...(forwardedHeader ? { minHeight: 60, maxHeight: 120 } : {}),
                 },
               ]}
               value={composeBody}
               onChangeText={setComposeBody}
-              placeholder="Write your message…"
+              placeholder={composeMode === 'forward' ? 'Add a message (optional)' : 'Write your message…'}
               placeholderTextColor={colors.textSecondary}
               multiline
               textAlignVertical="top"
+              autoFocus={composeMode === 'forward'}
             />
+
+            {forwardedHeader !== '' && (
+              <View style={[styles.forwardedBlock, { borderTopColor: colors.border }]}>
+                <Text style={[styles.forwardedLabel, { color: colors.textTertiary }]}>---------- Forwarded message ----------</Text>
+                <Text style={[styles.forwardedMeta, { color: colors.textSecondary }]}>{forwardedHeader}</Text>
+              </View>
+            )}
           </View>
         </DraggableBottomSheet>
 
@@ -892,7 +1254,7 @@ function MessagesScreen() {
               </View>
 
               <View style={[styles.proxySection, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.proxySectionTitle, { color: colors.textPrimary }]}>Your Proxy Email</Text>
+                <Text style={[styles.proxySectionTitle, { color: colors.textPrimary }]}>Your NextQuark Email ID</Text>
                 {proxyEmail ? (
                   <View style={styles.proxyRow}>
                     <Text style={[styles.proxyAddress, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -954,7 +1316,7 @@ function MessagesScreen() {
           </Pressable>
         </Modal>
 
-        <DetailModal />
+        {detailModal}
       </View>
     </TabTransitionWrapper>
   );
@@ -1010,6 +1372,7 @@ const styles = StyleSheet.create({
     borderColor: '#111827',
   },
   searchInput: { flex: 1, fontSize: 15, color: '#F9FAFB', padding: 0 },
+
   emailItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1019,11 +1382,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     marginVertical: 3,
   },
-  logoAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#0B1120' },
+  logoAvatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  avatarInitials: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   emailContent: { flex: 1, marginLeft: 12, marginRight: 8 },
   emailTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   emailSender: { fontSize: 14, color: '#F9FAFB', flex: 1 },
   emailSenderUnread: { fontWeight: '700' as const, color: '#FFFFFF' },
+  threadCountBadge: { fontSize: 12, fontWeight: '600' as const, marginLeft: 4, marginRight: 2 },
   emailTime: { fontSize: 11, color: '#6B7280', marginLeft: 8 },
   emailSubject: { fontSize: 14, color: '#E5E7EB', marginTop: 2 },
   emailSubjectUnread: { fontWeight: '700' as const, color: '#FFFFFF' },
@@ -1296,36 +1661,120 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  detailContainer: { flex: 1 },
-  detailToolbar: {
+  gmailDetailContainer: { flex: 1 },
+  gmailTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  detailToolbarLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  detailToolbarRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  detailIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  gmailBackBtn: { padding: 6 },
+  gmailTopBarActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  gmailTopBarIcon: { padding: 6 },
+  gmailSubjectRow: { paddingTop: 16, paddingBottom: 12 },
+  gmailSubject: { fontSize: 22, fontWeight: '700' as const, lineHeight: 28 },
+  gmailSenderAvatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  gmailSenderInitials: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  gmailSenderInfo: { flex: 1 },
+  gmailSenderNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gmailSenderName: { fontSize: 15, fontWeight: '700' as const, flex: 1 },
+  gmailDate: { fontSize: 12, marginLeft: 8 },
+  gmailToMe: { fontSize: 13, marginTop: 1 },
+  gmailBodyWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  gmailBody: { fontSize: 15, lineHeight: 22 },
+  gmailSenderRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14, gap: 12 },
+  threadMsgSeparator: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 16, paddingTop: 16 },
+  gmailBottomBar: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  detailTop: {
+    gap: 12,
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  gmailBottomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  gmailBottomBtnText: { fontSize: 14, fontWeight: '600' as const },
+
+  // Gmail-style inline reply
+  inlineReplyCard: {
+    marginTop: 20,
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  inlineReplyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  inlineReplyHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  inlineReplyTo: { fontSize: 13, flex: 1 },
+  inlineReplyInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+    minHeight: 100,
+    maxHeight: 200,
+  },
+  inlineReplySendRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 12,
     paddingBottom: 10,
   },
-  detailMetaBlock: { gap: 6 },
-  detailSubject: { fontSize: 16, fontWeight: '800' as const },
-  detailFromName: { fontSize: 14, fontWeight: '700' as const },
-  detailMeta: { fontSize: 12 },
-  detailBodyWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
-  detailBody: { fontSize: 14, lineHeight: 20 },
+  inlineReplySendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  inlineReplySendBtnActive: {
+    backgroundColor: '#4F46E5',
+  },
+  inlineReplySendText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#6B7280',
+  },
+
+  forwardedBlock: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  forwardedLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    marginBottom: 6,
+  },
+  forwardedMeta: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
 });

@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import TutorialModal from '@/components/TutorialModal';
-import { isRunningInExpoGo } from 'expo';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 let Notifications: any;
 try {
@@ -19,7 +19,16 @@ try {
 
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const TUTORIAL_COMPLETED_KEY = 'nextquark_tutorial_completed';
 const APP_OPENED_KEY = 'nextquark_app_opened';
@@ -31,18 +40,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
   const [appOpenedChecked, setAppOpenedChecked] = useState(false);
-  const notificationListener = useRef<any>();
-  const responseListener = useRef<any>();
+  const notificationListener = useRef<any>(null);
+  const responseListener = useRef<any>(null);
 
   // Handle notification responses (when user taps notification)
   useEffect(() => {
     if (!Notifications) return;
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+    notificationListener.current = Notifications.addNotificationReceivedListener((notification: any) => {
       console.log('Notification received:', notification);
     });
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response: any) => {
       const data = response.notification.request.content.data;
       console.log('Notification tapped:', data);
       
@@ -258,6 +267,24 @@ function RootLayoutNav() {
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="friend-profile"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="leaderboard"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="terms-of-service"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
     </AuthGuard>
   );
@@ -269,15 +296,17 @@ function RootLayout() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView>
-        <ThemeProvider>
-          <AuthProvider>
-            <RootLayoutNav />
-          </AuthProvider>
-        </ThemeProvider>
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+    <ErrorBoundary fallbackMessage="The app encountered an error. Tap below to restart.">
+      <QueryClientProvider client={queryClient}>
+        <GestureHandlerRootView>
+          <ThemeProvider>
+            <AuthProvider>
+              <RootLayoutNav />
+            </AuthProvider>
+          </ThemeProvider>
+        </GestureHandlerRootView>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

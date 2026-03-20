@@ -63,7 +63,6 @@ export default function DraggableBottomSheet({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 2,
         onPanResponderGrant: () => {
-          // @ts-expect-error: private Animated API
           height.stopAnimation((value: number) => {
             startHeightRef.current = value;
           });

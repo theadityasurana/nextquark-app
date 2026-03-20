@@ -7,7 +7,6 @@ import { X, MapPin, Briefcase, Clock, Users, Heart, Bookmark, Share2, Wifi, Buil
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
-import { mockJobs } from '@/mocks/jobs';
 import { fetchJobById, incrementRightSwipe, addToLiveApplicationQueue } from '@/lib/jobs';
 import MatchScoreBadge from '@/components/MatchScoreBadge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,7 +27,7 @@ export default function JobDetailsScreen() {
     enabled: !!id,
   });
 
-  const job = supabaseJob || mockJobs.find((j) => j.id === id);
+  const job = supabaseJob;
 
   if (isLoading) {
     return (

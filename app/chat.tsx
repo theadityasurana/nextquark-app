@@ -20,9 +20,7 @@ import { Image } from 'expo-image';
 import { ArrowLeft, Reply, Forward, Paperclip, Send, ImageIcon, FileText, File, X, Bold, Italic, Underline, Type, ChevronDown, AlertCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchGmailThread, sendGmailMessage, getAvatarUrl } from '@/lib/gmail';
-import { getValidAccessToken } from '@/lib/gmailAuth';
-import type { GmailMessage } from '@/lib/gmail';
+import { getAvatarUrl, fetchThreadMessages, sendEmailViaResend, getOrCreateProxyEmail, type InboundEmail, type SentEmail } from '@/lib/resend';
 
 const TEXT_SIZES = [
   { label: 'Small', size: 12 },
@@ -36,7 +34,14 @@ function ChatScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { threadId } = useLocalSearchParams<{ threadId: string; messageId: string }>();
-  const { userEmail } = useAuth();
+  const { userEmail, supabaseUserId, userName } = useAuth();
+  const [proxyEmail, setProxyEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (supabaseUserId) {
+      getOrCreateProxyEmail(supabaseUserId, userName || undefined).then(setProxyEmail);
+    }
+  }, [supabaseUserId]);
 
   const [replyMode, setReplyMode] = useState<'none' | 'reply' | 'forward'>('none');
   const [showReplyModal, setShowReplyModal] = useState(false);
@@ -55,29 +60,49 @@ function ChatScreen() {
   const [isUnderline, setIsUnderline] = useState(false);
   const [selectedTextSize, setSelectedTextSize] = useState(14);
 
+  interface ThreadMessage {
+    id: string;
+    fromEmail: string;
+    from: string;
+    subject: string | null;
+    body: string;
+    date: string;
+    _kind: 'inbound' | 'sent';
+  }
+
   const threadQuery = useQuery({
-    queryKey: ['gmail-thread', threadId],
-    queryFn: async () => {
-      const token = await getValidAccessToken();
-      return token ? fetchGmailThread(token, threadId!) : [];
+    queryKey: ['mail-thread', threadId, supabaseUserId],
+    queryFn: async (): Promise<ThreadMessage[]> => {
+      if (!supabaseUserId || !threadId) return [];
+      const msgs = await fetchThreadMessages(supabaseUserId, threadId);
+      return msgs.map(msg => {
+        const isSent = msg._kind === 'sent';
+        return {
+          id: msg.id,
+          fromEmail: isSent ? (proxyEmail || userEmail || '') : (msg as InboundEmail).from_email,
+          from: isSent ? 'You' : ((msg as InboundEmail).from_name || (msg as InboundEmail).from_email || ''),
+          subject: msg.subject,
+          body: msg.body_text || '',
+          date: isSent ? (msg as SentEmail).sent_at : (msg as InboundEmail).received_at,
+          _kind: msg._kind,
+        };
+      });
     },
-    enabled: !!threadId,
+    enabled: !!threadId && !!supabaseUserId,
   });
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      if (!toField || !replyText.trim()) return false;
-      const token = await getValidAccessToken();
-      if (!token) return false;
-      const subject = messages.length > 0 ? messages[0].subject : 'No Subject';
+      if (!toField || !replyText.trim() || !supabaseUserId || !proxyEmail) return false;
+      const subject = messages.length > 0 ? (messages[0].subject || 'No Subject') : 'No Subject';
       const replySubject = replyMode === 'forward' ? `Fwd: ${subject}` : `Re: ${subject}`;
-      return sendGmailMessage(token, toField, replySubject, replyText.trim(), threadId);
+      return sendEmailViaResend(proxyEmail, toField, replySubject, replyText.trim(), supabaseUserId);
     },
     onSuccess: (success) => {
       if (success) {
         closeReplyModal();
-        queryClient.invalidateQueries({ queryKey: ['gmail-thread', threadId] });
-        queryClient.invalidateQueries({ queryKey: ['gmail-inbox'] });
+        queryClient.invalidateQueries({ queryKey: ['mail-thread', threadId] });
+        queryClient.invalidateQueries({ queryKey: ['nextquark-mail'] });
         Alert.alert('Sent', 'Your email has been sent successfully.');
       } else {
         Alert.alert('Error', 'Failed to send email. Please try again.');
@@ -94,15 +119,15 @@ function ChatScreen() {
 
   const senderEmail = useMemo(() => {
     if (!firstMessage) return '';
-    const other = messages.find(m => m.fromEmail !== userEmail);
+    const other = messages.find(m => m._kind === 'inbound');
     return other?.fromEmail || firstMessage.fromEmail;
-  }, [messages, userEmail, firstMessage]);
+  }, [messages, firstMessage]);
 
   const senderName = useMemo(() => {
     if (!firstMessage) return '';
-    const other = messages.find(m => m.fromEmail !== userEmail);
+    const other = messages.find(m => m._kind === 'inbound');
     return other?.from || firstMessage.from;
-  }, [messages, userEmail, firstMessage]);
+  }, [messages, firstMessage]);
 
   const handleSend = useCallback(() => {
     if (!replyText.trim()) return;
@@ -138,8 +163,8 @@ function ChatScreen() {
     setBccField('');
   };
 
-  const renderMessage = useCallback(({ item }: { item: GmailMessage }) => {
-    const isUser = item.fromEmail === userEmail;
+  const renderMessage = useCallback(({ item }: { item: ThreadMessage }) => {
+    const isUser = item._kind === 'sent';
     const avatarUrl = getAvatarUrl(item.fromEmail);
 
     return (
@@ -156,14 +181,14 @@ function ChatScreen() {
             <Text style={styles.msgSenderName}>{isUser ? 'You' : item.from}</Text>
             <Text style={styles.msgSenderEmail}>{item.fromEmail}</Text>
           </View>
-          <Text style={styles.msgTimestamp}>{item.date}</Text>
+          <Text style={styles.msgTimestamp}>{new Date(item.date).toLocaleDateString()}</Text>
         </View>
         <View style={styles.emailMsgBody}>
-          <Text style={styles.emailMsgText}>{item.body || item.snippet}</Text>
+          <Text style={styles.emailMsgText}>{item.body}</Text>
         </View>
       </View>
     );
-  }, [userEmail]);
+  }, []);
 
   const getInputStyle = () => {
     const fontStyle: any = {
@@ -255,7 +280,7 @@ function ChatScreen() {
                   <View style={styles.emailFieldsContainer}>
                     <View style={styles.emailFieldRow}>
                       <Text style={styles.emailFieldLabel}>From</Text>
-                      <Text style={styles.emailFieldValue}>{userEmail || 'you@gmail.com'}</Text>
+                      <Text style={styles.emailFieldValue}>{proxyEmail || userEmail || 'loading...'}</Text>
                     </View>
                     <View style={styles.emailFieldDivider} />
                     <View style={styles.emailFieldRow}>

@@ -18,36 +18,8 @@ export interface PaymentResult {
   success: boolean;
   paymentId?: string;
   orderId?: string;
-  signature?: string;
+  paymentLinkId?: string;
   error?: string;
-}
-
-async function createRazorpayOrder(amount: number, currency: string, planType: string, billingCycle: string) {
-  const orderData = {
-    amount: Math.round(amount * 100), // Convert to paise and ensure integer
-    currency: currency,
-    receipt: `receipt_${Date.now()}`,
-    notes: {
-      planType,
-      billingCycle,
-    },
-  };
-
-  const response = await fetch('https://api.razorpay.com/v1/orders', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)}`,
-    },
-    body: JSON.stringify(orderData),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.description || 'Failed to create order');
-  }
-
-  return await response.json();
 }
 
 async function createPaymentLink(amount: number, currency: string, planType: string, billingCycle: string, options: PaymentOptions) {
@@ -65,8 +37,6 @@ async function createPaymentLink(amount: number, currency: string, planType: str
       email: false,
     },
     reminder_enable: false,
-    callback_url: 'https://yourapp.com/payment-callback',
-    callback_method: 'get',
     notes: {
       user_id: options.userId || '',
       plan_type: planType,
@@ -91,9 +61,32 @@ async function createPaymentLink(amount: number, currency: string, planType: str
   return await response.json();
 }
 
+export async function checkPaymentLinkStatus(paymentLinkId: string): Promise<{ paid: boolean; paymentId?: string }> {
+  try {
+    const response = await fetch(`https://api.razorpay.com/v1/payment_links/${paymentLinkId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Basic ${btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)}`,
+      },
+    });
+
+    if (!response.ok) return { paid: false };
+
+    const data = await response.json();
+    if (data.status === 'paid') {
+      const payments = data.payments || [];
+      const paymentId = payments.length > 0 ? payments[0].payment_id : data.id;
+      return { paid: true, paymentId };
+    }
+    return { paid: false };
+  } catch (error) {
+    console.error('Error checking payment link status:', error);
+    return { paid: false };
+  }
+}
+
 export async function initiatePayment(options: PaymentOptions): Promise<PaymentResult> {
   try {
-    // Create payment link
     const paymentLink = await createPaymentLink(
       options.amount,
       options.currency || 'INR',
@@ -102,13 +95,12 @@ export async function initiatePayment(options: PaymentOptions): Promise<PaymentR
       options
     );
     
-    // Open payment link in browser
     await Linking.openURL(paymentLink.short_url);
 
     return {
       success: true,
+      paymentLinkId: paymentLink.id,
       orderId: paymentLink.id,
-      error: 'Payment opened in browser',
     };
   } catch (error: any) {
     return {

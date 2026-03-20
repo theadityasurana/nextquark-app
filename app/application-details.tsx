@@ -46,6 +46,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
+import { getCompanyLogoUrl } from '@/lib/jobs';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: 'AI is cooking 🔥', color: '#92400E', bg: '#FEF3C7' },
@@ -134,20 +135,6 @@ export default function ApplicationDetailsScreen() {
   const application = useMemo(() => {
     if (!appData) return null;
     
-    const getCompanyLogoUrl = (companyName: string, logo?: string, logoUrl?: string): string => {
-      const SUPABASE_URL = 'https://widujxpahzlpegzjjpqp.supabase.co';
-      if (logoUrl && logoUrl.startsWith('http')) return logoUrl;
-      if (logo && logo.startsWith('http')) return logo;
-      if (logoUrl) {
-        return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoUrl}`;
-      }
-      if (logo) {
-        return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logo}`;
-      }
-      const logoPath = `logos/${companyName.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
-      return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoPath}`;
-    };
-
     const companyLogo = getCompanyLogoUrl(
       appData.company_name,
       appData.companyData?.logo,
@@ -195,32 +182,43 @@ export default function ApplicationDetailsScreen() {
     };
   }, [appData]);
 
-  const [showCredentials, setShowCredentials] = useState(false);
-  const [portalEmail, setPortalEmail] = useState('');
-  const [portalPassword, setPortalPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+
 
   const [showVideoModal, setShowVideoModal] = useState(false);
 
-  // Animated pulsing dot + auto-advance — always runs regardless of DB status
-  const pendingStepCount = 11; // 2 base completed + 9 animated steps
+  // Animated pulsing dot + time-based auto-advance that works even when app is closed
+  const TOTAL_STEPS = 9; // steps index 2..10 (9 animated steps)
+  const STEP_DURATION_MS = 13334; // ~13.3 seconds per step × 9 steps ≈ 120 seconds total
   const [activeStepOffset, setActiveStepOffset] = useState(0);
   const [reachedEnd, setReachedEnd] = useState(false);
   const [stepLoaded, setStepLoaded] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const storageKey = `app_step_${id}`;
+  const startTimeKey = `app_start_${id}`;
 
-  // Restore saved step offset on mount
+  // On mount: calculate step from elapsed time since first open
   useEffect(() => {
     if (!id) return;
-    AsyncStorage.getItem(storageKey).then((val) => {
-      if (val !== null) {
-        const saved = parseInt(val, 10);
-        if (!isNaN(saved)) {
-          setActiveStepOffset(saved);
-          if (saved >= pendingStepCount - 2 - 1) setReachedEnd(true);
-        }
+    Promise.all([
+      AsyncStorage.getItem(startTimeKey),
+      AsyncStorage.getItem(storageKey),
+    ]).then(([startStr, stepStr]) => {
+      const now = Date.now();
+      let startTime: number;
+
+      if (startStr) {
+        startTime = parseInt(startStr, 10);
+      } else {
+        // First time opening this application — record start time
+        startTime = now;
+        AsyncStorage.setItem(startTimeKey, String(now));
       }
+
+      const elapsed = now - startTime;
+      const calculatedStep = Math.min(Math.floor(elapsed / STEP_DURATION_MS), TOTAL_STEPS - 1);
+
+      setActiveStepOffset(calculatedStep);
+      if (calculatedStep >= TOTAL_STEPS - 1) setReachedEnd(true);
       setStepLoaded(true);
     });
   }, [id]);
@@ -231,19 +229,18 @@ export default function ApplicationDetailsScreen() {
     AsyncStorage.setItem(storageKey, String(activeStepOffset));
   }, [activeStepOffset, stepLoaded, id]);
 
+  // Live timer: advance steps while screen is open
   useEffect(() => {
     if (reachedEnd || !stepLoaded) return;
     const interval = setInterval(() => {
-      setActiveStepOffset((prev) => {
-        const next = prev + 1;
-        if (next >= pendingStepCount - 2 - 1) {
-          // pendingStepCount - 2 base steps - 1 for zero-index = last animated step
-          setReachedEnd(true);
-          return pendingStepCount - 2 - 1;
-        }
-        return next;
+      AsyncStorage.getItem(startTimeKey).then((startStr) => {
+        if (!startStr) return;
+        const elapsed = Date.now() - parseInt(startStr, 10);
+        const step = Math.min(Math.floor(elapsed / STEP_DURATION_MS), TOTAL_STEPS - 1);
+        setActiveStepOffset(step);
+        if (step >= TOTAL_STEPS - 1) setReachedEnd(true);
       });
-    }, 10000);
+    }, 1000);
     return () => clearInterval(interval);
   }, [reachedEnd, stepLoaded]);
 
@@ -287,11 +284,6 @@ export default function ApplicationDetailsScreen() {
   const LocationIcon = job.locationType === 'remote' ? Wifi : job.locationType === 'hybrid' ? Building2 : MapPin;
   const flowSteps = getFlowSteps();
 
-  const handleSaveCredentials = () => {
-    Alert.alert('Saved', 'Portal credentials saved. AI will use these to apply on your behalf.');
-    setShowCredentials(false);
-  };
-
   const formatSalary = (min: number, max: number) => {
     const fmt = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${n}`);
     return `${fmt(min)} - ${fmt(max)}`;
@@ -308,17 +300,6 @@ export default function ApplicationDetailsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Pressable style={styles.credentialsCard} onPress={() => setShowCredentials(true)}>
-          <View style={styles.credIcon}>
-            <Key size={18} color="#1565C0" />
-          </View>
-          <View style={styles.credContent}>
-            <Text style={styles.credTitle}>Portal Credentials</Text>
-            <Text style={styles.credSubtext}>{portalEmail ? 'Credentials saved' : 'Add login for AI to apply on your behalf'}</Text>
-          </View>
-          <ChevronRight size={18} color={Colors.textTertiary} />
-        </Pressable>
-
         <View style={styles.companyCard}>
           <Image source={{ uri: job.companyLogo }} style={styles.logo} />
           <Text style={styles.jobTitle}>{job.jobTitle}</Text>
@@ -436,51 +417,7 @@ export default function ApplicationDetailsScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showCredentials} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Portal Credentials</Text>
-              <Pressable onPress={() => setShowCredentials(false)} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtext}>Add your login credentials for {job.companyName}'s job portal so the AI agent can apply on your behalf.</Text>
-            <Text style={styles.fieldLabel}>Email / Username</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="your@email.com"
-              placeholderTextColor={Colors.textTertiary}
-              value={portalEmail}
-              onChangeText={setPortalEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <Text style={styles.fieldLabel}>Password</Text>
-            <View style={styles.passwordRow}>
-              <TextInput
-                style={[styles.modalInput, styles.passwordInput]}
-                placeholder="••••••••"
-                placeholderTextColor={Colors.textTertiary}
-                value={portalPassword}
-                onChangeText={setPortalPassword}
-                secureTextEntry={!showPassword}
-              />
-              <Pressable style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
-                {showPassword ? <EyeOff size={18} color={Colors.textTertiary} /> : <Eye size={18} color={Colors.textTertiary} />}
-              </Pressable>
-            </View>
-            <View style={styles.securityNote}>
-              <Key size={14} color={Colors.textTertiary} />
-              <Text style={styles.securityText}>Credentials are encrypted and stored securely</Text>
-            </View>
-            <Pressable style={styles.saveCredBtn} onPress={handleSaveCredentials}>
-              <Check size={18} color="#FFFFFF" />
-              <Text style={styles.saveCredBtnText}>Save Credentials</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+
     </View>
   );
 }

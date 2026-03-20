@@ -8,7 +8,7 @@ import * as FileSystem from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { StepProps } from '@/types/onboarding';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 
 type UserType = 'fresher' | 'job_switch' | null;
 
@@ -96,7 +96,7 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
           return;
         }
 
-        const uploadUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/resumes/${filePath}`;
+        const uploadUrl = getStorageUploadUrl('resumes', filePath);
         
         const response = await fetch(uploadUrl, {
           method: 'POST',

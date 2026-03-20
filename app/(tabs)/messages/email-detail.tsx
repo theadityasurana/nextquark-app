@@ -91,7 +91,7 @@ export default function EmailDetailScreen() {
   const subject = params.subject || '(no subject)';
   const bodyText = params.bodyText || '';
   const bodyHtml = params.bodyHtml || '';
-  const hasHtmlBody = !!bodyHtml.trim() && /<img\s/i.test(bodyHtml);
+  const hasHtmlBody = !!bodyHtml.trim() && (/<img\s/i.test(bodyHtml) || /<(table|div|span|a)\s/i.test(bodyHtml));
   const body = bodyText.trim() || (kind === 'inbound' ? stripHtmlToText(bodyHtml) : '') || '';
   const dateStr = params.dateStr || '';
   const emailId = params.id || '';

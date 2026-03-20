@@ -70,11 +70,13 @@ export interface Job {
     attachmentName?: string;
   }
   
+  export type ApplicationStatus = 'pending' | 'applied' | 'under_review' | 'interviewing' | 'interview_scheduled' | 'offer' | 'rejected' | 'withdrawn' | 'completed' | 'failed' | 'submitted';
+
   export interface Application {
     id: string;
     job: Job;
     appliedDate: string;
-    status: 'pending' | 'applied' | 'under_review' | 'interviewing' | 'interview_scheduled' | 'offer' | 'rejected' | 'withdrawn';
+    status: ApplicationStatus;
     lastActivity: string;
     interviewDate: string | null;
     interviewTime: string | null;
@@ -82,6 +84,58 @@ export interface Job {
     meetingPlatform: 'google_meet' | 'zoom' | 'microsoft_teams' | null;
     verificationOtp: string | null;
     otpReceivedAt: string | null;
+  }
+
+  export interface DbApplicationRow {
+    id: string;
+    user_id: string;
+    job_id: string;
+    company_name: string;
+    job_title: string;
+    job_url: string | null;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    location: string | null;
+    salary_min: number | null;
+    salary_max: number | null;
+    salary_currency: string | null;
+    interview_date: string | null;
+    interview_time: string | null;
+    meeting_link: string | null;
+    meeting_platform: string | null;
+    verification_otp: string | null;
+    otp_received_at: string | null;
+    company_logo?: string | null;
+    company_logo_url?: string | null;
+  }
+
+  export interface DbProfileRow {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+    avatar_url: string | null;
+    subscription_type: string | null;
+    education: Education[] | null;
+    headline: string | null;
+    location: string | null;
+    bio: string | null;
+    phone: string | null;
+    skills: string[] | null;
+    experience: WorkExperience[] | null;
+  }
+
+  export interface DbCompanyRow {
+    name: string;
+    logo_url: string | null;
+    logo: string | null;
+    industry: string | null;
+    location: string | null;
+    website: string | null;
+    linkedin: string | null;
+    description: string | null;
+    size: string | null;
+    company_type: string | null;
   }
   
   export interface WorkExperience {
@@ -172,7 +226,7 @@ export interface Job {
     desiredRoles?: string[];
     preferredCities?: string[];
     workProfessions?: string[];
-    onboardingData?: any;
+    onboardingData?: Record<string, unknown>;
     coverLetter?: string;
     workAuthorizationStatus?: string;
     jobRequirements?: string[];

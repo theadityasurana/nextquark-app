@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Switch, Animated, Alert, ActivityIndicator, TextInput, Image } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Switch, Animated, Alert, ActivityIndicator, TextInput, Image, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Crown, Check, X as XIcon, Zap, Sparkles, Shield, Star, Tag } from 'lucide-react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
-import { initiatePayment } from '@/lib/razorpay';
+import { initiatePayment, checkPaymentLinkStatus } from '@/lib/razorpay';
 import { validateCoupon, calculateDiscountedPrice, type Coupon } from '@/lib/coupons';
 import { activateSubscription, getSubscriptionStatus } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
@@ -39,21 +39,80 @@ export default function PremiumScreen() {
     }
   };
   const { supabaseUserId } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | 'premium'>('pro');
   const [isAnnual, setIsAnnual] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+  const pendingPaymentRef = useRef<{ paymentLinkId: string; planType: 'pro' | 'premium'; billingCycle: string; amount: number; couponCode?: string } | null>(null);
 
-  const { data: subscriptionData } = useQuery({
+  const { data: subscriptionData, refetch: refetchSubscription } = useQuery({
     queryKey: ['subscription-status', supabaseUserId],
     queryFn: () => getSubscriptionStatus(supabaseUserId!),
     enabled: !!supabaseUserId,
   });
 
   const currentSubscription = subscriptionData?.subscription_type || 'free';
+
+  // Poll for payment completion when user returns to the app
+  const verifyPendingPayment = useCallback(async () => {
+    const pending = pendingPaymentRef.current;
+    if (!pending || !supabaseUserId) return;
+
+    setIsVerifying(true);
+    try {
+      // Poll up to 5 times with 2s intervals
+      for (let i = 0; i < 5; i++) {
+        const status = await checkPaymentLinkStatus(pending.paymentLinkId);
+        if (status.paid) {
+          const result = await activateSubscription(
+            supabaseUserId,
+            pending.planType,
+            status.paymentId,
+            pending.paymentLinkId,
+            pending.amount,
+            pending.couponCode
+          );
+
+          pendingPaymentRef.current = null;
+          if (result.success) {
+            await refetchSubscription();
+            queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
+            Alert.alert(
+              'Subscription Activated! 🎉',
+              `You are now subscribed to the ${pending.planType.toUpperCase()} plan!`,
+              [{ text: 'OK', onPress: navigateAfterSubscription }]
+            );
+          } else {
+            Alert.alert('Error', result.error || 'Failed to activate subscription. Please contact support.');
+          }
+          setIsVerifying(false);
+          return;
+        }
+        // Wait 2 seconds before next check
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      // Payment not yet confirmed after polling
+      setIsVerifying(false);
+    } catch (error) {
+      console.error('Error verifying payment:', error);
+      setIsVerifying(false);
+    }
+  }, [supabaseUserId, refetchSubscription, queryClient]);
+
+  // Listen for app returning to foreground after payment
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && pendingPaymentRef.current) {
+        verifyPendingPayment();
+      }
+    });
+    return () => subscription.remove();
+  }, [verifyPendingPayment]);
 
   useEffect(() => {
     const totalWidth = FEATURE_TAGS.length * 140;
@@ -71,14 +130,12 @@ export default function PremiumScreen() {
 
   const getPlanPrice = () => {
     if (selectedPlan === 'free') return 0;
-    if (selectedPlan === 'pro') return isAnnual ? 225 : 20;
-    return isAnnual ? 799 : 79.99;
+    if (selectedPlan === 'pro') return 2; // TEMP: ₹2 for testing
+    return 3; // TEMP: ₹3 for testing
   };
 
   const getPlanPriceInINR = () => {
-    const usdPrice = getPlanPrice();
-    const conversionRate = 83; // 1 USD = 83 INR (approximate)
-    return Math.round(usdPrice * conversionRate);
+    return getPlanPrice(); // TEMP: prices are already in INR for testing
   };
 
   const getFinalPrice = () => {
@@ -114,7 +171,7 @@ export default function PremiumScreen() {
 
     try {
       const finalAmount = getFinalPrice();
-      const finalAmountINR = Math.round(finalAmount * 83); // Convert USD to INR
+      const finalAmountINR = Math.round(finalAmount); // TEMP: already in INR for testing
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -156,15 +213,16 @@ export default function PremiumScreen() {
         userName: user.user_metadata?.full_name || user.user_metadata?.name,
       });
 
-      if (result.success) {
-        // Don't activate subscription yet - wait for payment verification
-        // The subscription will be activated via webhook or manual verification
-        Alert.alert(
-          'Payment Page Opening',
-          'Complete your payment in the browser. Your subscription will be activated once payment is confirmed.',
-          [{ text: 'OK', onPress: navigateAfterSubscription }]
-        );
-      } else {
+      if (result.success && result.paymentLinkId) {
+        // Store pending payment info so we can verify when user returns
+        pendingPaymentRef.current = {
+          paymentLinkId: result.paymentLinkId,
+          planType: selectedPlan,
+          billingCycle: isAnnual ? 'annual' : 'monthly',
+          amount: finalAmountINR,
+          couponCode: appliedCoupon?.code,
+        };
+      } else if (!result.success) {
         Alert.alert('Error', result.error || 'Failed to initiate payment');
       }
     } catch (error: any) {
@@ -266,8 +324,8 @@ export default function PremiumScreen() {
             <Text style={styles.planOptionDesc}>100 applications / month</Text>
           </View>
           <View style={styles.priceCol}>
-            <Text style={styles.planOptionPrice}>{isAnnual ? '$225' : '$20'}</Text>
-            <Text style={styles.planOptionPeriod}>{isAnnual ? '/year' : '/month'}</Text>
+            <Text style={styles.planOptionPrice}>₹2</Text>
+            <Text style={styles.planOptionPeriod}>/test</Text>
           </View>
         </Pressable>
 
@@ -295,8 +353,8 @@ export default function PremiumScreen() {
             <Text style={styles.planOptionDesc}>500 applications / month</Text>
           </View>
           <View style={styles.priceCol}>
-            <Text style={styles.planOptionPrice}>{isAnnual ? '$799' : '$79.99'}</Text>
-            <Text style={styles.planOptionPeriod}>{isAnnual ? '/year' : '/month'}</Text>
+            <Text style={styles.planOptionPrice}>₹3</Text>
+            <Text style={styles.planOptionPeriod}>/test</Text>
           </View>
         </Pressable>
 
@@ -336,15 +394,15 @@ export default function PremiumScreen() {
           <View style={styles.priceBreakdown}>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Original Price:</Text>
-              <Text style={styles.priceValue}>${getPlanPrice()}</Text>
+              <Text style={styles.priceValue}>₹{getPlanPrice()}</Text>
             </View>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Discount:</Text>
-              <Text style={styles.discountValue}>-${(getPlanPrice() - getFinalPrice()).toFixed(2)}</Text>
+              <Text style={styles.discountValue}>-₹{(getPlanPrice() - getFinalPrice()).toFixed(2)}</Text>
             </View>
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total:</Text>
-              <Text style={styles.totalValue}>${getFinalPrice().toFixed(2)}</Text>
+              <Text style={styles.totalValue}>₹{getFinalPrice().toFixed(2)}</Text>
             </View>
           </View>
         )}
@@ -352,13 +410,18 @@ export default function PremiumScreen() {
         <Pressable 
           style={[
             styles.subscribeBtn, 
-            (isProcessing || currentSubscription === selectedPlan) && styles.subscribeBtnDisabled
+            (isProcessing || isVerifying || currentSubscription === selectedPlan) && styles.subscribeBtnDisabled
           ]} 
           onPress={handleSubscribe} 
-          disabled={isProcessing || currentSubscription === selectedPlan}
+          disabled={isProcessing || isVerifying || currentSubscription === selectedPlan}
         >
           {isProcessing ? (
             <ActivityIndicator color="#FFFFFF" />
+          ) : isVerifying ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator color="#FFFFFF" size="small" />
+              <Text style={styles.subscribeBtnText}>Verifying Payment...</Text>
+            </View>
           ) : currentSubscription === selectedPlan ? (
             <Text style={styles.subscribeBtnText}>Current Plan</Text>
           ) : (
@@ -549,5 +612,5 @@ const styles = StyleSheet.create({
   featureCarouselContainer: { height: 40, overflow: 'hidden', marginBottom: 24 },
   featureCarousel: { flexDirection: 'row', gap: 10 },
   featureTag: { backgroundColor: Colors.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: Colors.borderLight },
-  featureTagText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textPrimary, whiteSpace: 'nowrap' as const },
+  featureTagText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textPrimary },
 });

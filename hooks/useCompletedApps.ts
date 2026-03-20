@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 
-const PENDING_STEP_COUNT = 11; // must match application-details.tsx
-const LAST_STEP = PENDING_STEP_COUNT - 2 - 1; // 8
+const TOTAL_ANIMATED_STEPS = 9; // must match application-details.tsx
+const LAST_STEP = TOTAL_ANIMATED_STEPS - 1; // 8
 
 /**
  * Given a list of application IDs, returns a Set of IDs

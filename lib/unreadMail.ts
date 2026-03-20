@@ -29,7 +29,7 @@ async function fetchUnreadCount(userId: string): Promise<number> {
     .eq('is_archived', false);
 
   if (error) {
-    console.log('fetchUnreadCount error:', error.message);
+    if (__DEV__) console.log('fetchUnreadCount error:', error.message);
     return 0;
   }
   return count || 0;

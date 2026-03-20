@@ -6,7 +6,7 @@ import { Image } from 'expo-image';
 import { X, Trophy, Crown } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
-import { supabase } from '@/lib/supabase';
+import { supabase, getProfilePictureUrl } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Stack } from 'expo-router';
 
@@ -67,10 +67,10 @@ export default function LeaderboardScreen() {
               if (user.avatar_url.startsWith('http')) {
                 avatarUrl = user.avatar_url;
               } else {
-                avatarUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${user.avatar_url}`;
+                avatarUrl = getProfilePictureUrl(user.avatar_url);
               }
             } else {
-              avatarUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.full_name || 'User') + '&background=6366f1&color=fff&size=200';
+              avatarUrl = 'https://api.dicebear.com/9.x/adventurer/png?seed=' + encodeURIComponent(user.id || user.full_name || 'User') + '&size=200';
             }
 
             const isPremium = user.subscription_type === 'premium' || user.subscription_type === 'pro';

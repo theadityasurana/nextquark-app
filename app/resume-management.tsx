@@ -8,7 +8,7 @@ import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { Resume } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 import { getSubscriptionStatus } from '@/lib/subscription';
 import { useQuery } from '@tanstack/react-query';
 
@@ -181,7 +181,7 @@ export default function ResumeManagementScreen() {
         return;
       }
 
-      const uploadUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/resumes/${filePath}`;
+      const uploadUrl = getStorageUploadUrl('resumes', filePath);
       
       const response = await fetch(uploadUrl, {
         method: 'POST',

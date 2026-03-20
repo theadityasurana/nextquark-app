@@ -16,10 +16,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, SlidersHorizontal, Sparkles, MapPin, Check, ChevronDown, Search, RefreshCw } from 'lucide-react-native';
+import { X, Heart, SlidersHorizontal, Sparkles, MapPin, Check, ChevronDown, Search, RefreshCw, Globe } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
+import Colors, { darkColors } from '@/constants/colors';
 import { mockJobs } from '@/mocks/jobs';
 import { Job } from '@/types';
 import JobCard from '@/components/JobCard';
@@ -105,6 +105,7 @@ export default function HomeScreen() {
   const queryClient = useQueryClient();
   const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile } = useAuth();
   const colors = useColors();
+  const isDark = colors.background === darkColors.background;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -118,7 +119,7 @@ export default function HomeScreen() {
   const [roleSearch, setRoleSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [locationSearch, setLocationSearch] = useState('');
-  const [feedMode, setFeedMode] = useState<'discover' | 'foryou'>('discover');
+  const [feedMode, setFeedMode] = useState<'discover' | 'india' | 'foryou'>('india');
   const [notification, setNotification] = useState<{ visible: boolean; job?: Job } | null>(null);
   const [isSwipeEnabled, setIsSwipeEnabled] = useState(true);
   const [activeSearchTags, setActiveSearchTags] = useState<string[]>([]);
@@ -129,6 +130,12 @@ export default function HomeScreen() {
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   const loadingWords = ['Vibe', 'Check', 'Apply'];
+
+  const { data: supabaseJobs, isLoading: isLoadingJobs, refetch: refetchJobs } = useQuery({
+    queryKey: ['supabase-jobs'],
+    queryFn: fetchJobsFromSupabase,
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Floating bounce + loading word animation
   useEffect(() => {
@@ -171,14 +178,6 @@ export default function HomeScreen() {
       });
     }, [])
   );
-
-
-
-  const { data: supabaseJobs, isLoading: isLoadingJobs, refetch: refetchJobs } = useQuery({
-    queryKey: ['supabase-jobs'],
-    queryFn: fetchJobsFromSupabase,
-    staleTime: 1000 * 60 * 5,
-  });
 
   const { data: allCompanies = [] } = useQuery({
     queryKey: ['all-companies'],
@@ -245,6 +244,16 @@ export default function HomeScreen() {
       const swipedSet = new Set(swipedJobIds);
       filtered = filtered.filter(job => !swipedSet.has(job.id));
     }
+    // Apply India filter
+    filtered = filtered.filter(job => {
+      const keyword = 'india';
+      return job.jobTitle.toLowerCase().includes(keyword) ||
+        job.companyName.toLowerCase().includes(keyword) ||
+        job.location.toLowerCase().includes(keyword) ||
+        job.description.toLowerCase().includes(keyword) ||
+        job.skills.some(skill => skill.toLowerCase().includes(keyword));
+    });
+    // Apply desired roles filter
     if (userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
       filtered = filtered.filter(job => 
         userProfile.desiredRoles!.some(role => {
@@ -258,6 +267,22 @@ export default function HomeScreen() {
     return filtered.length;
   }, [allJobs, swipedJobIds, userProfile]);
 
+  const indiaCount = useMemo(() => {
+    let filtered = allJobs;
+    if (swipedJobIds.length > 0) {
+      const swipedSet = new Set(swipedJobIds);
+      filtered = filtered.filter(job => !swipedSet.has(job.id));
+    }
+    return filtered.filter(job => {
+      const keyword = 'india';
+      return job.jobTitle.toLowerCase().includes(keyword) ||
+        job.companyName.toLowerCase().includes(keyword) ||
+        job.location.toLowerCase().includes(keyword) ||
+        job.description.toLowerCase().includes(keyword) ||
+        job.skills.some(skill => skill.toLowerCase().includes(keyword));
+    }).length;
+  }, [allJobs, swipedJobIds]);
+
   const jobs: Job[] = useMemo(() => {
     let filtered = allJobs;
 
@@ -266,16 +291,28 @@ export default function HomeScreen() {
       filtered = filtered.filter(job => !swipedSet.has(job.id));
     }
 
-    // For You mode: filter by user's desired roles
-    if (feedMode === 'foryou' && userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
-      filtered = filtered.filter(job => 
-        userProfile.desiredRoles!.some(role => {
-          const roleLower = role.toLowerCase();
-          return job.jobTitle.toLowerCase().includes(roleLower) ||
-            job.description.toLowerCase().includes(roleLower) ||
-            job.skills.some(skill => skill.toLowerCase().includes(roleLower));
-        })
-      );
+    // For You mode: filter by India + user's desired roles
+    if (feedMode === 'foryou') {
+      filtered = filtered.filter(job => {
+        const keyword = 'india';
+        return job.jobTitle.toLowerCase().includes(keyword) ||
+          job.companyName.toLowerCase().includes(keyword) ||
+          job.location.toLowerCase().includes(keyword) ||
+          job.description.toLowerCase().includes(keyword) ||
+          job.employmentType.toLowerCase().includes(keyword) ||
+          job.locationType.toLowerCase().includes(keyword) ||
+          job.skills.some(skill => skill.toLowerCase().includes(keyword));
+      });
+      if (userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
+        filtered = filtered.filter(job => 
+          userProfile.desiredRoles!.some(role => {
+            const roleLower = role.toLowerCase();
+            return job.jobTitle.toLowerCase().includes(roleLower) ||
+              job.description.toLowerCase().includes(roleLower) ||
+              job.skills.some(skill => skill.toLowerCase().includes(roleLower));
+          })
+        );
+      }
     }
 
     // ACTIVE FILTERS (ALL FUNCTIONAL):
@@ -291,6 +328,20 @@ export default function HomeScreen() {
     // ✅ Posted Within (Date Range) - NOW WORKING
     // ✅ Job Levels - NOW WORKING (filters by experienceLevel, jobTitle, description)
     // ✅ Job Requirements - NOW WORKING (H1B, Security Clearance, No Degree, Remote Only, Relocation)
+
+    // India mode: filter by India keyword
+    if (feedMode === 'india') {
+      filtered = filtered.filter(job => {
+        const keyword = 'india';
+        return job.jobTitle.toLowerCase().includes(keyword) ||
+          job.companyName.toLowerCase().includes(keyword) ||
+          job.location.toLowerCase().includes(keyword) ||
+          job.description.toLowerCase().includes(keyword) ||
+          job.employmentType.toLowerCase().includes(keyword) ||
+          job.locationType.toLowerCase().includes(keyword) ||
+          job.skills.some(skill => skill.toLowerCase().includes(keyword));
+      });
+    }
 
     // Apply active search tags from search page
     if (activeSearchTags.length > 0) {
@@ -641,17 +692,15 @@ export default function HomeScreen() {
 
     setSwipeDirection(null);
     
-    // Delay resetting position and incrementing index to avoid flicker
+    // Increment index first, then reset position atomically to avoid flicker
+    setCurrentIndex((prev) => prev + 1);
+    position.setValue({ x: 0, y: 0 });
+    
+    // Re-enable swiping after a short delay
     setTimeout(() => {
-      position.setValue({ x: 0, y: 0 });
-      setCurrentIndex((prev) => prev + 1);
-      
-      // Re-enable swiping after card transition completes
-      setTimeout(() => {
-        console.log('🔓 Re-enabling swipe - transition complete');
-        setIsSwipeEnabled(true);
-      }, 100);
-    }, 150);
+      console.log('🔓 Re-enabling swipe - transition complete');
+      setIsSwipeEnabled(true);
+    }, 100);
   }, [currentIndex, position, triggerHaptic, jobs, refetchJobs, addSwipedJobId, supabaseUserId, userProfile, userName, queryClient]);
 
   const forceSwipe = useCallback((direction: string) => {
@@ -1007,25 +1056,45 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.feedToggleRow}>
+      <View style={{ flexShrink: 0 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feedToggleRow}>
         <Pressable
-          style={[styles.feedToggleBtn, feedMode === 'discover' ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } : { backgroundColor: 'transparent', borderColor: '#FFFFFF', borderWidth: 1 }]}
+          style={[styles.feedToggleBtn, feedMode === 'discover'
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
           onPress={() => setFeedMode('discover')}
         >
-          <Text style={[styles.feedToggleText, { color: feedMode === 'discover' ? '#000000' : '#FFFFFF' }]}>Discover</Text>
-          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'discover' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)' }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? '#000000' : '#FFFFFF' }]}>{allJobs.length}</Text>
+          <Globe size={14} color={feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000')} />
+          <Text style={[styles.feedToggleText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>Global</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'discover' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{allJobs.length}</Text>
           </View>
         </Pressable>
         <Pressable
-          style={[styles.feedToggleBtn, feedMode === 'foryou' ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } : { backgroundColor: 'transparent', borderColor: '#FFFFFF', borderWidth: 1 }]}
-          onPress={() => setFeedMode('foryou')}
+          style={[styles.feedToggleBtn, feedMode === 'india'
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
+          onPress={() => setFeedMode('india')}
         >
-          <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>For You</Text>
-          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)' }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : '#FFFFFF' }]}>{forYouCount}</Text>
+          <Text style={{ fontSize: 14 }}>🇮🇳</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>India</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'india' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{indiaCount}</Text>
           </View>
         </Pressable>
+        <Pressable
+          style={[styles.feedToggleBtn, feedMode === 'foryou'
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
+          onPress={() => setFeedMode('foryou')}
+        >
+          <Heart size={14} color={feedMode === 'foryou' ? '#EF4444' : (isDark ? '#FFFFFF' : '#000000')} fill={feedMode === 'foryou' ? '#EF4444' : 'transparent'} />
+          <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>For You</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{forYouCount}</Text>
+          </View>
+        </Pressable>
+      </ScrollView>
       </View>
 
       {activeSearchTags.length > 0 && (
@@ -1036,9 +1105,11 @@ export default function HomeScreen() {
                 <Text style={styles.activeSearchTagText}>{tag}</Text>
               </View>
             ))}
-            <Pressable style={styles.clearSearchButton} onPress={clearSearchTags}>
-              <Text style={styles.clearSearchText}>Clear</Text>
-            </Pressable>
+            {activeSearchTags.length > 0 && (
+              <Pressable style={styles.clearSearchButton} onPress={clearSearchTags}>
+                <Text style={styles.clearSearchText}>Clear</Text>
+              </Pressable>
+            )}
           </ScrollView>
         </View>
       )}
@@ -1328,8 +1399,8 @@ export default function HomeScreen() {
               <Pressable style={styles.resetFilterBtn} onPress={handleResetFilters}>
                 <Text style={styles.resetFilterBtnText}>Reset</Text>
               </Pressable>
-              <Pressable style={[styles.applyFilterBtn, { backgroundColor: colors.secondary }]} onPress={handleApplyFilters}>
-                <Text style={[styles.applyFilterBtnText, { color: colors.surface }]}>Apply Filters ({jobs.length})</Text>
+              <Pressable style={[styles.applyFilterBtn, { backgroundColor: colors.textPrimary }]} onPress={handleApplyFilters}>
+                <Text style={[styles.applyFilterBtnText, { color: colors.background }]}>Apply Filters ({jobs.length})</Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -1536,9 +1607,9 @@ const styles = StyleSheet.create({
   filterBadge: { position: 'absolute' as const, top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   filterBadgeText: { fontSize: 10, fontWeight: '700' as const, color: "#000" },
   aiButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  feedToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 6 },
-  feedToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  feedToggleText: { fontSize: 13, fontWeight: '600' as const },
+  feedToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  feedToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  feedToggleText: { fontSize: 12, fontWeight: '600' as const },
   feedToggleBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
   feedToggleBadgeText: { fontSize: 10, fontWeight: '700' as const },
   activeSearchContainer: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#000000' },
@@ -1550,12 +1621,12 @@ const styles = StyleSheet.create({
   cardsContainer: { flex: 0.9, paddingHorizontal: 12, paddingTop: 2, paddingBottom: 8 },
   cardWrapper: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
   overlayLabel: { position: 'absolute' as const, zIndex: 10, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
-  likeLabel: { top: 40, left: 24, backgroundColor: "#FFF", borderWidth: 2, borderColor: "#DDD" },
-  likeLabelText: { fontSize: 24, fontWeight: '900' as const, color: "#000", letterSpacing: 2 },
-  nopeLabel: { top: 40, right: 24, backgroundColor: "#FFF", borderWidth: 2, borderColor: "#DDD" },
-  nopeLabelText: { fontSize: 24, fontWeight: '900' as const, color: "#000", letterSpacing: 2 },
-  saveLabel: { bottom: 60, alignSelf: 'center', left: '35%', backgroundColor: '#EEEEEE', borderWidth: 2, borderColor: "#DDD" },
-  saveLabelText: { fontSize: 24, fontWeight: '900' as const, color: "#000", letterSpacing: 2 },
+  likeLabel: { top: 40, left: 24, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#16a34a' },
+  likeLabelText: { fontSize: 24, fontWeight: '900' as const, color: '#FFFFFF', letterSpacing: 2 },
+  nopeLabel: { top: 40, right: 24, backgroundColor: '#ef4444', borderWidth: 2, borderColor: '#dc2626' },
+  nopeLabelText: { fontSize: 24, fontWeight: '900' as const, color: '#FFFFFF', letterSpacing: 2 },
+  saveLabel: { bottom: 60, alignSelf: 'center', left: '35%', backgroundColor: '#3b82f6', borderWidth: 2, borderColor: '#2563eb' },
+  saveLabelText: { fontSize: 24, fontWeight: '900' as const, color: '#FFFFFF', letterSpacing: 2 },
   actionBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20, paddingTop: 12, paddingHorizontal: 20, backgroundColor: "#FFF" },
   actionButton: { justifyContent: 'center', alignItems: 'center', borderRadius: 999, shadowColor: "rgba(0,0,0,0.1)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 4 },
   passButton: { width: 60, height: 60, backgroundColor: "#FFF", borderWidth: 2, borderColor: "#DDD" },

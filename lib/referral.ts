@@ -46,15 +46,15 @@ export async function applyReferralCode(
   referralCode: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    console.log('🎁 [REFERRAL] Starting applyReferralCode:', { newUserId, referralCode });
+    if (__DEV__) console.log('🎁 [REFERRAL] Starting applyReferralCode:', { newUserId, referralCode });
     
     if (!referralCode.trim()) {
-      console.log('❌ [REFERRAL] Empty referral code');
+      if (__DEV__) console.log('❌ [REFERRAL] Empty referral code');
       return { success: false, message: 'Invalid referral code' };
     }
 
     // Find referrer by code (use service role to bypass RLS)
-    console.log('🔍 [REFERRAL] Looking up referral code:', referralCode.toUpperCase());
+    if (__DEV__) console.log('🔍 [REFERRAL] Looking up referral code:', referralCode.toUpperCase());
     const { data: referrers, error: referrerError } = await supabase
       .from('profiles')
       .select('id, applications_remaining, applications_limit, referral_swipes_earned')
@@ -62,16 +62,16 @@ export async function applyReferralCode(
       .limit(1);
 
     if (referrerError || !referrers || referrers.length === 0) {
-      console.log('❌ [REFERRAL] Referral code not found:', referrerError?.message);
+      if (__DEV__) console.log('❌ [REFERRAL] Referral code not found:', referrerError?.message);
       return { success: false, message: 'Referral code not found' };
     }
 
     const referrer = referrers[0];
-    console.log('✅ [REFERRAL] Found referrer:', referrer.id);
+    if (__DEV__) console.log('✅ [REFERRAL] Found referrer:', referrer.id);
 
     // Prevent self-referral
     if (referrer.id === newUserId) {
-      console.log('❌ [REFERRAL] Self-referral attempt');
+      if (__DEV__) console.log('❌ [REFERRAL] Self-referral attempt');
       return { success: false, message: 'Cannot use your own referral code' };
     }
 
@@ -83,12 +83,12 @@ export async function applyReferralCode(
       .single();
 
     if (existingReferral) {
-      console.log('❌ [REFERRAL] User already used a referral code');
+      if (__DEV__) console.log('❌ [REFERRAL] User already used a referral code');
       return { success: false, message: 'You have already used a referral code' };
     }
 
-    console.log('💰 [REFERRAL] Awarding swipes to referrer...');
-    console.log('🔍 [REFERRAL] Referrer current swipes:', {
+    if (__DEV__) console.log('💰 [REFERRAL] Awarding swipes to referrer...');
+    if (__DEV__) console.log('🔍 [REFERRAL] Referrer current swipes:', {
       applications_remaining: referrer.applications_remaining,
       applications_limit: referrer.applications_limit
     });
@@ -108,7 +108,7 @@ export async function applyReferralCode(
       referrerUpdateError = rpcError;
       
       if (rpcError) {
-        console.log('⚠️ [REFERRAL] RPC failed, trying direct update:', rpcError.message);
+        if (__DEV__) console.log('⚠️ [REFERRAL] RPC failed, trying direct update:', rpcError.message);
         // Fallback: try direct update (might work if RLS allows)
         const { error: directError } = await supabase
           .from('profiles')
@@ -122,24 +122,24 @@ export async function applyReferralCode(
         referrerUpdateError = directError;
       }
     } catch (e: any) {
-      console.log('⚠️ [REFERRAL] Exception updating referrer:', e);
+      if (__DEV__) console.log('⚠️ [REFERRAL] Exception updating referrer:', e);
       referrerUpdateError = e;
     }
 
-    console.log('🔍 [REFERRAL] Referrer new swipes:', {
+    if (__DEV__) console.log('🔍 [REFERRAL] Referrer new swipes:', {
       applications_remaining: newReferrerRemaining,
       applications_limit: newReferrerLimit,
       referral_swipes_earned: newReferrerEarned
     });
 
     if (referrerUpdateError) {
-      console.log('❌ [REFERRAL] Error updating referrer:', referrerUpdateError.message || referrerUpdateError);
-      console.log('❌ [REFERRAL] Full error:', JSON.stringify(referrerUpdateError));
+      if (__DEV__) console.log('❌ [REFERRAL] Error updating referrer:', referrerUpdateError.message || referrerUpdateError);
+      if (__DEV__) console.log('❌ [REFERRAL] Full error:', JSON.stringify(referrerUpdateError));
     } else {
-      console.log('✅ [REFERRAL] Referrer updated successfully');
+      if (__DEV__) console.log('✅ [REFERRAL] Referrer updated successfully');
     }
 
-    console.log('💰 [REFERRAL] Awarding swipes to new user...');
+    if (__DEV__) console.log('💰 [REFERRAL] Awarding swipes to new user...');
     // Award swipes to new user - ensure they get exactly 45 swipes (40 default + 5 bonus)
     const { data: newUser } = await supabase
       .from('profiles')
@@ -147,7 +147,7 @@ export async function applyReferralCode(
       .eq('id', newUserId)
       .single();
 
-    console.log('🔍 [REFERRAL] New user current swipes:', {
+    if (__DEV__) console.log('🔍 [REFERRAL] New user current swipes:', {
       applications_remaining: newUser?.applications_remaining,
       applications_limit: newUser?.applications_limit
     });
@@ -165,18 +165,18 @@ export async function applyReferralCode(
       })
       .eq('id', newUserId);
 
-    console.log('🔍 [REFERRAL] New user final swipes:', {
+    if (__DEV__) console.log('🔍 [REFERRAL] New user final swipes:', {
       applications_remaining: totalSwipesForNewUser,
       applications_limit: totalSwipesForNewUser
     });
 
     if (newUserUpdateError) {
-      console.log('❌ [REFERRAL] Error updating new user:', newUserUpdateError.message);
+      if (__DEV__) console.log('❌ [REFERRAL] Error updating new user:', newUserUpdateError.message);
     } else {
-      console.log('✅ [REFERRAL] New user updated successfully');
+      if (__DEV__) console.log('✅ [REFERRAL] New user updated successfully');
     }
 
-    console.log('📝 [REFERRAL] Recording referral...');
+    if (__DEV__) console.log('📝 [REFERRAL] Recording referral...');
     // Record referral
     const { error: insertError } = await supabase.from('referrals').insert({
       referrer_id: referrer.id,
@@ -186,12 +186,12 @@ export async function applyReferralCode(
     });
 
     if (insertError) {
-      console.log('❌ [REFERRAL] Error inserting referral record:', insertError.message);
+      if (__DEV__) console.log('❌ [REFERRAL] Error inserting referral record:', insertError.message);
     } else {
-      console.log('✅ [REFERRAL] Referral recorded successfully');
+      if (__DEV__) console.log('✅ [REFERRAL] Referral recorded successfully');
     }
 
-    console.log('🎉 [REFERRAL] Referral process completed successfully!');
+    if (__DEV__) console.log('🎉 [REFERRAL] Referral process completed successfully!');
     return { success: true, message: `Welcome! You received ${SWIPES_PER_REFERRAL} bonus swipes (${baseSwipes + SWIPES_PER_REFERRAL} total)!` };
   } catch (error) {
     console.error('💥 [REFERRAL] Exception in applyReferralCode:', error);

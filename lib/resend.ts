@@ -1,8 +1,7 @@
-import { supabase } from './supabase';
+import { supabase, SUPABASE_FUNCTIONS_URL } from './supabase';
 
 const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
 const PROXY_DOMAIN = 'nextquark.in';
-const SUPABASE_FUNCTIONS_URL = 'https://widujxpahzlpegzjjpqp.supabase.co/functions/v1';
 
 export interface InboundEmail {
   id: string;
@@ -84,7 +83,7 @@ export async function getOrCreateProxyEmail(userId: string, userName?: string): 
     const data = await res.json();
     return data?.proxy_address || null;
   } catch (e) {
-    console.log('getOrCreateProxyEmail error:', e);
+    if (__DEV__) console.log('getOrCreateProxyEmail error:', e);
     return null;
   }
 }
@@ -99,7 +98,7 @@ export async function fetchInboundEmails(userId: string): Promise<InboundEmail[]
       .limit(50);
 
     if (error) {
-      console.log('Error fetching inbound emails:', error.message);
+      if (__DEV__) console.log('Error fetching inbound emails:', error.message);
       return [];
     }
     return (data || []).map((row: any) => ({
@@ -109,7 +108,7 @@ export async function fetchInboundEmails(userId: string): Promise<InboundEmail[]
       is_read: normalizeMaybeBool(row.is_read),
     })) as InboundEmail[];
   } catch (e) {
-    console.log('fetchInboundEmails error:', e);
+    if (__DEV__) console.log('fetchInboundEmails error:', e);
     return [];
   }
 }
@@ -151,7 +150,7 @@ export async function fetchStarredEmails(userId: string): Promise<{ inbound: Inb
       sent: hasSentStar ? sent.filter((x) => x.is_starred) : sent,
     };
   } catch (e) {
-    console.log('fetchStarredEmails error:', e);
+    if (__DEV__) console.log('fetchStarredEmails error:', e);
     return { inbound: [], sent: [] };
   }
 }
@@ -169,7 +168,7 @@ export async function fetchSentEmails(userId: string): Promise<SentEmail[]> {
       .limit(50);
 
     if (error) {
-      console.log('Error fetching sent emails:', error.message);
+      if (__DEV__) console.log('Error fetching sent emails:', error.message);
       return [];
     }
     return ((data || []) as any[]).map((row: any) => ({
@@ -178,7 +177,7 @@ export async function fetchSentEmails(userId: string): Promise<SentEmail[]> {
       is_archived: normalizeMaybeBool(row.is_archived),
     })) as SentEmail[];
   } catch (e) {
-    console.log('fetchSentEmails error:', e);
+    if (__DEV__) console.log('fetchSentEmails error:', e);
     return [];
   }
 }
@@ -226,7 +225,7 @@ export async function sendEmailViaResend(
 
     if (!res.ok) {
       const errText = await res.text();
-      console.log('Resend API error:', res.status, errText);
+      if (__DEV__) console.log('Resend API error:', res.status, errText);
       return false;
     }
 
@@ -251,7 +250,7 @@ export async function sendEmailViaResend(
 
     return true;
   } catch (e) {
-    console.log('sendEmailViaResend error:', e);
+    if (__DEV__) console.log('sendEmailViaResend error:', e);
     return false;
   }
 }
@@ -339,7 +338,7 @@ export async function fetchThreadMessages(userId: string, threadId: string): Pro
       return new Date(aDate).getTime() - new Date(bDate).getTime();
     });
   } catch (e) {
-    console.log('fetchThreadMessages error:', e);
+    if (__DEV__) console.log('fetchThreadMessages error:', e);
   }
   return messages;
 }
@@ -408,7 +407,7 @@ export async function forwardEmail(
 
     return res.ok;
   } catch (e) {
-    console.log('forwardEmail error:', e);
+    if (__DEV__) console.log('forwardEmail error:', e);
     return false;
   }
 }

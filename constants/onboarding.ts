@@ -95,7 +95,7 @@ export const AuthColors = {
   'Growth Marketing Manager', 'Performance Marketing Manager', 'SEO Specialist',
   'Social Media Manager', 'Brand Manager', 'Marketing Director', 'CMO',
   'Email Marketing Specialist', 'Marketing Analyst', 'Demand Generation Manager',
-  'Field Marketing Manager', 'Product Marketing Manager', 'Content Strategist',
+  'Field Marketing Manager', 'Content Strategist',
   'Copywriter', 'Marketing Operations Manager',
   // Sales
   'Sales Representative', 'Account Executive', 'Sales Manager', 'Business Development Manager',
@@ -119,7 +119,7 @@ export const AuthColors = {
   // Finance
   'Financial Analyst', 'Accountant', 'Finance Manager', 'CFO',
   // Customer Support
-  'Customer Support Specialist', 'Customer Success Manager', 'Support Manager',
+  'Customer Support Specialist', 'Support Manager',
   // Other
   'Technical Writer', 'Community Manager', 'Partnerships Manager',
 ];

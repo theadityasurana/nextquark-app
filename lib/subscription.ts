@@ -31,14 +31,22 @@ export async function activateSubscription(
 
     const applicationsLimit = SUBSCRIPTION_LIMITS[subscriptionType];
 
-    // Update user subscription
+    // Fetch current remaining swipes to add on top
+    const { data: currentProfile } = await supabase
+      .from('profiles')
+      .select('applications_remaining')
+      .eq('id', userId)
+      .single();
+    const currentRemaining = currentProfile?.applications_remaining || 0;
+
+    // Update user subscription — add new plan limit on top of existing remaining swipes
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
         subscription_type: subscriptionType,
         subscription_start_date: startDate.toISOString(),
         subscription_end_date: endDate.toISOString(),
-        applications_remaining: applicationsLimit,
+        applications_remaining: currentRemaining + applicationsLimit,
         applications_limit: applicationsLimit,
         last_reset_date: startDate.toISOString(),
       })

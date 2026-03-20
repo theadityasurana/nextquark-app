@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
@@ -49,6 +51,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useColors } from '@/contexts/useColors';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import DraggableBottomSheet from '@/components/DraggableBottomSheet';
+import { isValidEmail, sanitizeSearchInput } from '@/lib/validation';
 import {
   archiveInbound,
   archiveSent,
@@ -156,6 +159,44 @@ function stripHtmlToText(html: string): string {
     .trim();
 }
 
+function AutoHeightWebView({ html, textColor, bgColor }: { html: string; textColor: string; bgColor: string }) {
+  const [height, setHeight] = useState(80);
+  const injectedJS = `
+    (function() {
+      function postHeight() {
+        var h = document.documentElement.scrollHeight || document.body.scrollHeight;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ height: h }));
+      }
+      postHeight();
+      new MutationObserver(postHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
+      window.addEventListener('load', postHeight);
+      setTimeout(postHeight, 300);
+      setTimeout(postHeight, 1000);
+    })();
+    true;
+  `;
+  const fullHtml = `<html><head><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>body{font-family:-apple-system,sans-serif;font-size:15px;line-height:1.5;color:${textColor};background:${bgColor};padding:0;margin:0;word-break:break-word;overflow:hidden;}img{max-width:100%;height:auto;border-radius:8px;}a{color:#4F46E5;}</style></head><body>${html}</body></html>`;
+  return (
+    <View style={{ height, marginBottom: 16 }}>
+      <WebView
+        originWhitelist={['*']}
+        source={{ html: fullHtml }}
+        style={{ height, backgroundColor: 'transparent' }}
+        scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+        scalesPageToFit={false}
+        injectedJavaScript={injectedJS}
+        onMessage={(e) => {
+          try {
+            const data = JSON.parse(e.nativeEvent.data);
+            if (data.height && data.height > 0) setHeight(Math.ceil(data.height) + 10);
+          } catch {}
+        }}
+      />
+    </View>
+  );
+}
+
 function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -166,6 +207,14 @@ function MessagesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarView, setSidebarView] = useState<SidebarView>('inbox');
   const [showSidebar, setShowSidebar] = useState(false);
+  const mailListRef = useRef<FlatList>(null);
+  useScrollToTop(mailListRef);
+
+  useFocusEffect(
+    useCallback(() => {
+      mailListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }, [])
+  );
 
   const [proxyEmail, setProxyEmail] = useState<string | null>(null);
   const [copiedProxy, setCopiedProxy] = useState(false);
@@ -307,12 +356,15 @@ function MessagesScreen() {
   });
 
   const unreadCount = useMemo(() => {
+    if (!supabaseUserId) return 0;
     const items = listQuery.data || [];
+    // Only count unread from inbound items that are not archived
     return items.reduce((count, item) => {
       if (item.kind !== 'inbound') return count;
+      if (item.data.is_archived) return count;
       return count + (item.data.is_read ? 0 : 1);
     }, 0);
-  }, [listQuery.data]);
+  }, [listQuery.data, supabaseUserId]);
 
 
 
@@ -443,6 +495,10 @@ function MessagesScreen() {
       Alert.alert('Missing fields', 'Please fill in To and Subject.');
       return;
     }
+    if (!isValidEmail(composeTo.trim())) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
 
     setIsSending(true);
     let fullBody = composeBody.trim();
@@ -511,21 +567,47 @@ function MessagesScreen() {
   const openItem = useCallback(
     (item: MailItem, threadId?: string) => {
       setActiveItem(item);
-      if (item.kind === 'inbound' && !item.data.is_read) {
-        markReadMutation.mutate({ emailId: item.data.id, read: true });
-      }
-      // Load full thread if we have a threadId
       const tid = threadId || item.data.thread_id || computeThreadIdLocal(item.data.subject);
       setActiveThreadId(tid);
-      if (supabaseUserId && tid) {
+
+      // Mark ALL unread inbound emails in this thread as read
+      const allItems = listQuery.data || [];
+      const threadItems = allItems.filter((m) => {
+        const mTid = m.data.thread_id || computeThreadIdLocal(m.data.subject);
+        return mTid === tid;
+      });
+
+      threadItems.forEach((m) => {
+        if (m.kind === 'inbound' && !m.data.is_read) {
+          markReadMutation.mutate({ emailId: m.data.id, read: true });
+        }
+      });
+
+      if (threadItems.length > 1) {
+        // Convert to the format threadMessages expects
+        const msgs = threadItems.map((m) => ({
+          ...m.data,
+          _kind: m.kind as 'inbound' | 'sent',
+        })).sort((a, b) => {
+          const aDate = a._kind === 'inbound' ? (a as any).received_at : (a as any).sent_at;
+          const bDate = b._kind === 'inbound' ? (b as any).received_at : (b as any).sent_at;
+          return new Date(aDate).getTime() - new Date(bDate).getTime();
+        });
+        setThreadMessages(msgs as any);
+        setThreadLoading(false);
+      } else if (supabaseUserId && tid) {
+        // Fallback to DB fetch for threads not fully in cache
         setThreadLoading(true);
         fetchThreadMessages(supabaseUserId, tid).then((msgs) => {
           setThreadMessages(msgs);
           setThreadLoading(false);
         });
+      } else {
+        setThreadMessages([]);
+        setThreadLoading(false);
       }
     },
-    [markReadMutation, supabaseUserId]
+    [markReadMutation, supabaseUserId, listQuery.data]
   );
 
   const closeItem = useCallback(() => {
@@ -741,7 +823,7 @@ function MessagesScreen() {
     : (detailIsInbound ? parseDisplayName((detailItem?.data as InboundEmail)?.from_name, (detailItem?.data as InboundEmail)?.from_email) : '');
 
   const detailModal = (
-      <Modal visible={!!activeItem} animationType="slide" transparent={false}>
+      <Modal visible={!!activeItem} animationType="slide" transparent={false} onRequestClose={closeItemAndReply}>
         <KeyboardAvoidingView
           style={[styles.gmailDetailContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -813,17 +895,18 @@ function MessagesScreen() {
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
                 <ActivityIndicator size="small" color={colors.textTertiary} />
               </View>
-            ) : detailHasThread ? (
-              threadMessages.map((msg, idx) => {
+            ) : (detailHasThread ? threadMessages : detailItem ? [{ ...detailItem.data, _kind: detailItem.kind }] : []).length > 0 ? (
+              (detailHasThread ? threadMessages : [{ ...detailItem!.data, _kind: detailItem!.kind }]).map((msg: any, idx: number) => {
                 const isSent = msg._kind === 'sent';
                 const msgName = isSent ? 'You' : parseDisplayName((msg as InboundEmail).from_name, isSent ? (msg as SentEmail).to_email : (msg as InboundEmail).from_email);
-                const msgEmail = isSent ? proxyEmail || '' : (msg as InboundEmail).from_email;
                 const msgDate = new Date(isSent ? (msg as SentEmail).sent_at : (msg as InboundEmail).received_at);
                 const msgDateStr = !isNaN(msgDate.getTime())
                   ? `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${pad2(msgDate.getHours())}:${pad2(msgDate.getMinutes())}`
                   : '';
-                const msgBody = msg.body_text?.trim() || (msg._kind === 'inbound' ? stripHtmlToText((msg as InboundEmail).body_html || '') : '') || '';
                 const msgToEmail = isSent ? (msg as SentEmail).to_email : (msg as InboundEmail).to_email;
+                const msgHtml = msg._kind === 'inbound' ? ((msg as InboundEmail).body_html || '') : '';
+                const msgPlainText = msg.body_text?.trim() || '';
+                const hasHtml = msgHtml.trim().length > 0;
 
                 return (
                   <View key={msg.id} style={idx > 0 ? [styles.threadMsgSeparator, { borderTopColor: colors.border }] : undefined}>
@@ -841,43 +924,14 @@ function MessagesScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text style={[styles.gmailBody, { color: colors.textPrimary }]} selectable>{msgBody}</Text>
+                    <AutoHeightWebView
+                      html={hasHtml ? msgHtml : `<pre style="white-space:pre-wrap;word-break:break-word;font-family:-apple-system,sans-serif;font-size:15px;line-height:1.5;margin:0;">${(msgPlainText || stripHtmlToText(msgHtml)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`}
+                      textColor={colors.textPrimary}
+                      bgColor={colors.background}
+                    />
                   </View>
                 );
               })
-            ) : detailItem ? (
-              <>
-                {/* Single message fallback */}
-                {(() => {
-                  const displayName = detailIsInbound
-                    ? parseDisplayName((detailItem.data as InboundEmail).from_name, (detailItem.data as InboundEmail).from_email)
-                    : 'You';
-                  const toEmail = detailItem.data.to_email;
-                  const dateStr = detailIsInbound ? (detailItem.data as InboundEmail).received_at : (detailItem.data as SentEmail).sent_at;
-                  const dateObj = new Date(dateStr);
-                  const formattedDate = !isNaN(dateObj.getTime())
-                    ? `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${pad2(dateObj.getHours())}:${pad2(dateObj.getMinutes())}`
-                    : '';
-                  const body = detailItem.data.body_text?.trim() || (detailItem.kind === 'inbound' ? stripHtmlToText((detailItem.data as InboundEmail).body_html || '') : '') || '';
-                  return (
-                    <>
-                      <View style={styles.gmailSenderRow}>
-                        <View style={[styles.gmailSenderAvatar, { backgroundColor: detailIsInbound ? getAvatarColor(displayName) : '#4F46E5' }]}>
-                          <Text style={styles.gmailSenderInitials}>{detailIsInbound ? getInitials(displayName) : 'You'}</Text>
-                        </View>
-                        <View style={styles.gmailSenderInfo}>
-                          <View style={styles.gmailSenderNameRow}>
-                            <Text style={[styles.gmailSenderName, { color: colors.textPrimary }]} numberOfLines={1}>{displayName}</Text>
-                            <Text style={[styles.gmailDate, { color: colors.textTertiary }]}>{formattedDate}</Text>
-                          </View>
-                          <Text style={[styles.gmailToMe, { color: colors.textSecondary }]} numberOfLines={1}>to {toEmail?.split('@')[0] || 'me'}</Text>
-                        </View>
-                      </View>
-                      <Text style={[styles.gmailBody, { color: colors.textPrimary }]} selectable>{body}</Text>
-                    </>
-                  );
-                })()}
-              </>
             ) : null}
 
             {/* Inline reply card */}
@@ -999,13 +1053,14 @@ function MessagesScreen() {
             placeholder="Search mail..."
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => setSearchQuery(sanitizeSearchInput(text))}
           />
         </View>
 
 
 
         <FlatList
+          ref={mailListRef}
           data={filteredItems as any[]}
           renderItem={renderItem as any}
           keyExtractor={(item: any) => {
@@ -1283,35 +1338,38 @@ function MessagesScreen() {
                 { key: 'starred' as const, label: 'Starred', icon: Star, count: 0 },
                 { key: 'sent' as const, label: 'Sent', icon: Send, count: 0 },
                 { key: 'archived' as const, label: 'Archived', icon: Archive, count: 0 },
-              ].map((row) => (
-                <Pressable
-                  key={row.key}
-                  style={[styles.sidebarItem, sidebarView === row.key && styles.sidebarItemActive]}
-                  onPress={() => {
-                    setSidebarView(row.key);
-                    setShowSidebar(false);
-                  }}
-                >
-                  <row.icon
-                    size={20}
-                    color={sidebarView === row.key ? colors.accent : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.sidebarItemText,
-                      { color: colors.textSecondary },
-                      sidebarView === row.key && { color: colors.textPrimary },
-                    ]}
+              ].map((row) => {
+                const isActive = sidebarView === row.key;
+                return (
+                  <Pressable
+                    key={row.key}
+                    style={[styles.sidebarItem, isActive && [styles.sidebarItemActive, !isDark && { backgroundColor: '#111111' }]]}
+                    onPress={() => {
+                      setSidebarView(row.key);
+                      setShowSidebar(false);
+                    }}
                   >
-                    {row.label}
-                  </Text>
-                  {row.count > 0 && (
-                    <View style={styles.sidebarBadge}>
-                      <Text style={styles.sidebarBadgeText}>{row.count}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
+                    <row.icon
+                      size={20}
+                      color={isActive ? (isDark ? colors.accent : '#FFFFFF') : colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.sidebarItemText,
+                        { color: colors.textSecondary },
+                        isActive && { color: isDark ? colors.textPrimary : '#FFFFFF' },
+                      ]}
+                    >
+                      {row.label}
+                    </Text>
+                    {row.count > 0 && (
+                      <View style={styles.sidebarBadge}>
+                        <Text style={styles.sidebarBadgeText}>{row.count}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </Pressable>
         </Modal>
@@ -1683,26 +1741,27 @@ const styles = StyleSheet.create({
   gmailDate: { fontSize: 12, marginLeft: 8 },
   gmailToMe: { fontSize: 13, marginTop: 1 },
   gmailBodyWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
-  gmailBody: { fontSize: 15, lineHeight: 22 },
+  gmailBody: { fontSize: 15, lineHeight: 22, paddingBottom: 16 },
   gmailSenderRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14, gap: 12 },
-  threadMsgSeparator: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 16, paddingTop: 16 },
+  threadMsgSeparator: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 16 },
   gmailBottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    gap: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   gmailBottomBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderRightWidth: StyleSheet.hairlineWidth,
   },
   gmailBottomBtnText: { fontSize: 14, fontWeight: '600' as const },
 

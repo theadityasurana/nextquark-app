@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { X, Search as SearchIcon, ArrowRight } from 'lucide-react-native';
 import { useColors } from '@/contexts/useColors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sanitizeSearchInput } from '@/lib/validation';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 
@@ -47,7 +48,7 @@ export default function SearchScreen() {
           placeholder="discover your dream job"
           placeholderTextColor={colors.textTertiary}
           value={searchKeyword}
-          onChangeText={setSearchKeyword}
+          onChangeText={(text) => setSearchKeyword(sanitizeSearchInput(text))}
           onSubmitEditing={handleKeywordSubmit}
           returnKeyType="done"
           autoFocus

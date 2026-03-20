@@ -6,8 +6,9 @@ import { Image } from 'expo-image';
 import { X, MapPin, Briefcase, GraduationCap, Trophy, Award, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
-import { supabase } from '@/lib/supabase';
+import { supabase, getProfilePictureUrl, getCompanyLogoStorageUrl } from '@/lib/supabase';
 import { fetchJobById } from '@/lib/jobs';
+import { Job } from '@/types';
 
 const JOBS_PER_PAGE = 10;
 
@@ -74,10 +75,10 @@ export default function FriendProfileScreen() {
     if (profile.avatar_url.startsWith('http')) {
       avatarUrl = profile.avatar_url;
     } else {
-      avatarUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`;
+      avatarUrl = getProfilePictureUrl(profile.avatar_url);
     }
   } else {
-    avatarUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.full_name || 'User') + '&background=6366f1&color=fff&size=200';
+    avatarUrl = 'https://api.dicebear.com/9.x/adventurer/png?seed=' + encodeURIComponent(profile.id || profile.full_name || 'User') + '&size=200';
   }
 
   const paginatedJobs = appliedJobs.slice(jobsPage * JOBS_PER_PAGE, (jobsPage + 1) * JOBS_PER_PAGE);
@@ -199,7 +200,7 @@ export default function FriendProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Applied Jobs ({appliedJobs.length})</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.jobsRow}>
-              {paginatedJobs.map((job: any) => (
+              {paginatedJobs.map((job: Job) => (
                 <Pressable key={job.id} style={styles.jobTile} onPress={() => router.push({ pathname: '/job-details' as any, params: { id: job.id } })}>
                   <Image source={{ uri: job.companyLogo }} style={styles.jobLogo} />
                   <Text style={styles.jobCompany} numberOfLines={1}>{job.companyName}</Text>
@@ -226,7 +227,7 @@ export default function FriendProfileScreen() {
             <Text style={styles.sectionTitle}>Favorite Companies</Text>
             <View style={styles.companiesGrid}>
               {favoriteCompaniesData.map((company: any, idx: number) => {
-                const logoUrl = company.logo_url ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${company.logo_url}` : null;
+                const logoUrl = company.logo_url ? getCompanyLogoStorageUrl(company.logo_url) : null;
                 return (
                   <Pressable key={idx} style={styles.companyChip} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: company.name } })}>
                     {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companyLogo} />}

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,11 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ChevronRight,
@@ -26,6 +28,7 @@ import {
   Star,
   Eye,
   FileText,
+  FileText as FileTextIcon,
   LogOut,
   Zap,
   Plus,
@@ -53,7 +56,6 @@ import {
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors, { lightColors, darkColors } from '@/constants/colors';
-import { mockUser } from '@/mocks/user';
 import { UserProfile, WorkExperience, Education, Certification, Achievement } from '@/types';
 import { CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
 import RangeSlider from '@/components/RangeSlider';
@@ -63,13 +65,23 @@ import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { fetchUserApplications } from '@/lib/jobs';
 import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_URL, getProfilePictureUrl, getCompanyLogoStorageUrl, getStorageUploadUrl } from '@/lib/supabase';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share, Clipboard } from 'react-native';
 import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboarding';
 import { universities } from '@/constants/universities';
 
-type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | null;
+type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | 'completeprofile' | null;
+
+type ProfileWizardStep = 'topskills' | 'education' | 'experience' | 'achievements' | 'certifications';
+
+const WIZARD_HELPER_TEXT: Record<ProfileWizardStep, string> = {
+  topskills: "your skills are literally your superpower ✨ pick the ones that make you *you*",
+  education: "drop your academic era here 🎓 flex those degrees bestie",
+  experience: "time to show off your work glow-up 💼 no cap, recruiters love this",
+  achievements: "main character energy only 🏆 what wins are you proud of?",
+  certifications: "certified iconic 📜 add your certs and watch your profile slay",
+};
 
 const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
@@ -84,7 +96,7 @@ function buildProfileFromOnboarding(data: OnboardingData): UserProfile {
     phone: data.phone || '',
     headline: data.headline || '',
     location: data.location || '',
-    avatar: data.profilePicture || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+    avatar: data.profilePicture || `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(data.firstName || data.lastName || 'user')}&size=200`,
     bio: '',
     profileCompletion: 0,
     totalApplications: 0,
@@ -138,6 +150,23 @@ export default function ProfileScreen() {
   const { theme, toggleTheme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollViewRef);
+  const favoriteCompaniesY = useRef(0);
+  const params = useLocalSearchParams<{ scrollTo?: string }>();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (params.scrollTo === 'favoritecompanies') {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({ y: favoriteCompaniesY.current, animated: true });
+        }, 300);
+      } else {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      }
+      refetchProfile();
+    }, [params.scrollTo, refetchProfile])
+  );
 
   const { data: applications = [] } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
@@ -159,7 +188,7 @@ export default function ProfileScreen() {
   });
 
   const totalApplications = applications.length;
-  const interviewsScheduled = applications.filter((app: any) => 
+  const interviewsScheduled = applications.filter((app: { status?: string }) => 
     app.status === 'interviewing' || app.status === 'interview_scheduled'
   ).length;
 
@@ -315,6 +344,7 @@ export default function ProfileScreen() {
   const [workdayEmail, setWorkdayEmail] = useState(user.workdayEmail || '');
   const [workdayPassword, setWorkdayPassword] = useState(user.workdayPassword || '');
   const [showWorkdayPassword, setShowWorkdayPassword] = useState(false);
+  const [wizardStepIndex, setWizardStepIndex] = useState(0);
   const [jobleverEmail, setJobleverEmail] = useState(user.jobleverEmail || '');
   const [jobleverPassword, setJobleverPassword] = useState(user.jobleverPassword || '');
   const [showJobleverPassword, setShowJobleverPassword] = useState(false);
@@ -759,7 +789,7 @@ const MAJOR_CITIES = [
         name: fileName,
       } as any);
 
-      const uploadUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/profile-pictures/${filePath}`;
+      const uploadUrl = getStorageUploadUrl('profile-pictures', filePath);
       const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
@@ -779,7 +809,7 @@ const MAJOR_CITIES = [
         updated_at: new Date().toISOString(),
       });
 
-      const publicUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${filePath}`;
+      const publicUrl = getProfilePictureUrl(filePath);
       setUser((prev) => ({ ...prev, avatar: publicUrl }));
       setAvatarUrl(publicUrl);
       await refetchProfile();
@@ -803,12 +833,11 @@ const MAJOR_CITIES = [
     setUser((prev) => ({
       ...prev,
       phone: contactPhone.trim(),
-      email: contactEmail.trim(),
       linkedinUrl: contactLinkedin.trim() || undefined,
       githubUrl: contactGithub.trim() || undefined,
     }));
     setActiveModal(null);
-  }, [contactPhone, contactEmail, contactLinkedin, contactGithub]);
+  }, [contactPhone, contactLinkedin, contactGithub]);
 
   const handleSaveExperience = useCallback(() => {
     if (!expTitle.trim() || !expCompany.trim()) {
@@ -1042,6 +1071,122 @@ const MAJOR_CITIES = [
     ]);
   }, [logout]);
 
+  const incompleteSteps = useMemo((): ProfileWizardStep[] => {
+    const steps: ProfileWizardStep[] = [];
+    if (user.topSkills.length === 0) steps.push('topskills');
+    if (user.education.length === 0) steps.push('education');
+    if (user.experience.length === 0) steps.push('experience');
+    if (user.achievements.length === 0) steps.push('achievements');
+    if (user.certifications.length === 0) steps.push('certifications');
+    return steps;
+  }, [user.topSkills, user.education, user.experience, user.achievements, user.certifications]);
+
+  const initWizardStep = useCallback((step: ProfileWizardStep) => {
+    if (step === 'topskills') {
+      setSkillQuery('');
+    } else if (step === 'education') {
+      setEditingEducation(null);
+      setEduInstitution(''); setEduDegree(''); setEduField('');
+      setEduStartDate(''); setEduEndDate('');
+      setEduDescription('• '); setEduAchievements('• '); setEduExtracurriculars('• ');
+      setUniversitySearch(''); setShowUniversityDropdown(false);
+    } else if (step === 'experience') {
+      setEditingExperience(null);
+      setExpTitle(''); setExpCompany(''); setExpStartDate(''); setExpEndDate('');
+      setExpDescription('• '); setExpIsCurrent(false); setExpSkills('');
+      setExpType('Full-time'); setExpMode('Onsite'); setExpLocation('');
+    } else if (step === 'achievements') {
+      setEditingAchievement(null);
+      setAchTitle(''); setAchIssuer(''); setAchDate(''); setAchDescription('');
+    } else if (step === 'certifications') {
+      setEditingCertification(null);
+      setCertName(''); setCertOrg(''); setCertUrl(''); setCertSkills('');
+    }
+  }, []);
+
+  const openCompleteProfileWizard = useCallback(() => {
+    if (incompleteSteps.length === 0) return;
+    setWizardStepIndex(0);
+    initWizardStep(incompleteSteps[0]);
+    setActiveModal('completeprofile');
+  }, [incompleteSteps, initWizardStep]);
+
+  const handleWizardNext = useCallback(() => {
+    const currentStep = incompleteSteps[wizardStepIndex];
+    // Save current step inline (without closing modal)
+    if (currentStep === 'education') {
+      if (!eduInstitution.trim() || !eduDegree.trim()) {
+        Alert.alert('Required', 'Please fill in institution and degree');
+        return;
+      }
+      const edu: Education = {
+        id: `ed${Date.now()}`, institution: eduInstitution.trim(), degree: eduDegree.trim(),
+        field: eduField.trim(), startDate: eduStartDate.trim(), endDate: eduEndDate.trim(),
+        description: eduDescription.trim() || undefined, achievements: eduAchievements.trim() || undefined,
+        extracurriculars: eduExtracurriculars.trim() || undefined,
+      };
+      setUser(prev => ({ ...prev, education: [...prev.education, edu] }));
+    } else if (currentStep === 'experience') {
+      if (!expTitle.trim() || !expCompany.trim()) {
+        Alert.alert('Required', 'Please fill in title and company');
+        return;
+      }
+      const exp: WorkExperience = {
+        id: `e${Date.now()}`, title: expTitle.trim(), company: expCompany.trim(),
+        startDate: expStartDate.trim(), endDate: expIsCurrent ? null : expEndDate.trim(),
+        isCurrent: expIsCurrent, description: expDescription.trim(),
+        skills: expSkills.split(',').map(s => s.trim()).filter(Boolean),
+        employmentType: expType, workMode: expMode,
+        jobLocation: expMode === 'Remote' ? 'Remote' : expLocation.trim(),
+      };
+      setUser(prev => ({ ...prev, experience: [...prev.experience, exp] }));
+    } else if (currentStep === 'achievements') {
+      if (!achTitle.trim() || !achIssuer.trim()) {
+        Alert.alert('Required', 'Please fill in the title and issuer');
+        return;
+      }
+      const ach: Achievement = {
+        id: `ach${Date.now()}`, title: achTitle.trim(), issuer: achIssuer.trim(),
+        date: achDate.trim(), description: achDescription.trim() || undefined,
+      };
+      setUser(prev => ({ ...prev, achievements: [...prev.achievements, ach] }));
+    } else if (currentStep === 'certifications') {
+      if (!certName.trim() || !certOrg.trim()) {
+        Alert.alert('Required', 'Please fill in the certification name and organization');
+        return;
+      }
+      const cert: Certification = {
+        id: `c${Date.now()}`, name: certName.trim(), issuingOrganization: certOrg.trim(),
+        credentialUrl: certUrl.trim(), skills: certSkills.split(',').map(s => s.trim()).filter(Boolean),
+      };
+      setUser(prev => ({ ...prev, certifications: [...prev.certifications, cert] }));
+    }
+    // topskills are saved inline via toggles, no extra save needed
+
+    if (wizardStepIndex < incompleteSteps.length - 1) {
+      const nextIdx = wizardStepIndex + 1;
+      setWizardStepIndex(nextIdx);
+      initWizardStep(incompleteSteps[nextIdx]);
+    } else {
+      setActiveModal(null);
+    }
+  }, [wizardStepIndex, incompleteSteps, initWizardStep,
+    eduInstitution, eduDegree, eduField, eduStartDate, eduEndDate, eduDescription, eduAchievements, eduExtracurriculars,
+    expTitle, expCompany, expStartDate, expEndDate, expDescription, expIsCurrent, expSkills, expType, expMode, expLocation,
+    achTitle, achIssuer, achDate, achDescription,
+    certName, certOrg, certUrl, certSkills,
+  ]);
+
+  const handleWizardSkip = useCallback(() => {
+    if (wizardStepIndex < incompleteSteps.length - 1) {
+      const nextIdx = wizardStepIndex + 1;
+      setWizardStepIndex(nextIdx);
+      initWizardStep(incompleteSteps[nextIdx]);
+    } else {
+      setActiveModal(null);
+    }
+  }, [wizardStepIndex, incompleteSteps]);
+
   const closeModal = useCallback(() => {
     setActiveModal(null);
     setEditingExperience(null);
@@ -1074,6 +1219,18 @@ const MAJOR_CITIES = [
           </Pressable>
           <Pressable
             style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+            onPress={() => router.push('/resume-management' as any)}
+            testID="resume-btn"
+          >
+            <FileText size={22} color={colors.textSecondary} />
+            {!supabaseProfile?.resumeUrl && (
+              <View style={styles.resumeExclamation}>
+                <Text style={styles.resumeExclamationText}>!</Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
             onPress={() => router.push('/profile-preview' as any)}
             testID="profile-preview-btn"
           >
@@ -1089,7 +1246,7 @@ const MAJOR_CITIES = [
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={false} onRefresh={refetchProfile} tintColor={colors.primary} />}>
+      <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={false} onRefresh={refetchProfile} tintColor={colors.primary} />}>
         <View style={[styles.profileCard, { backgroundColor: theme === 'dark' ? '#1E1E1E' : '#111111' }]}>
           <View style={styles.profileTop}>
             <Pressable onPress={openAvatarModal} style={styles.avatarWrapper}>
@@ -1101,7 +1258,11 @@ const MAJOR_CITIES = [
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{user.name}</Text>
               <Pressable onPress={openHeadlineModal} style={styles.editableRow}>
-                <Text style={styles.profileHeadline} numberOfLines={1}>{user.headline}</Text>
+                {user.headline ? (
+                  <Text style={styles.profileHeadline} numberOfLines={1}>{user.headline}</Text>
+                ) : (
+                  <Text style={[styles.profileHeadline, { color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }]} numberOfLines={1}>Add a headline</Text>
+                )}
                 <Pencil size={12} color="rgba(255,255,255,0.4)" />
               </Pressable>
               <Pressable onPress={openLocationModal} style={styles.editableRow}>
@@ -1133,21 +1294,20 @@ const MAJOR_CITIES = [
           </View>
         </View>
 
-        {(user.topSkills.length === 0 || user.education.length === 0 || user.experience.length === 0 || user.achievements.length === 0 || user.certifications.length === 0) && (
-          <View style={[styles.completionPromptCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        {incompleteSteps.length > 0 && (
+          <Pressable
+            style={[styles.completionPromptCard, { backgroundColor: theme === 'dark' ? '#FFFFFF' : colors.surface, borderColor: theme === 'dark' ? '#FFFFFF' : colors.borderLight }]}
+            onPress={openCompleteProfileWizard}
+          >
             <View style={styles.completionPromptHeader}>
-              <Zap size={18} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
-              <Text style={[styles.completionPromptTitle, { color: colors.textPrimary }]}>Complete Your Profile</Text>
+              <Zap size={18} color={theme === 'dark' ? '#000000' : '#111111'} />
+              <Text style={[styles.completionPromptTitle, { color: theme === 'dark' ? '#000000' : colors.textPrimary }]}>Complete Your Profile</Text>
+              <ChevronRight size={18} color={theme === 'dark' ? '#666666' : colors.textTertiary} style={{ marginLeft: 'auto' }} />
             </View>
-            <Text style={[styles.completionPromptText, { color: colors.textSecondary }]}>Add these sections to boost your visibility:</Text>
-            <View style={styles.missingFieldsList}>
-              {user.topSkills.length === 0 && <Text style={styles.missingFieldItem}>• Select top skills</Text>}
-              {user.education.length === 0 && <Text style={styles.missingFieldItem}>• Add education</Text>}
-              {user.experience.length === 0 && <Text style={styles.missingFieldItem}>• Add work experience</Text>}
-              {user.achievements.length === 0 && <Text style={styles.missingFieldItem}>• Add achievements</Text>}
-              {user.certifications.length === 0 && <Text style={styles.missingFieldItem}>• Add certifications</Text>}
-            </View>
-          </View>
+            <Text style={[styles.completionPromptText, { color: theme === 'dark' ? '#444444' : colors.textSecondary }]}>
+              {incompleteSteps.length} section{incompleteSteps.length > 1 ? 's' : ''} left — tap to finish up real quick ⚡
+            </Text>
+          </Pressable>
         )}
 
         {subscriptionData?.subscription_type === 'free' ? (
@@ -1260,7 +1420,10 @@ const MAJOR_CITIES = [
           ) : null}
         </Pressable>
 
-        <View style={styles.section}>
+        <View
+          style={[styles.contactCard, { backgroundColor: colors.surface }]}
+          onLayout={(e) => { favoriteCompaniesY.current = e.nativeEvent.layout.y; }}
+        >
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Favourite Companies</Text>
             <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={() => setActiveModal('favoritecompanies')}>
@@ -1270,9 +1433,9 @@ const MAJOR_CITIES = [
           {(user.favoriteCompanies && user.favoriteCompanies.length > 0) ? (
             <View style={styles.favoriteCompaniesWrap}>
               {user.favoriteCompanies.map((company, idx) => {
-                const companyData = allCompaniesData.find((c: any) => c.name === company);
+                const companyData = allCompaniesData.find((c: { name: string; logo_url: string | null }) => c.name === company);
                 const logoUrl = companyData?.logo_url 
-                  ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${companyData.logo_url}`
+                  ? getCompanyLogoStorageUrl(companyData.logo_url)
                   : null;
                 return (
                   <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
@@ -1290,7 +1453,7 @@ const MAJOR_CITIES = [
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 20 }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Desired Roles</Text>
             <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openDesiredRolesModal}>
@@ -1313,7 +1476,7 @@ const MAJOR_CITIES = [
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Preferred Cities to Work</Text>
             <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openPreferredCitiesModal}>
@@ -1337,7 +1500,7 @@ const MAJOR_CITIES = [
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Job Type Preferences</Text>
           </View>
@@ -1347,7 +1510,7 @@ const MAJOR_CITIES = [
               return (
                 <Pressable
                   key={pref}
-                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.surface, borderColor: selected ? colors.secondary : colors.borderLight }]}
+                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.background, borderColor: selected ? colors.secondary : colors.borderLight }]}
                   onPress={() => handleToggleJobPref(pref)}
                 >
                   {selected && <Check size={14} color={colors.surface} />}
@@ -1358,7 +1521,7 @@ const MAJOR_CITIES = [
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Work Mode Preferences</Text>
           </View>
@@ -1368,7 +1531,7 @@ const MAJOR_CITIES = [
               return (
                 <Pressable
                   key={mode}
-                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.surface, borderColor: selected ? colors.secondary : colors.borderLight }]}
+                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.background, borderColor: selected ? colors.secondary : colors.borderLight }]}
                   onPress={() => handleToggleWorkMode(mode)}
                 >
                   {selected && <Check size={14} color={colors.surface} />}
@@ -1400,7 +1563,7 @@ const MAJOR_CITIES = [
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Top Skills</Text>
             <Text style={[styles.topSkillHint, { color: colors.textTertiary }]}>{user.topSkills.length}/5</Text>
@@ -1632,40 +1795,7 @@ const MAJOR_CITIES = [
           ) : null}
         </Pressable>
 
-        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={openWorkdayCredentialsModal}>
-          <View style={styles.demoHeader}>
-            <Lock size={16} color={colors.textSecondary} />
-            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Portal Credentials</Text>
-            <Pressable onPress={openWorkdayCredentialsModal} style={{ marginLeft: 'auto' }}>
-              <Pencil size={14} color={colors.textTertiary} />
-            </Pressable>
-          </View>
-          <Text style={[styles.demoNote, { color: colors.textTertiary }]}>We'll use these to auto-create accounts and apply on your behalf</Text>
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Workday</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.workdayEmail || 'Not configured'}</Text>
-            </View>
-          </View>
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Joblever</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.jobleverEmail || 'Not configured'}</Text>
-            </View>
-          </View>
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Greenhouse</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.greenhouseEmail || 'Not configured'}</Text>
-            </View>
-          </View>
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Oracle Taleo</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.taleoEmail || 'Not configured'}</Text>
-            </View>
-          </View>
-        </Pressable>
+
 
         <View style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <View style={styles.demoHeader}>
@@ -1716,6 +1846,164 @@ const MAJOR_CITIES = [
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <Modal visible={activeModal === 'completeprofile'} animationType="fade" transparent>
+        <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill}>
+          <View style={[wizStyles.overlay, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)' }]}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[wizStyles.card, { backgroundColor: colors.surface }]}>
+              <View style={wizStyles.header}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[wizStyles.stepCounter, { color: colors.textTertiary }]}>
+                    {wizardStepIndex + 1} of {incompleteSteps.length}
+                  </Text>
+                  <Text style={[wizStyles.title, { color: colors.secondary }]}>
+                    {incompleteSteps[wizardStepIndex] === 'topskills' && 'Top Skills'}
+                    {incompleteSteps[wizardStepIndex] === 'education' && 'Education'}
+                    {incompleteSteps[wizardStepIndex] === 'experience' && 'Work Experience'}
+                    {incompleteSteps[wizardStepIndex] === 'achievements' && 'Achievements & Honors'}
+                    {incompleteSteps[wizardStepIndex] === 'certifications' && 'Certifications'}
+                  </Text>
+                </View>
+                <Pressable onPress={closeModal} style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}>
+                  <X size={22} color={colors.textPrimary} />
+                </Pressable>
+              </View>
+              <Text style={[wizStyles.helperText, { color: colors.textSecondary }]}>
+                {WIZARD_HELPER_TEXT[incompleteSteps[wizardStepIndex]]}
+              </Text>
+              <View style={[wizStyles.progressTrack, { backgroundColor: colors.borderLight }]}>
+                <View style={[wizStyles.progressFill, { width: `${((wizardStepIndex + 1) / incompleteSteps.length) * 100}%` }]} />
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} style={wizStyles.body} keyboardShouldPersistTaps="handled">
+                {/* Top Skills Step */}
+                {incompleteSteps[wizardStepIndex] === 'topskills' && (
+                  <View>
+                    <Text style={[styles.topSkillSubtext, { color: colors.textTertiary }]}>Tap to toggle top skill (max 5). Long-press to remove.</Text>
+                    <View style={styles.skillsWrap}>
+                      {user.skills.map((skill, idx) => {
+                        const isTop = user.topSkills.includes(skill);
+                        return (
+                          <Pressable
+                            key={idx}
+                            style={[styles.skillTag, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary }, isTop && { borderWidth: 2, borderColor: '#D4A017' }]}
+                            onPress={() => handleToggleTopSkill(skill)}
+                            onLongPress={() => handleRemoveSkill(idx)}
+                          >
+                            {isTop && <Star size={12} color="#D4A017" />}
+                            <Text style={[styles.skillTagText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{skill}</Text>
+                          </Pressable>
+                        );
+                      })}
+                      <Pressable style={[styles.addSkillBtn, { backgroundColor: colors.secondary }]} onPress={openAddSkillModal}>
+                        <Plus size={16} color={colors.surface} />
+                      </Pressable>
+                    </View>
+                    <Text style={[wizStyles.selectionCount, { color: colors.textTertiary }]}>{user.topSkills.length}/5 selected</Text>
+                  </View>
+                )}
+                {/* Education Step */}
+                {incompleteSteps[wizardStepIndex] === 'education' && (
+                  <View>
+                    <Text style={styles.fieldLabel}>Institution *</Text>
+                    <View style={styles.universityInputContainer}>
+                      <TextInput style={styles.universityInput} placeholder="Select or type university" placeholderTextColor={Colors.textTertiary} value={universitySearch} onChangeText={(text) => { setUniversitySearch(text); setEduInstitution(text); setShowUniversityDropdown(true); }} onFocus={() => setShowUniversityDropdown(true)} />
+                      <ChevronDown size={14} color={Colors.textTertiary} />
+                    </View>
+                    {showUniversityDropdown && (
+                      <View style={styles.universityDropdown}>
+                        <ScrollView style={styles.universityDropdownScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                          {universitySearch && !universities.some(u => u.toLowerCase() === universitySearch.toLowerCase()) && (
+                            <Pressable style={styles.universityDropdownItem} onPress={() => { setEduInstitution(universitySearch); setShowUniversityDropdown(false); }}>
+                              <Plus size={16} color={Colors.primary} />
+                              <Text style={styles.universityDropdownItemTextAdd}>Add "{universitySearch}"</Text>
+                            </Pressable>
+                          )}
+                          {universities.filter(u => !universitySearch || u.toLowerCase().includes(universitySearch.toLowerCase())).slice(0, 50).map(uni => (
+                            <Pressable key={uni} style={styles.universityDropdownItem} onPress={() => { setEduInstitution(uni); setUniversitySearch(uni); setShowUniversityDropdown(false); }}>
+                              <Text style={styles.universityDropdownItemText}>{uni}</Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                    <Text style={styles.fieldLabel}>Degree *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. Bachelor's" placeholderTextColor={Colors.textTertiary} value={eduDegree} onChangeText={setEduDegree} />
+                    <Text style={styles.fieldLabel}>Field of Study</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. Computer Science" placeholderTextColor={Colors.textTertiary} value={eduField} onChangeText={setEduField} />
+                    <View style={styles.dateRow}>
+                      <View style={styles.dateField}><Text style={styles.fieldLabel}>Start Year</Text><TextInput style={styles.modalInput} placeholder="e.g. 2016" placeholderTextColor={Colors.textTertiary} value={eduStartDate} onChangeText={setEduStartDate} /></View>
+                      <View style={styles.dateField}><Text style={styles.fieldLabel}>End Year</Text><TextInput style={styles.modalInput} placeholder="e.g. 2020" placeholderTextColor={Colors.textTertiary} value={eduEndDate} onChangeText={setEduEndDate} /></View>
+                    </View>
+                  </View>
+                )}
+                {/* Experience Step */}
+                {incompleteSteps[wizardStepIndex] === 'experience' && (
+                  <View>
+                    <Text style={styles.fieldLabel}>Job Title *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. Software Engineer" placeholderTextColor={Colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />
+                    <Text style={styles.fieldLabel}>Company *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. Google" placeholderTextColor={Colors.textTertiary} value={expCompany} onChangeText={setExpCompany} />
+                    <Text style={styles.fieldLabel}>Employment Type</Text>
+                    <View style={styles.chipGrid}>
+                      {EXP_TYPE_OPTIONS.map((t) => (
+                        <Pressable key={t} style={[styles.prefChip, expType === t && styles.prefChipActive]} onPress={() => setExpType(t)}>
+                          {expType === t && <Check size={12} color={Colors.surface} />}
+                          <Text style={[styles.prefChipText, expType === t && styles.prefChipTextActive]}>{t}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <View style={styles.dateRow}>
+                      <View style={styles.dateField}><Text style={styles.fieldLabel}>Start Date</Text><TextInput style={styles.modalInput} placeholder="e.g. Jan 2023" placeholderTextColor={Colors.textTertiary} value={expStartDate} onChangeText={setExpStartDate} /></View>
+                      <View style={styles.dateField}><Text style={styles.fieldLabel}>End Date</Text><TextInput style={[styles.modalInput, expIsCurrent && styles.inputDisabled]} placeholder="e.g. Dec 2024" placeholderTextColor={Colors.textTertiary} value={expIsCurrent ? 'Present' : expEndDate} onChangeText={setExpEndDate} editable={!expIsCurrent} /></View>
+                    </View>
+                    <Pressable style={styles.checkboxRow} onPress={() => setExpIsCurrent(!expIsCurrent)}>
+                      <View style={[styles.checkbox, expIsCurrent && styles.checkboxActive]}>{expIsCurrent && <Check size={12} color={Colors.surface} />}</View>
+                      <Text style={styles.checkboxLabel}>I currently work here</Text>
+                    </Pressable>
+                  </View>
+                )}
+                {/* Achievements Step */}
+                {incompleteSteps[wizardStepIndex] === 'achievements' && (
+                  <View>
+                    <Text style={styles.fieldLabel}>Title *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. Best Innovation Award" placeholderTextColor={Colors.textTertiary} value={achTitle} onChangeText={setAchTitle} />
+                    <Text style={styles.fieldLabel}>Issuer/Organization *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. TechCorp Hackathon" placeholderTextColor={Colors.textTertiary} value={achIssuer} onChangeText={setAchIssuer} />
+                    <Text style={styles.fieldLabel}>Date</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. 2024" placeholderTextColor={Colors.textTertiary} value={achDate} onChangeText={setAchDate} />
+                    <Text style={styles.fieldLabel}>Description</Text>
+                    <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe this achievement..." placeholderTextColor={Colors.textTertiary} value={achDescription} onChangeText={setAchDescription} multiline numberOfLines={3} />
+                  </View>
+                )}
+                {/* Certifications Step */}
+                {incompleteSteps[wizardStepIndex] === 'certifications' && (
+                  <View>
+                    <Text style={styles.fieldLabel}>Certification Name *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. AWS Solutions Architect" placeholderTextColor={Colors.textTertiary} value={certName} onChangeText={setCertName} />
+                    <Text style={styles.fieldLabel}>Issuing Organization *</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. Amazon Web Services" placeholderTextColor={Colors.textTertiary} value={certOrg} onChangeText={setCertOrg} />
+                    <Text style={styles.fieldLabel}>Credential URL</Text>
+                    <TextInput style={styles.modalInput} placeholder="https://..." placeholderTextColor={Colors.textTertiary} value={certUrl} onChangeText={setCertUrl} autoCapitalize="none" />
+                    <Text style={styles.fieldLabel}>Skills (comma-separated)</Text>
+                    <TextInput style={styles.modalInput} placeholder="e.g. AWS, Cloud Architecture" placeholderTextColor={Colors.textTertiary} value={certSkills} onChangeText={setCertSkills} />
+                  </View>
+                )}
+              </ScrollView>
+              <View style={wizStyles.footer}>
+                <Pressable style={[wizStyles.skipBtn, { borderColor: colors.borderLight }]} onPress={handleWizardSkip}>
+                  <Text style={[wizStyles.skipBtnText, { color: colors.textSecondary }]}>Skip</Text>
+                </Pressable>
+                <Pressable style={wizStyles.nextBtn} onPress={handleWizardNext}>
+                  <Text style={wizStyles.nextBtnText}>
+                    {wizardStepIndex === incompleteSteps.length - 1 ? 'Done' : 'Next'}
+                  </Text>
+                  {wizardStepIndex < incompleteSteps.length - 1 && <ChevronRight size={16} color="#FFFFFF" />}
+                </Pressable>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </BlurView>
+      </Modal>
 
       <Modal visible={activeModal === 'skill'} animationType="slide" transparent>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
@@ -1876,7 +2164,11 @@ const MAJOR_CITIES = [
               <Text style={styles.fieldLabel}>Phone Number</Text>
               <TextInput style={styles.modalInput} placeholder="+1 (555) 123-4567" placeholderTextColor={Colors.textTertiary} value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
               <Text style={styles.fieldLabel}>Email Address</Text>
-              <TextInput style={styles.modalInput} placeholder="your@email.com" placeholderTextColor={Colors.textTertiary} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />
+              <View style={[styles.modalInput, { backgroundColor: '#F0F0F0', flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                <Lock size={14} color={Colors.textTertiary} />
+                <Text style={{ fontSize: 15, color: Colors.textSecondary, flex: 1 }} numberOfLines={1}>{user.email}</Text>
+              </View>
+              <Text style={{ fontSize: 11, color: Colors.textTertiary, marginTop: -8, marginBottom: 12 }}>Email is auto-generated and cannot be changed</Text>
               <Text style={styles.fieldLabel}>LinkedIn Profile</Text>
               <TextInput style={styles.modalInput} placeholder="https://linkedin.com/in/..." placeholderTextColor={Colors.textTertiary} value={contactLinkedin} onChangeText={setContactLinkedin} autoCapitalize="none" />
               <Text style={styles.fieldLabel}>GitHub Profile</Text>
@@ -2343,51 +2635,6 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'worklocations'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Preferred Work Locations</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search cities..."
-                placeholderTextColor={Colors.textTertiary}
-                value={cityQuery}
-                onChangeText={setCityQuery}
-              />
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <View style={styles.chipGrid}>
-                {MAJOR_CITIES
-                  .filter((c) => !cityQuery || c.toLowerCase().includes(cityQuery.toLowerCase()))
-                  .map((city) => {
-                    const selected = (user.preferredWorkLocations || []).includes(city);
-                    return (
-                      <Pressable 
-                        key={city} 
-                        style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
-                        onPress={() => handleToggleWorkLocation(city)}
-                      >
-                        <MapPin size={14} color={selected ? Colors.surface : Colors.textPrimary} />
-                        <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{city}</Text>
-                        {selected && <Check size={14} color={Colors.surface} />}
-                      </Pressable>
-                    );
-                  })}
-              </View>
-            </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
-              <Text style={styles.cityDoneBtnText}>Done ({(user.preferredWorkLocations || []).length} selected)</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={activeModal === 'desiredroles'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -2412,11 +2659,11 @@ const MAJOR_CITIES = [
               <View style={styles.chipGrid}>
                 {suggestedRoles
                   .filter((r) => !roleQuery || r.toLowerCase().includes(roleQuery.toLowerCase()))
-                  .map((role) => {
+                  .map((role, idx) => {
                     const selected = (user.desiredRoles || []).includes(role);
                     return (
                       <Pressable 
-                        key={role} 
+                        key={`${role}-${idx}`} 
                         style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
                         onPress={() => handleToggleDesiredRole(role)}
                       >
@@ -2480,136 +2727,7 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'workdaycredentials'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Portal Credentials</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.securityNote}>
-              <ShieldCheck size={16} color={Colors.success} />
-              <Text style={styles.securityNoteText}>Your passwords are encrypted and stored securely</Text>
-            </View>
-            <Text style={[styles.credentialsInfo, { color: Colors.textSecondary }]}>We'll use these credentials to automatically create accounts and apply to jobs on your behalf when you swipe right.</Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <Text style={styles.portalSectionTitle}>Workday</Text>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="your.email@company.com"
-                placeholderTextColor={Colors.textTertiary}
-                value={workdayEmail}
-                onChangeText={setWorkdayEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Enter password"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={workdayPassword}
-                  onChangeText={setWorkdayPassword}
-                  secureTextEntry={!showWorkdayPassword}
-                  autoCapitalize="none"
-                />
-                <Pressable onPress={() => setShowWorkdayPassword(!showWorkdayPassword)} style={styles.eyeIcon}>
-                  <Eye size={20} color={Colors.textTertiary} />
-                </Pressable>
-              </View>
 
-              <Text style={styles.portalSectionTitle}>Joblever</Text>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="your.email@company.com"
-                placeholderTextColor={Colors.textTertiary}
-                value={jobleverEmail}
-                onChangeText={setJobleverEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Enter password"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={jobleverPassword}
-                  onChangeText={setJobleverPassword}
-                  secureTextEntry={!showJobleverPassword}
-                  autoCapitalize="none"
-                />
-                <Pressable onPress={() => setShowJobleverPassword(!showJobleverPassword)} style={styles.eyeIcon}>
-                  <Eye size={20} color={Colors.textTertiary} />
-                </Pressable>
-              </View>
-
-              <Text style={styles.portalSectionTitle}>Greenhouse</Text>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="your.email@company.com"
-                placeholderTextColor={Colors.textTertiary}
-                value={greenhouseEmail}
-                onChangeText={setGreenhouseEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Enter password"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={greenhousePassword}
-                  onChangeText={setGreenhousePassword}
-                  secureTextEntry={!showGreenhousePassword}
-                  autoCapitalize="none"
-                />
-                <Pressable onPress={() => setShowGreenhousePassword(!showGreenhousePassword)} style={styles.eyeIcon}>
-                  <Eye size={20} color={Colors.textTertiary} />
-                </Pressable>
-              </View>
-
-              <Text style={styles.portalSectionTitle}>Oracle Taleo</Text>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="your.email@company.com"
-                placeholderTextColor={Colors.textTertiary}
-                value={taleoEmail}
-                onChangeText={setTaleoEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Enter password"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={taleoPassword}
-                  onChangeText={setTaleoPassword}
-                  secureTextEntry={!showTaleoPassword}
-                  autoCapitalize="none"
-                />
-                <Pressable onPress={() => setShowTaleoPassword(!showTaleoPassword)} style={styles.eyeIcon}>
-                  <Eye size={20} color={Colors.textTertiary} />
-                </Pressable>
-              </View>
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveWorkdayCredentials}>
-              <Check size={18} color={Colors.surface} />
-              <Text style={styles.modalSaveBtnText}>Save Credentials</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
       <Modal visible={activeModal === 'favoritecompanies'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -2649,11 +2767,11 @@ const MAJOR_CITIES = [
               <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
                 <View style={styles.chipGrid}>
                   {allCompaniesData
-                    .filter((c: any) => !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase()))
-                    .map((company: any) => {
+                    .filter((c: { name: string; logo_url: string | null }) => !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase()))
+                    .map((company: { name: string; logo_url: string | null }) => {
                       const selected = (user.favoriteCompanies || []).includes(company.name);
                       const logoUrl = company.logo_url 
-                        ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${company.logo_url}`
+                        ? getCompanyLogoStorageUrl(company.logo_url)
                         : null;
                       return (
                         <Pressable 
@@ -2689,7 +2807,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   headerTitle: { fontSize: 28, fontWeight: '800' as const, color: Colors.secondary },
   headerActions: { flexDirection: 'row', gap: 8 },
-  settingsButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
+  settingsButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center', position: 'relative' as const },
+  resumeExclamation: { position: 'absolute' as const, top: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' },
+  resumeExclamationText: { fontSize: 10, fontWeight: '800' as const, color: '#FFFFFF' },
   scrollContent: { paddingHorizontal: 16 },
   profileCard: { backgroundColor: '#111111', borderRadius: 20, padding: 20, shadowColor: Colors.cardShadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 3 },
   profileTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
@@ -2876,6 +2996,24 @@ const styles = StyleSheet.create({
   universityDropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   universityDropdownItemText: { fontSize: 15, color: Colors.textPrimary },
   universityDropdownItemTextAdd: { fontSize: 15, color: Colors.primary, fontWeight: '600' as const },
+});
+
+const wizStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
+  card: { borderRadius: 24, padding: 20, maxHeight: '80%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 24, elevation: 10 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
+  stepCounter: { fontSize: 12, fontWeight: '600' as const, marginBottom: 2 },
+  title: { fontSize: 22, fontWeight: '800' as const },
+  helperText: { fontSize: 14, fontStyle: 'italic' as const, lineHeight: 20, marginBottom: 12 },
+  progressTrack: { height: 4, borderRadius: 2, marginBottom: 16, overflow: 'hidden' as const },
+  progressFill: { height: '100%', backgroundColor: '#10B981', borderRadius: 2 },
+  body: { maxHeight: 360, marginBottom: 12 },
+  selectionCount: { fontSize: 12, fontWeight: '600' as const, marginTop: 12, textAlign: 'right' as const },
+  footer: { flexDirection: 'row', gap: 12 },
+  skipBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  skipBtnText: { fontSize: 15, fontWeight: '700' as const },
+  nextBtn: { flex: 1, flexDirection: 'row', paddingVertical: 14, borderRadius: 14, backgroundColor: '#111111', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  nextBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
   securityNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E8F5E9', padding: 12, borderRadius: 10, marginBottom: 16 },
   securityNoteText: { fontSize: 12, color: '#2E7D32', fontWeight: '600' as const, flex: 1 },
   credentialsInfo: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 16, paddingHorizontal: 4 },

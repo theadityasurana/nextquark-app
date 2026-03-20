@@ -32,6 +32,7 @@ export default function OnboardingScreen() {
     ...defaultOnboardingData,
     ...onboardingData,
   }));
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const blurAnim = useRef(new Animated.Value(0)).current;
@@ -61,9 +62,11 @@ export default function OnboardingScreen() {
   const handleNext = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentStep === 3) {
+      if (isSubmitting) return;
+      setIsSubmitting(true);
       completeOnboarding(data).then(() => {
-        router.replace('/quick-tips' as any);
-      });
+        router.replace('/(tabs)' as any);
+      }).catch(() => setIsSubmitting(false));
       return;
     }
     animateTransition('forward', () => {

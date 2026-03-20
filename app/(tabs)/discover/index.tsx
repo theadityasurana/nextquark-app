@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, TextInput, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { Plus, SlidersHorizontal, X, ChevronDown, Check, Search, Users, Crown, Building2, TrendingUp, Clock, GraduationCap, Trophy } from 'lucide-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
@@ -35,6 +36,17 @@ export default function DiscoverScreen() {
   const [universityFilter, setUniversityFilter] = useState<string[]>([]);
   const [universitySearch, setUniversitySearch] = useState('');
   const [showFriendSearch, setShowFriendSearch] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
+
+  useFocusEffect(
+    useCallback(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+      queryClient.invalidateQueries({ queryKey: ['jobs-by-favorite-companies'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['all-profiles'] });
+    }, [queryClient])
+  );
 
   const { data: referralStats, refetch: refetchReferralStats } = useQuery({
     queryKey: ['referral-stats', supabaseUserId],
@@ -123,7 +135,7 @@ export default function DiscoverScreen() {
     queryFn: async () => {
       const hours = recentJobsTimeRange === '24h' ? 24 : recentJobsTimeRange === '48h' ? 48 : recentJobsTimeRange === '7d' ? 168 : 720;
       const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).order('created_at', { ascending: false }).limit(10);
+      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false });
       return data || [];
     },
   });
@@ -224,7 +236,7 @@ export default function DiscoverScreen() {
   }, [refetchJobs]);
 
   const handleAddFavoriteCompany = useCallback(() => {
-    router.push('/profile' as any);
+    router.push({ pathname: '/(tabs)/profile' as any, params: { scrollTo: 'favoritecompanies' } });
   }, [router]);
 
   const handleJobPress = useCallback((job: Job) => {
@@ -254,7 +266,7 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />} onTouchStart={() => setShowFriendSearch(false)}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />} onTouchStart={() => setShowFriendSearch(false)}>
           <View style={styles.friendsSection}>
             <View style={styles.friendsHeader}>
               <Users size={20} color={colors.secondary} />
@@ -275,7 +287,7 @@ export default function DiscoverScreen() {
               </Pressable>
               <Pressable style={styles.inviteButton} onPress={async () => {
                 if (!referralStats?.referralCode && supabaseUserId) {
-                  const code = await createReferralCode(supabaseUserId, userProfile?.full_name || 'User');
+                  const code = await createReferralCode(supabaseUserId, userProfile?.name || 'User');
                   if (code) await refetchReferralStats();
                 }
                 if (referralStats?.referralCode) {
@@ -326,7 +338,7 @@ export default function DiscoverScreen() {
                     }
                   } else {
                     // Fallback to UI Avatars
-                    avatarUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.full_name || 'User') + '&background=6366f1&color=fff&size=200';
+                    avatarUrl = 'https://api.dicebear.com/9.x/adventurer/png?seed=' + encodeURIComponent(profile.id || profile.full_name || 'User') + '&size=200';
                   }
                   
                   const isPremium = profile.subscription_type === 'premium' || profile.subscription_type === 'pro';
@@ -426,7 +438,7 @@ export default function DiscoverScreen() {
                   style={[styles.timeRangeChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, analyticsTimeRange === range && { backgroundColor: colors.secondary, borderColor: colors.secondary }]}
                   onPress={() => setAnalyticsTimeRange(range)}
                 >
-                  <Text style={[styles.timeRangeText, { color: colors.textPrimary }, analyticsTimeRange === range && { color: colors.surface }]}>
+                  <Text style={[styles.timeRangeText as any, { color: colors.textPrimary }, analyticsTimeRange === range && { color: colors.surface }]}>
                     {range === '24h' ? '24h' : range === '3d' ? '3d' : range === '7d' ? '7d' : range === '30d' ? '30d' : range === '365d' ? '1y' : 'All'}
                   </Text>
                 </Pressable>
@@ -442,7 +454,7 @@ export default function DiscoverScreen() {
                       <View key={idx} style={styles.barRow}>
                         <Text style={styles.barLabel}>{item[0].substring(0, 15)}</Text>
                         <View style={styles.barContainer}>
-                          <View style={[styles.barFill, { width: `${(item[1] / topCompanies[0][1]) * 100}%`, backgroundColor: '#6366f1' }]} />
+                          <View style={[styles.barFill, { width: `${((item[1] as number) / (topCompanies[0][1] as number)) * 100}%`, backgroundColor: '#6366f1' }]} />
                           <Text style={styles.barValue}>{item[1]}</Text>
                         </View>
                       </View>
@@ -482,7 +494,7 @@ export default function DiscoverScreen() {
                       <View key={idx} style={styles.barRow}>
                         <Text style={styles.barLabel}>{item[0].substring(0, 15)}</Text>
                         <View style={styles.barContainer}>
-                          <View style={[styles.barFill, { width: `${(item[1] / trendingLocations[0][1]) * 100}%`, backgroundColor: '#22c55e' }]} />
+                          <View style={[styles.barFill, { width: `${((item[1] as number) / (trendingLocations[0][1] as number)) * 100}%`, backgroundColor: '#22c55e' }]} />
                           <Text style={styles.barValue}>{item[1]}</Text>
                         </View>
                       </View>
@@ -764,4 +776,5 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 14, fontWeight: '600' },
   clearFiltersButton: { marginTop: 20, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   clearFiltersText: { fontSize: 16, fontWeight: '700' },
+  timeRangeText: { fontSize: 12, fontWeight: '600' as const },
 });

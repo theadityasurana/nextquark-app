@@ -20,18 +20,18 @@ if (Platform.OS === 'ios') {
       });
     }
   } catch (error) {
-    console.log('Notifications not available:', error);
+    if (__DEV__) console.log('Notifications not available:', error);
   }
 }
 
 export async function registerForPushNotifications() {
   if (!Notifications || !Device) {
-    console.log('Push notifications require a development build (not available in Expo Go on Android)');
+    if (__DEV__) console.log('Push notifications require a development build (not available in Expo Go on Android)');
     return null;
   }
 
   if (!Device.isDevice) {
-    console.log('Push notifications only work on physical devices');
+    if (__DEV__) console.log('Push notifications only work on physical devices');
     return null;
   }
 
@@ -45,7 +45,7 @@ export async function registerForPushNotifications() {
     }
     
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token');
+      if (__DEV__) console.log('Failed to get push token');
       return null;
     }
 
@@ -64,7 +64,7 @@ export async function registerForPushNotifications() {
 
     return token.data;
   } catch (error) {
-    console.log('Error registering for push notifications:', error);
+    if (__DEV__) console.log('Error registering for push notifications:', error);
     return null;
   }
 }

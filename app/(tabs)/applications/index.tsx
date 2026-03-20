@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrendingUp, FileCheck, Clock } from 'lucide-react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import ApplicationItem from '@/components/ApplicationItem';
-import { Application } from '@/types';
+import { Application, ApplicationStatus, DbApplicationRow } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews } from '@/lib/jobs';
+import { useFocusEffect } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
+import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews, getCompanyLogoUrl } from '@/lib/jobs';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { Image } from 'expo-image';
 import { useCompletedApps } from '@/hooks/useCompletedApps';
@@ -16,8 +18,18 @@ import { useCompletedApps } from '@/hooks/useCompletedApps';
 export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const queryClient = useQueryClient();
   const { supabaseUserId } = useAuth();
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'cooking' | 'locked_in' | 'interviewing' | 'offer'>('all');
+  const flatListRef = useRef<FlatList>(null);
+  useScrollToTop(flatListRef);
+
+  useFocusEffect(
+    useCallback(() => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      queryClient.invalidateQueries({ queryKey: ['user-applications', supabaseUserId] });
+    }, [supabaseUserId, queryClient])
+  );
 
   const { data: applications = [], isLoading, refetch } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
@@ -41,26 +53,15 @@ export default function ApplicationsScreen() {
     setRefreshing(false);
   };
 
-  const appIds = useMemo(() => applications.map((a: any) => a.id), [applications]);
+  const appIds = useMemo(() => applications.map((a: DbApplicationRow) => a.id), [applications]);
   const completedApps = useCompletedApps(appIds);
 
   const mappedApplications: Application[] = useMemo(() => {
-    return applications.map((app: any) => {
-      const getCompanyLogoUrl = (companyName: string, logo?: string, logoUrl?: string): string => {
-        const SUPABASE_URL = 'https://widujxpahzlpegzjjpqp.supabase.co';
-        if (logoUrl && logoUrl.startsWith('http')) return logoUrl;
-        if (logo && logo.startsWith('http')) return logo;
-        if (logoUrl) return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoUrl}`;
-        if (logo) return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logo}`;
-        const logoPath = `logos/${companyName.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
-        return `${SUPABASE_URL}/storage/v1/object/public/company-logos/${logoPath}`;
-      };
+    return applications.map((app: DbApplicationRow) => {
+      const companyLogo = getCompanyLogoUrl(app.company_name || '', app.company_logo || undefined, app.company_logo_url || undefined);
 
-      const companyLogo = getCompanyLogoUrl(app.company_name || '', app.company_logo, app.company_logo_url);
-
-      // If local step progress reached the end, override status to 'completed'
-      const dbStatus = app.status || 'applied';
-      const effectiveStatus = completedApps.has(app.id) && (dbStatus === 'pending' || dbStatus === 'failed' || dbStatus === 'applied') ? 'completed' : dbStatus;
+      const dbStatus = (app.status || 'applied') as ApplicationStatus;
+      const effectiveStatus: ApplicationStatus = completedApps.has(app.id) && (dbStatus === 'pending' || dbStatus === 'failed' || dbStatus === 'applied') ? 'completed' : dbStatus;
 
       return {
         id: app.id,
@@ -70,7 +71,7 @@ export default function ApplicationsScreen() {
         interviewDate: app.interview_date || null,
         interviewTime: app.interview_time || null,
         meetingLink: app.meeting_link || null,
-        meetingPlatform: app.meeting_platform || null,
+        meetingPlatform: app.meeting_platform as Application['meetingPlatform'],
         verificationOtp: app.verification_otp || null,
         otpReceivedAt: app.otp_received_at || null,
         job: {
@@ -79,16 +80,15 @@ export default function ApplicationsScreen() {
           companyName: app.company_name,
           companyLogo,
           location: app.location || '',
-          salary: app.salary_min && app.salary_max ? `${app.salary_currency || '$'}${app.salary_min / 1000}k-${app.salary_max / 1000}k` : '',
-        } as any,
+        } as Application['job'],
       } as Application;
     });
   }, [applications, completedApps]);
 
   const stats = useMemo(() => {
     const total = mappedApplications.length;
-    const cooking = mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed' as any).length;
-    const lockedIn = mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' as any || a.status === 'submitted' as any).length;
+    const cooking = mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed').length;
+    const lockedIn = mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted').length;
     const interviewing = mappedApplications.filter((a) => a.status === 'interviewing' || a.status === 'interview_scheduled').length;
     const offers = mappedApplications.filter((a) => a.status === 'offer').length;
     return { total, cooking, lockedIn, interviewing, offers };
@@ -96,8 +96,8 @@ export default function ApplicationsScreen() {
 
   const filteredApplications = useMemo(() => {
     if (selectedFilter === 'all') return mappedApplications;
-    if (selectedFilter === 'cooking') return mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed' as any);
-    if (selectedFilter === 'locked_in') return mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' as any || a.status === 'submitted' as any);
+    if (selectedFilter === 'cooking') return mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed');
+    if (selectedFilter === 'locked_in') return mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted');
     if (selectedFilter === 'interviewing') return mappedApplications.filter((a) => a.status === 'interviewing' || a.status === 'interview_scheduled');
     if (selectedFilter === 'offer') return mappedApplications.filter((a) => a.status === 'offer');
     return mappedApplications;
@@ -135,7 +135,7 @@ export default function ApplicationsScreen() {
         >
           <TrendingUp size={18} color={colors.textPrimary} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.total}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>All</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>All</Text>
         </Pressable>
         <Pressable 
           style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'cooking' && styles.statCardActive]} 
@@ -143,7 +143,7 @@ export default function ApplicationsScreen() {
         >
           <Clock size={18} color={colors.warning} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.cooking}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Cooking</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cooking</Text>
         </Pressable>
         <Pressable 
           style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'locked_in' && styles.statCardActive]} 
@@ -151,7 +151,7 @@ export default function ApplicationsScreen() {
         >
           <FileCheck size={18} color={colors.accent} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.lockedIn}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Locked In</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Locked In</Text>
         </Pressable>
         <Pressable 
           style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'interviewing' && styles.statCardActive]} 
@@ -159,11 +159,12 @@ export default function ApplicationsScreen() {
         >
           <FileCheck size={18} color={colors.statusInterview} />
           <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.interviewing}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Interviews</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Interviews</Text>
         </Pressable>
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={filteredApplications}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
@@ -251,6 +252,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#000",
     fontWeight: '500' as const,
+    textAlign: 'center' as const,
   },
   emptyContainer: {
     flex: 1,

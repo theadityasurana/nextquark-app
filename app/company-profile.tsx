@@ -6,10 +6,9 @@ import { Image } from 'expo-image';
 import { ArrowLeft, MapPin, Users, Briefcase, Building2, ExternalLink, ChevronRight, Clock, Globe } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
-import { mockJobs } from '@/mocks/jobs';
-import { mockApplications } from '@/mocks/applications';
 import { Job } from '@/types';
-import { fetchJobsByCompany, fetchCompanyFromSupabase } from '@/lib/jobs';
+import { fetchJobsByCompany, fetchCompanyFromSupabase, fetchUserApplications } from '@/lib/jobs';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -40,6 +39,7 @@ export default function CompanyProfileScreen() {
   const router = useRouter();
   const { companyName } = useLocalSearchParams<{ companyName: string }>();
   const [activeTab, setActiveTab] = useState<TabType>('Overview');
+  const { supabaseUserId } = useAuth();
 
   const { data: supabaseCompanyJobs, isLoading: isLoadingJobs } = useQuery({
     queryKey: ['company-jobs', companyName],
@@ -55,10 +55,19 @@ export default function CompanyProfileScreen() {
 
   const companyJobs = useMemo(() => {
     if (supabaseCompanyJobs && supabaseCompanyJobs.length > 0) return supabaseCompanyJobs;
-    return mockJobs.filter(j => j.companyName === companyName);
+    return [];
   }, [companyName, supabaseCompanyJobs]);
 
-  const companyApplications = useMemo(() => mockApplications.filter(a => a.job.companyName === companyName), [companyName]);
+  const { data: userApplications = [] } = useQuery({
+    queryKey: ['user-applications', supabaseUserId],
+    queryFn: () => fetchUserApplications(supabaseUserId!),
+    enabled: !!supabaseUserId,
+  });
+
+  const companyApplications = useMemo(() => 
+    userApplications.filter((a: any) => a.company_name?.toLowerCase() === companyName?.toLowerCase()),
+    [userApplications, companyName]
+  );
 
   const companyMeta = useMemo(() => {
     if (supabaseCompany) {
@@ -190,11 +199,11 @@ export default function CompanyProfileScreen() {
       {companyApplications.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Recent Applications</Text>
-          {companyApplications.map((app) => (
+          {companyApplications.map((app: any) => (
             <Pressable key={app.id} style={styles.miniAppCard} onPress={() => handleApplicationPress(app.id)}>
               <View style={styles.miniAppInfo}>
-                <Text style={styles.miniAppTitle}>{app.job.jobTitle}</Text>
-                <Text style={styles.miniAppDate}>Applied {app.appliedDate}</Text>
+                <Text style={styles.miniAppTitle}>{app.job_title}</Text>
+                <Text style={styles.miniAppDate}>Applied {new Date(app.created_at).toLocaleDateString()}</Text>
               </View>
               <View style={[styles.miniStatusBadge, { backgroundColor: `${getStatusColor(app.status)}18` }]}>
                 <Text style={[styles.miniStatusText, { color: getStatusColor(app.status) }]}>{getStatusLabel(app.status)}</Text>
@@ -268,18 +277,18 @@ export default function CompanyProfileScreen() {
       ) : (
         <>
           <Text style={styles.jobsCount}>{companyApplications.length} application{companyApplications.length !== 1 ? 's' : ''}</Text>
-          {companyApplications.map((app) => (
+          {companyApplications.map((app: any) => (
             <Pressable key={app.id} style={styles.appListCard} onPress={() => handleApplicationPress(app.id)}>
               <View style={styles.appListHeader}>
-                <Text style={styles.appListTitle}>{app.job.jobTitle}</Text>
+                <Text style={styles.appListTitle}>{app.job_title}</Text>
                 <View style={[styles.appStatusBadge, { backgroundColor: `${getStatusColor(app.status)}18` }]}>
                   <View style={[styles.appStatusDot, { backgroundColor: getStatusColor(app.status) }]} />
                   <Text style={[styles.appStatusText, { color: getStatusColor(app.status) }]}>{getStatusLabel(app.status)}</Text>
                 </View>
               </View>
-              <Text style={styles.appListActivity}>{app.lastActivity}</Text>
+              <Text style={styles.appListActivity}>{app.status}</Text>
               <View style={styles.appListFooter}>
-                <Text style={styles.appListDate}>Applied {app.appliedDate}</Text>
+                <Text style={styles.appListDate}>Applied {new Date(app.created_at).toLocaleDateString()}</Text>
                 <ChevronRight size={16} color={Colors.textTertiary} />
               </View>
             </Pressable>

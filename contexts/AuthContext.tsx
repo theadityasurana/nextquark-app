@@ -5,12 +5,16 @@ import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import { UserProfile } from '@/types';
 import { supabase, getProfilePictureUrl } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
-import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
+import { registerForPushNotifications, savePushToken, scheduleAllNotifications, sendWelcomeNotification } from '@/lib/notifications';
 import { getOrCreateProxyEmail } from '@/lib/resend';
 
 const AUTH_KEY = 'nextquark_auth';
 const ONBOARDING_KEY = 'nextquark_onboarding';
 const SWIPED_JOBS_KEY = 'nextquark_swiped_jobs';
+
+// Only cache the most recent swiped IDs locally to avoid CursorWindow overflow.
+// The full list is persisted in Supabase.
+const MAX_LOCAL_SWIPED_IDS = 500;
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -128,6 +132,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         }
       }).catch(err => console.log('Push notification registration error:', err));
 
+      // Schedule all local notifications (morning, evening, motivational, festivals)
+      supabase.from('profiles').select('first_name').eq('id', userId).single().then(({ data: p }) => {
+        const name = p?.first_name || '';
+        scheduleAllNotifications(name);
+      }).catch(() => {});
+
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -215,7 +225,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
         const swipedIds = Array.isArray(profile.swiped_job_ids) ? profile.swiped_job_ids : [];
         setSwipedJobIds(swipedIds);
-        await AsyncStorage.setItem(SWIPED_JOBS_KEY, JSON.stringify(swipedIds));
+        // Only cache the tail locally to avoid CursorWindow overflow
+        const localCache = swipedIds.slice(-MAX_LOCAL_SWIPED_IDS);
+        await AsyncStorage.setItem(SWIPED_JOBS_KEY, JSON.stringify(localCache));
 
         setUserProfile(mapDbToUserProfile(profile, userId));
         await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(currentAuthState));
@@ -371,6 +383,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       };
       setOnboardingData(freshOnboardingData);
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(freshOnboardingData));
+
+      // Send welcome notification for first-time signup
+      const parts2 = name.split(' ');
+      sendWelcomeNotification(parts2[0] || '').catch(() => {});
+      scheduleAllNotifications(parts2[0] || '').catch(() => {});
 
       return { success: true, userId: data.user.id };
     } catch (e: any) {
@@ -695,15 +712,28 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setSwipedJobIds(prev => {
       if (prev.includes(jobId)) return prev;
       const updated = [...prev, jobId];
-      AsyncStorage.setItem(SWIPED_JOBS_KEY, JSON.stringify(updated));
+      // Only cache the tail locally to avoid CursorWindow overflow
+      const localCache = updated.slice(-MAX_LOCAL_SWIPED_IDS);
+      AsyncStorage.setItem(SWIPED_JOBS_KEY, JSON.stringify(localCache)).catch(() => {});
       if (supabaseUserId) {
-        supabase.from('profiles').upsert({
-          id: supabaseUserId,
-          swiped_job_ids: updated,
-          updated_at: new Date().toISOString(),
+        // Append single ID server-side instead of sending the full array
+        supabase.rpc('append_swiped_job_id', {
+          user_id: supabaseUserId,
+          job_id: jobId,
         }).then(({ error }) => {
-          if (error) console.log('Error saving swiped job IDs to Supabase:', error.message);
-          else console.log('Swiped job IDs synced to Supabase, total:', updated.length);
+          if (error) {
+            // Fallback: upsert full array if RPC doesn't exist yet
+            supabase.from('profiles').upsert({
+              id: supabaseUserId,
+              swiped_job_ids: updated,
+              updated_at: new Date().toISOString(),
+            }).then(({ error: e2 }) => {
+              if (e2) console.log('Error saving swiped job IDs:', e2.message);
+              else console.log('Swiped job IDs synced (fallback), total:', updated.length);
+            });
+          } else {
+            console.log('Swiped job ID appended via RPC:', jobId);
+          }
         });
       }
       return updated;
@@ -723,6 +753,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setUserProfile(null);
     setSupabaseUserId(null);
     setSwipedJobIds([]);
+  }, []);
+
+  const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'An unexpected error occurred' };
+    }
   }, []);
 
   const deleteAccount = useCallback(async () => {
@@ -766,6 +806,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     swipedJobIds,
     signUpWithEmail,
     signInWithEmail,
+    resetPassword,
     completeOnboarding,
     updateOnboardingData,
     saveProfile,

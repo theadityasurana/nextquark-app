@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, SlidersHorizontal, Sparkles, MapPin, Check, ChevronDown, Search, RefreshCw, Globe } from 'lucide-react-native';
+import { X, Heart, SlidersHorizontal, MapPin, Check, ChevronDown, Search, Globe } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors, { darkColors } from '@/constants/colors';
@@ -39,6 +39,26 @@ const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 const CARD_COLORS = [Colors.surface];
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+function EmptyState({ colors, emptyFadeAnim, emptySlideAnim }: { colors: any; emptyFadeAnim: Animated.Value; emptySlideAnim: Animated.Value }) {
+  useEffect(() => {
+    emptyFadeAnim.setValue(0);
+    emptySlideAnim.setValue(30);
+    Animated.parallel([
+      Animated.timing(emptyFadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(emptySlideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <View style={styles.emptyState}>
+      <Animated.View style={{ opacity: emptyFadeAnim, transform: [{ translateY: emptySlideAnim }], alignItems: 'center' }}>
+        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>All caught up!</Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>You've reviewed all available jobs. Check back later or adjust your filters for more matches.</Text>
+      </Animated.View>
+    </View>
+  );
+}
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 const JOB_TYPES = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
@@ -107,7 +127,10 @@ export default function HomeScreen() {
   const colors = useColors();
   const isDark = colors.background === darkColors.background;
   const [currentIndex, setCurrentIndex] = useState(0);
+  const currentIndexRef = useRef(0);
   const [swipeDirection, setSwipeDirection] = useState<string | null>(null);
+  // Snapshot of swipedJobIds at deck-build time, so swiping doesn't recompute the deck
+  const [deckSwipedSnapshot, setDeckSwipedSnapshot] = useState<Set<string>>(new Set(swipedJobIds));
   const [showFilters, setShowFilters] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
@@ -119,15 +142,24 @@ export default function HomeScreen() {
   const [roleSearch, setRoleSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [locationSearch, setLocationSearch] = useState('');
-  const [feedMode, setFeedMode] = useState<'discover' | 'india' | 'foryou'>('india');
+  const [feedMode, setFeedMode] = useState<'discover' | 'india' | 'foryou' | 'remote'>('india');
   const [notification, setNotification] = useState<{ visible: boolean; job?: Job } | null>(null);
   const [isSwipeEnabled, setIsSwipeEnabled] = useState(true);
   const [activeSearchTags, setActiveSearchTags] = useState<string[]>([]);
   const [loadingWordIndex, setLoadingWordIndex] = useState(0);
+  const [showOutOfSwipes, setShowOutOfSwipes] = useState(false);
+  const outOfSwipesAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
-  const position = useRef(new Animated.ValueXY()).current;
+  // Each card gets a fresh Animated position. We use a ref keyed by currentIndex
+  // so the position is always clean {0,0} for a new card and never carries over
+  // the off-screen value from the previous swiped card.
+  const positionRef = useRef(new Animated.ValueXY()).current;
+  const [cardKey, setCardKey] = useState(0);
+  const cardMountAnim = useRef(new Animated.Value(1)).current;
   const loadingWordOpacity = useRef(new Animated.Value(0)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const emptyFadeAnim = useRef(new Animated.Value(0)).current;
+  const emptySlideAnim = useRef(new Animated.Value(30)).current;
 
   const loadingWords = ['Vibe', 'Check', 'Apply'];
 
@@ -227,7 +259,7 @@ export default function HomeScreen() {
       jobsList = mockJobs;
     }
     
-    // Shuffle the jobs array
+    // Shuffle the jobs array using a seeded approach so it's stable
     const shuffled = [...jobsList];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -283,12 +315,31 @@ export default function HomeScreen() {
     }).length;
   }, [allJobs, swipedJobIds]);
 
-  const jobs: Job[] = useMemo(() => {
+  const remoteCount = useMemo(() => {
     let filtered = allJobs;
-
     if (swipedJobIds.length > 0) {
       const swipedSet = new Set(swipedJobIds);
       filtered = filtered.filter(job => !swipedSet.has(job.id));
+    }
+    return filtered.filter(job => {
+      const keyword = 'remote';
+      return job.jobTitle.toLowerCase().includes(keyword) ||
+        job.companyName.toLowerCase().includes(keyword) ||
+        job.location.toLowerCase().includes(keyword) ||
+        job.description.toLowerCase().includes(keyword) ||
+        job.employmentType.toLowerCase().includes(keyword) ||
+        job.locationType.toLowerCase().includes(keyword) ||
+        job.skills.some(skill => skill.toLowerCase().includes(keyword));
+    }).length;
+  }, [allJobs, swipedJobIds]);
+
+  const jobs: Job[] = useMemo(() => {
+    let filtered = allJobs;
+
+    // Use the snapshot taken at deck-build time, NOT the live swipedJobIds.
+    // This prevents the deck from shifting when a card is swiped.
+    if (deckSwipedSnapshot.size > 0) {
+      filtered = filtered.filter(job => !deckSwipedSnapshot.has(job.id));
     }
 
     // For You mode: filter by India + user's desired roles
@@ -333,6 +384,20 @@ export default function HomeScreen() {
     if (feedMode === 'india') {
       filtered = filtered.filter(job => {
         const keyword = 'india';
+        return job.jobTitle.toLowerCase().includes(keyword) ||
+          job.companyName.toLowerCase().includes(keyword) ||
+          job.location.toLowerCase().includes(keyword) ||
+          job.description.toLowerCase().includes(keyword) ||
+          job.employmentType.toLowerCase().includes(keyword) ||
+          job.locationType.toLowerCase().includes(keyword) ||
+          job.skills.some(skill => skill.toLowerCase().includes(keyword));
+      });
+    }
+
+    // Remote mode: filter by remote keyword
+    if (feedMode === 'remote') {
+      filtered = filtered.filter(job => {
+        const keyword = 'remote';
         return job.jobTitle.toLowerCase().includes(keyword) ||
           job.companyName.toLowerCase().includes(keyword) ||
           job.location.toLowerCase().includes(keyword) ||
@@ -514,12 +579,31 @@ export default function HomeScreen() {
 
     console.log(`Applied filters: ${allJobs.length} -> ${filtered.length} jobs`);
     return filtered;
-  }, [allJobs, swipedJobIds, filters, feedMode, userProfile, activeSearchTags]);
+  }, [allJobs, deckSwipedSnapshot, filters, feedMode, userProfile, activeSearchTags]);
 
+
+
+  // Rebuild deck when feed mode, filters, or search tags change.
+  // Take a fresh snapshot of swipedJobIds so the new deck excludes already-swiped jobs.
+  const prevFeedModeRef = useRef(feedMode);
+  const prevFiltersRef = useRef(filters);
+  const prevActiveSearchTagsRef = useRef(activeSearchTags);
   useEffect(() => {
-    setCurrentIndex(0);
-    position.setValue({ x: 0, y: 0 });
-  }, [jobs, position]);
+    const feedModeChanged = prevFeedModeRef.current !== feedMode;
+    const filtersChanged = prevFiltersRef.current !== filters;
+    const searchTagsChanged = prevActiveSearchTagsRef.current !== activeSearchTags;
+    
+    if (feedModeChanged || filtersChanged || searchTagsChanged) {
+      prevFeedModeRef.current = feedMode;
+      prevFiltersRef.current = filters;
+      prevActiveSearchTagsRef.current = activeSearchTags;
+      setDeckSwipedSnapshot(new Set(swipedJobIds));
+      setCurrentIndex(0);
+      currentIndexRef.current = 0;
+      positionRef.setValue({ x: 0, y: 0 });
+      setCardKey(prev => prev + 1);
+    }
+  }, [feedMode, filters, activeSearchTags, positionRef, swipedJobIds]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -535,44 +619,67 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const rotation = position.x.interpolate({
+  const rotation = positionRef.x.interpolate({
     inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
     outputRange: ['-8deg', '0deg', '8deg'],
     extrapolate: 'clamp',
   });
 
-  const likeOpacity = position.x.interpolate({
+  const likeOpacity = positionRef.x.interpolate({
     inputRange: [0, SCREEN_WIDTH / 4],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
 
-  const nopeOpacity = position.x.interpolate({
+  const nopeOpacity = positionRef.x.interpolate({
     inputRange: [-SCREEN_WIDTH / 4, 0],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  const saveOpacity = position.y.interpolate({
+  const saveOpacity = positionRef.y.interpolate({
     inputRange: [-SCREEN_HEIGHT / 6, 0],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  const nextCardScale = position.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-    outputRange: [1, 0.92, 1],
+  const nextCardScale = Animated.add(
+    positionRef.x.interpolate({
+      inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+      outputRange: [0.08, 0, 0.08],
+      extrapolate: 'clamp',
+    }),
+    positionRef.y.interpolate({
+      inputRange: [-SCREEN_HEIGHT / 4, 0],
+      outputRange: [0.08, 0],
+      extrapolate: 'clamp',
+    })
+  ).interpolate({
+    inputRange: [0, 0.08, 0.16],
+    outputRange: [0.92, 1, 1],
     extrapolate: 'clamp',
   });
 
-  const nextCardOpacity = position.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-    outputRange: [1, 0.6, 1],
+  const nextCardOpacity = Animated.add(
+    positionRef.x.interpolate({
+      inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+      outputRange: [0.4, 0, 0.4],
+      extrapolate: 'clamp',
+    }),
+    positionRef.y.interpolate({
+      inputRange: [-SCREEN_HEIGHT / 4, 0],
+      outputRange: [0.4, 0],
+      extrapolate: 'clamp',
+    })
+  ).interpolate({
+    inputRange: [0, 0.4, 0.8],
+    outputRange: [0.6, 1, 1],
     extrapolate: 'clamp',
   });
 
   const handleSwipeComplete = useCallback(async (direction: string) => {
-    const currentJob = jobs[currentIndex];
+    const idx = currentIndexRef.current;
+    const currentJob = jobs[idx];
     if (!currentJob) return;
 
     console.log('🔒 Disabling swipe - handleSwipeComplete started for direction:', direction);
@@ -603,7 +710,6 @@ export default function HomeScreen() {
       console.log('Incrementing right_swipe for job:', currentJob.id);
       incrementRightSwipe(currentJob.id).then(() => {
         console.log('right_swipe incremented successfully');
-        refetchJobs();
       });
 
       // Decrement application count
@@ -692,31 +798,85 @@ export default function HomeScreen() {
 
     setSwipeDirection(null);
     
-    // Increment index first, then reset position atomically to avoid flicker
-    setCurrentIndex((prev) => prev + 1);
-    position.setValue({ x: 0, y: 0 });
+    const nextIndex = currentIndexRef.current + 1;
+    currentIndexRef.current = nextIndex;
     
-    // Re-enable swiping after a short delay
-    setTimeout(() => {
-      console.log('🔓 Re-enabling swipe - transition complete');
+    positionRef.setValue({ x: 0, y: 0 });
+    cardMountAnim.setValue(0);
+    
+    setCardKey(prev => prev + 1);
+    setCurrentIndex(nextIndex);
+    
+    // Scale-up fade-in: 0.92 scale + 0 opacity -> 1.0 scale + 1 opacity
+    Animated.timing(cardMountAnim, {
+      toValue: 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
       setIsSwipeEnabled(true);
-    }, 100);
-  }, [currentIndex, position, triggerHaptic, jobs, refetchJobs, addSwipedJobId, supabaseUserId, userProfile, userName, queryClient]);
+    });
+  }, [positionRef, triggerHaptic, jobs, addSwipedJobId, supabaseUserId, userProfile, userName, queryClient]);
+
+  const openOutOfSwipesSheet = useCallback(() => {
+    outOfSwipesAnim.setValue(SCREEN_HEIGHT);
+    setShowOutOfSwipes(true);
+    Animated.spring(outOfSwipesAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 18,
+      stiffness: 120,
+    }).start();
+  }, [outOfSwipesAnim]);
+
+  const closeOutOfSwipesSheet = useCallback(() => {
+    Animated.timing(outOfSwipesAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => setShowOutOfSwipes(false));
+  }, [outOfSwipesAnim]);
 
   const forceSwipe = useCallback((direction: string) => {
     if (!isSwipeEnabled) {
       console.log('🚫 forceSwipe blocked - isSwipeEnabled:', isSwipeEnabled);
       return;
     }
+    // Block right swipe (apply) and up swipe (save) when out of swipes
+    if ((direction === 'right' || direction === 'up') && subscriptionData && subscriptionData.applications_remaining <= 0) {
+      Animated.spring(positionRef, {
+        toValue: { x: 0, y: 0 },
+        friction: 5,
+        useNativeDriver: true,
+      }).start();
+      setSwipeDirection(null);
+      openOutOfSwipesSheet();
+      return;
+    }
     console.log('✅ forceSwipe allowed - direction:', direction, 'isSwipeEnabled:', isSwipeEnabled);
     const x = direction === 'right' ? SCREEN_WIDTH * 1.5 : direction === 'left' ? -SCREEN_WIDTH * 1.5 : 0;
     const y = direction === 'up' ? -SCREEN_HEIGHT : 0;
-    Animated.timing(position, {
+    
+    // Start swipe-away. After 150ms (card is mostly off-screen), trigger the
+    // card swap early so the new card begins fading in while the old one
+    // is still leaving. This eliminates any visible gap.
+    let swapTriggered = false;
+    const triggerSwap = () => {
+      if (swapTriggered) return;
+      swapTriggered = true;
+      handleSwipeComplete(direction);
+    };
+    
+    setTimeout(triggerSwap, 150);
+    
+    Animated.timing(positionRef, {
       toValue: { x, y },
       duration: 300,
       useNativeDriver: true,
-    }).start(() => handleSwipeComplete(direction));
-  }, [position, handleSwipeComplete, isSwipeEnabled]);
+    }).start(() => {
+      // Safety: if setTimeout hasn't fired yet (shouldn't happen), trigger now
+      triggerSwap();
+    });
+  }, [positionRef, handleSwipeComplete, isSwipeEnabled, subscriptionData, openOutOfSwipesSheet]);
 
   const panResponder = useMemo(
     () => PanResponder.create({
@@ -727,7 +887,7 @@ export default function HomeScreen() {
       },
       onPanResponderMove: (_, gesture) => {
         if (!isSwipeEnabled) return;
-        position.setValue({ x: gesture.dx, y: gesture.dy });
+        positionRef.setValue({ x: gesture.dx, y: gesture.dy });
         if (gesture.dx > 50) setSwipeDirection('right');
         else if (gesture.dx < -50) setSwipeDirection('left');
         else if (gesture.dy < -50) setSwipeDirection('up');
@@ -742,7 +902,7 @@ export default function HomeScreen() {
         } else if (gesture.dy < -SWIPE_THRESHOLD) {
           forceSwipe('up');
         } else {
-          Animated.spring(position, {
+          Animated.spring(positionRef, {
             toValue: { x: 0, y: 0 },
             friction: 5,
             useNativeDriver: true,
@@ -751,15 +911,10 @@ export default function HomeScreen() {
         }
       },
     }),
-    [isSwipeEnabled, position, forceSwipe]
+    [isSwipeEnabled, positionRef, forceSwipe]
   );
 
-  useEffect(() => {
-    if (currentIndex < jobs.length && jobs[currentIndex]) {
-      console.log('🔄 useEffect: Re-enabling swipe for new card at index:', currentIndex);
-      setIsSwipeEnabled(true);
-    }
-  }, [currentIndex, jobs]);
+
 
   const toggleJobType = useCallback((type: string) => {
     setTempFilters((prev) => ({
@@ -941,22 +1096,44 @@ export default function HomeScreen() {
     ? allLocations.filter((l) => l.toLowerCase().includes(locationSearch.toLowerCase()))
     : allLocations;
 
-  const renderCard = (job: Job, index: number) => {
-    if (index < currentIndex) return null;
+  // Mount animation interpolations
+  const mountScale = cardMountAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1],
+  });
 
-    const hash = job.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const cardColor = CARD_COLORS[hash % CARD_COLORS.length];
-
-    if (index === currentIndex) {
-      return (
+  const renderCards = () => {
+    if (currentIndex >= jobs.length) return null;
+    
+    const currentJob = jobs[currentIndex];
+    const nextJob = currentIndex + 1 < jobs.length ? jobs[currentIndex + 1] : null;
+    
+    const currentHash = currentJob.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+    const currentColor = CARD_COLORS[currentHash % CARD_COLORS.length];
+    
+    return (
+      <>
+        {nextJob && (
+          <Animated.View
+            key={`next-${nextJob.id}`}
+            style={[
+              styles.cardWrapper,
+              { transform: [{ scale: nextCardScale }], opacity: nextCardOpacity, paddingHorizontal: 16 },
+            ]}
+          >
+            <JobCard job={nextJob} backgroundColor={CARD_COLORS[nextJob.id.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % CARD_COLORS.length]} showMatchBadge={feedMode === 'foryou'} />
+          </Animated.View>
+        )}
         <Animated.View
-          key={job.id}
+          key={`current-${cardKey}-${currentJob.id}`}
           style={[
             styles.cardWrapper,
             {
+              opacity: cardMountAnim,
               transform: [
-                { translateX: position.x },
-                { translateY: position.y },
+                { scale: mountScale },
+                { translateX: positionRef.x },
+                { translateY: positionRef.y },
                 { rotate: rotation },
               ],
               paddingHorizontal: 16,
@@ -973,26 +1150,10 @@ export default function HomeScreen() {
           <Animated.View style={[styles.overlayLabel, styles.saveLabel, { opacity: saveOpacity }]}>
             <Text style={styles.saveLabelText}>SAVE</Text>
           </Animated.View>
-          <JobCard job={job} onViewDetails={() => router.push({ pathname: '/job-details' as any, params: { id: job.id } })} backgroundColor={cardColor} showMatchBadge={feedMode === 'foryou'} />
+          <JobCard job={currentJob} onViewDetails={() => router.push({ pathname: '/job-details' as any, params: { id: currentJob.id } })} backgroundColor={currentColor} showMatchBadge={feedMode === 'foryou'} />
         </Animated.View>
-      );
-    }
-
-    if (index === currentIndex + 1) {
-      return (
-        <Animated.View
-          key={job.id}
-          style={[
-            styles.cardWrapper,
-            { transform: [{ scale: nextCardScale }], opacity: nextCardOpacity, paddingHorizontal: 16 },
-          ]}
-        >
-          <JobCard job={job} backgroundColor={cardColor} showMatchBadge={feedMode === 'foryou'} />
-        </Animated.View>
-      );
-    }
-
-    return null;
+      </>
+    );
   };
 
   const remainingJobs = jobs.length - currentIndex;
@@ -1067,7 +1228,7 @@ export default function HomeScreen() {
           <Globe size={14} color={feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000')} />
           <Text style={[styles.feedToggleText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>Global</Text>
           <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'discover' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{allJobs.length}</Text>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>1.3Mn+</Text>
           </View>
         </Pressable>
         <Pressable
@@ -1079,7 +1240,7 @@ export default function HomeScreen() {
           <Text style={{ fontSize: 14 }}>🇮🇳</Text>
           <Text style={[styles.feedToggleText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>India</Text>
           <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'india' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{indiaCount}</Text>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>19k+</Text>
           </View>
         </Pressable>
         <Pressable
@@ -1092,6 +1253,18 @@ export default function HomeScreen() {
           <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>For You</Text>
           <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
             <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{forYouCount}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          style={[styles.feedToggleBtn, feedMode === 'remote'
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
+          onPress={() => setFeedMode('remote')}
+        >
+          <Text style={{ fontSize: 14 }}>🌴</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'remote' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>Remote</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'remote' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'remote' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{remoteCount}</Text>
           </View>
         </Pressable>
       </ScrollView>
@@ -1164,63 +1337,52 @@ export default function HomeScreen() {
               {loadingWords[loadingWordIndex]}
             </Animated.Text>
           </View>
-        ) : subscriptionData && subscriptionData.applications_remaining <= 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Heart size={40} color={Colors.error} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: colors.secondary }]}>Out of Swipes!</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Sorry, but you have run out of free swipes. Consider upgrading your plan or share NextQuark with your friends to earn more swipes.</Text>
-            <View style={styles.outOfSwipesActions}>
-              <Pressable 
-                style={[styles.upgradeButton, { backgroundColor: colors.surface }]} 
-                onPress={() => router.push('/premium' as any)}
-              >
-                <Text style={[styles.upgradeButtonText, { color: colors.secondary }]}>Upgrade to Pro</Text>
-              </Pressable>
-              <Pressable 
-                style={styles.shareButton} 
-                onPress={async () => {
-                  if (supabaseUserId) {
-                    const { getReferralStats, createReferralCode } = await import('@/lib/referral');
-                    const stats = await getReferralStats(supabaseUserId);
-                    if (!stats?.referralCode) {
-                      await createReferralCode(supabaseUserId, userName || 'User');
-                    }
-                    const updatedStats = await getReferralStats(supabaseUserId);
-                    if (updatedStats?.referralCode) {
-                      try {
-                        const { Share } = await import('react-native');
-                        await Share.share({
-                          message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${updatedStats.referralCode} and get 5 free application swipes to get started. Download now!`,
-                        });
-                      } catch (error) {
-                        console.error('Error sharing:', error);
-                      }
-                    }
-                  }
-                }}
-              >
-                <Text style={styles.shareButtonText}>Share to Earn Free Swipes</Text>
-              </Pressable>
-            </View>
-          </View>
         ) : currentIndex >= jobs.length ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Sparkles size={40} color={Colors.primary} />
-            </View>
-            <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptyText}>You've reviewed all available jobs. Check back later or adjust your filters for more matches.</Text>
-            <Pressable style={styles.resetButton} onPress={() => { setCurrentIndex(0); refetchJobs(); }}>
-              <Text style={styles.resetButtonText}>Start Over</Text>
-            </Pressable>
-          </View>
+          <EmptyState colors={colors} emptyFadeAnim={emptyFadeAnim} emptySlideAnim={emptySlideAnim} />
         ) : (
-          [...jobs].reverse().map((job, i) => renderCard(job, jobs.length - 1 - i))
+          renderCards()
         )}
       </View>
 
+
+      {showOutOfSwipes && (
+        <View style={styles.swipeModalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeOutOfSwipesSheet} />
+          <Animated.View style={[styles.swipeModalCard, { transform: [{ translateY: outOfSwipesAnim }] }]}>
+            <Heart size={28} color="#EF4444" fill="#EF4444" style={{ alignSelf: 'center', marginBottom: 12 }} />
+            <Text style={styles.sheetTitle}>You're all out buddy 💔</Text>
+            <Text style={styles.sheetSubtitle}>No more free swipes left. Level up your plan or share the vibe to keep swiping!</Text>
+            <Pressable style={styles.sheetUpgradeBtn} onPress={() => { closeOutOfSwipesSheet(); router.push('/premium' as any); }}>
+              <Text style={styles.sheetUpgradeBtnText}>Upgrade to Pro</Text>
+            </Pressable>
+            <Pressable
+              style={styles.sheetShareBtn}
+              onPress={async () => {
+                if (supabaseUserId) {
+                  const { getReferralStats, createReferralCode } = await import('@/lib/referral');
+                  const stats = await getReferralStats(supabaseUserId);
+                  if (!stats?.referralCode) {
+                    await createReferralCode(supabaseUserId, userName || 'User');
+                  }
+                  const updatedStats = await getReferralStats(supabaseUserId);
+                  if (updatedStats?.referralCode) {
+                    try {
+                      const { Share } = await import('react-native');
+                      await Share.share({
+                        message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${updatedStats.referralCode} and get 5 free application swipes to get started. Download now!`,
+                      });
+                    } catch (error) {
+                      console.error('Error sharing:', error);
+                    }
+                  }
+                }
+              }}
+            >
+              <Text style={styles.sheetShareBtnText}>Share to Earn Free Swipes</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      )}
 
       <Modal visible={showFilters} animationType="slide" transparent>
         <View style={styles.filterOverlay}>
@@ -1399,8 +1561,8 @@ export default function HomeScreen() {
               <Pressable style={styles.resetFilterBtn} onPress={handleResetFilters}>
                 <Text style={styles.resetFilterBtnText}>Reset</Text>
               </Pressable>
-              <Pressable style={[styles.applyFilterBtn, { backgroundColor: colors.textPrimary }]} onPress={handleApplyFilters}>
-                <Text style={[styles.applyFilterBtnText, { color: colors.background }]}>Apply Filters ({jobs.length})</Text>
+              <Pressable style={[styles.applyFilterBtn, { backgroundColor: '#000000' }]} onPress={handleApplyFilters}>
+                <Text style={[styles.applyFilterBtnText, { color: '#FFFFFF' }]}>Apply Filters</Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -1695,6 +1857,14 @@ const styles = StyleSheet.create({
   searchTagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   searchTag: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: "#FFF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   searchTagText: { fontSize: 12, color: "#000", fontWeight: '600' as const },
+  swipeModalOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', zIndex: 998, justifyContent: 'center', alignItems: 'center' },
+  swipeModalCard: { width: SCREEN_WIDTH - 80, backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 20 },
+  sheetTitle: { fontSize: 20, fontWeight: '800' as const, color: '#000000', textAlign: 'center', marginBottom: 8 },
+  sheetSubtitle: { fontSize: 14, color: '#374151', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  sheetUpgradeBtn: { backgroundColor: '#7C3AED', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 10 },
+  sheetUpgradeBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  sheetShareBtn: { backgroundColor: '#9CA3AF', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  sheetShareBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
   notificationContainer: { position: 'absolute' as const, left: 16, right: 16, zIndex: 1000 },
   notificationCard: { backgroundColor: "#FFF", borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 12, borderWidth: 1, borderColor: "#DDD" },
   notificationLogo: { width: 52, height: 52, borderRadius: 12, backgroundColor: "#FFF" },

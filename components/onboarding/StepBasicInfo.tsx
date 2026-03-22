@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList, Alert, Linking, Dimensions } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { Check, MapPin, ChevronDown, Search, X, Camera, Link2, Play } from 'lucide-react-native';
+import { Check, MapPin, ChevronDown, Search, X, Camera, Link2 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -13,10 +12,6 @@ const GENDER_OPTIONS = [
   { value: 'female' as const, label: 'Female' },
   { value: 'prefer_not_to_say' as const, label: 'Prefer not to say' },
 ];
-
-const YOUTUBE_VIDEO_ID = 'YRvBQdJlBeo';
-const YOUTUBE_THUMBNAIL = `https://img.youtube.com/vi/${YOUTUBE_VIDEO_ID}/maxresdefault.jpg`;
-const YOUTUBE_EMBED = `https://www.youtube.com/embed/${YOUTUBE_VIDEO_ID}?autoplay=1&playsinline=1`;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -32,7 +27,6 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
-  const [showVideoModal, setShowVideoModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scrollX = useRef(new Animated.Value(0)).current;
 
@@ -60,10 +54,6 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
 
   const selectedCountry = countryCodes.find(c => c.code === data.countryCode) || countryCodes.find(c => c.code === '+91') || countryCodes[0];
 
-  const handleOpenVideo = () => {
-    setShowVideoModal(true);
-  };
-
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -87,18 +77,6 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <Pressable style={styles.videoContainer} onPress={handleOpenVideo}>
-            <Image source={{ uri: YOUTUBE_THUMBNAIL }} style={styles.videoThumbnail} />
-            <View style={styles.playOverlay}>
-              <View style={styles.playButton}>
-                <Play size={32} color="#FFFFFF" fill="#FFFFFF" />
-              </View>
-            </View>
-            <View style={styles.videoBadge}>
-              <Text style={styles.videoBadgeText}>Watch: How it works</Text>
-            </View>
-          </Pressable>
-
           <Animated.FlatList
             data={GEN_Z_TIPS}
             horizontal
@@ -271,35 +249,6 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
         </Pressable>
       </ScrollView>
 
-      <Modal visible={showVideoModal} animationType="slide" transparent onRequestClose={() => setShowVideoModal(false)}>
-        <View style={styles.videoModalOverlay}>
-          <View style={styles.videoModalContent}>
-            <View style={styles.videoModalHeader}>
-              <Text style={styles.videoModalTitle}>How it works</Text>
-              <Pressable onPress={() => setShowVideoModal(false)} style={styles.videoCloseBtn}>
-                <X size={24} color="#111111" />
-              </Pressable>
-            </View>
-            <View style={styles.videoPlayerContainer}>
-              {Platform.OS === 'web' ? (
-                <iframe
-                  src={YOUTUBE_EMBED}
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : (
-                <WebView
-                  source={{ uri: YOUTUBE_EMBED }}
-                  allowsFullscreenVideo
-                  mediaPlaybackRequiresUserAction={false}
-                />
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Country Picker Modal */}
       <Modal visible={showCountryPicker} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -390,44 +339,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#FFFFFF' },
   scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24, justifyContent: 'space-between', backgroundColor: '#FFFFFF' },
   content: { paddingTop: 12 },
-  videoContainer: { 
-    width: '100%', 
-    height: 180, 
-    borderRadius: 16, 
-    overflow: 'hidden' as const, 
-    marginBottom: 16,
-    position: 'relative' as const,
-    backgroundColor: '#000',
-  },
-  videoThumbnail: { width: '100%', height: '100%' },
-  playOverlay: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoBadge: {
-    position: 'absolute' as const,
-    top: 12,
-    left: 12,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  videoBadgeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' as const },
   tipCarousel: { marginBottom: 12 },
   tipCarouselContent: { paddingHorizontal: 0 },
   tipCard: {
@@ -461,34 +372,6 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const, 
     color: '#F57F17',
     lineHeight: 20,
-  },
-  videoModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoModalContent: {
-    width: '90%',
-    maxWidth: 500,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden' as const,
-  },
-  videoModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  videoModalTitle: { fontSize: 18, fontWeight: '700' as const, color: '#111111' },
-  videoCloseBtn: { padding: 4 },
-  videoPlayerContainer: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000',
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   emoji: { fontSize: 36 },

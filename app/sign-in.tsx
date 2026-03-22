@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignInScreen() {
-  const { signInWithEmail } = useAuth();
+  const { signInWithEmail, resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +34,37 @@ export default function SignInScreen() {
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
     setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    const targetEmail = isEmailValid ? email : '';
+    if (Platform.OS === 'web') {
+      const input = window.prompt('Enter your email address to reset your password:', targetEmail);
+      if (!input) return;
+      const result = await resetPassword(input.trim());
+      if (result.success) {
+        window.alert('Password reset email sent! Check your inbox.');
+      } else {
+        window.alert(result.error || 'Failed to send reset email.');
+      }
+      return;
+    }
+    Alert.prompt(
+      'Reset Password',
+      'Enter your email address and we\'ll send you a reset link.',
+      async (input) => {
+        if (!input?.trim()) return;
+        const result = await resetPassword(input.trim());
+        if (result.success) {
+          Alert.alert('Email Sent', 'Check your inbox for a password reset link.');
+        } else {
+          Alert.alert('Error', result.error || 'Failed to send reset email.');
+        }
+      },
+      'plain-text',
+      targetEmail,
+      'email-address',
+    );
   };
 
   const animatePress = () => {
@@ -104,7 +135,7 @@ export default function SignInScreen() {
                 </View>
               </View>
 
-              <Pressable style={styles.forgotButton}>
+              <Pressable style={styles.forgotButton} onPress={handleForgotPassword}>
                 <Text style={styles.forgotText}>Forgot Password?</Text>
               </Pressable>
             </View>

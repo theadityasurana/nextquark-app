@@ -42,11 +42,10 @@ import {
   Check,
 
 } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
-import { getCompanyLogoUrl } from '@/lib/jobs';
+import { getCompanyLogoUrl, updateApplicationProgress } from '@/lib/jobs';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: 'AI is cooking 🔥', color: '#92400E', bg: '#FEF3C7' },
@@ -77,8 +76,8 @@ interface FlowStep {
 
 function getFlowSteps(): FlowStep[] {
   return [
-    { label: 'You swiped right 👍', date: 'Just now', status: 'completed' },
-    { label: 'AI started filling the application 🤖', date: 'Just now', status: 'completed' },
+    { label: 'You swiped right 👍', date: '', status: 'completed' },
+    { label: 'AI started filling the application 🤖', date: '', status: 'completed' },
     { label: 'AI is opening the job portal 🌐', date: '', status: 'pending', description: 'Navigating to the application page...' },
     { label: 'AI is filling out your name & contact info ✍️', date: '', status: 'pending', description: 'Entering your personal details...' },
     { label: 'AI is entering your education details 🎓', date: '', status: 'pending', description: 'Adding your school & degree info...' },
@@ -186,63 +185,29 @@ export default function ApplicationDetailsScreen() {
 
   const [showVideoModal, setShowVideoModal] = useState(false);
 
-  // Animated pulsing dot + time-based auto-advance that works even when app is closed
-  const TOTAL_STEPS = 9; // steps index 2..10 (9 animated steps)
-  const STEP_DURATION_MS = 13334; // ~13.3 seconds per step × 9 steps ≈ 120 seconds total
-  const [activeStepOffset, setActiveStepOffset] = useState(0);
+  // DB-driven progress tracking
+  const [progressStep, setProgressStep] = useState(0);
+  const [progressTimestamps, setProgressTimestamps] = useState<string[]>([]);
   const [reachedEnd, setReachedEnd] = useState(false);
-  const [stepLoaded, setStepLoaded] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const storageKey = `app_step_${id}`;
-  const startTimeKey = `app_start_${id}`;
 
-  // On mount: calculate step from elapsed time since first open
+  // Poll progress from DB
   useEffect(() => {
     if (!id) return;
-    Promise.all([
-      AsyncStorage.getItem(startTimeKey),
-      AsyncStorage.getItem(storageKey),
-    ]).then(([startStr, stepStr]) => {
-      const now = Date.now();
-      let startTime: number;
+    let cancelled = false;
 
-      if (startStr) {
-        startTime = parseInt(startStr, 10);
-      } else {
-        // First time opening this application — record start time
-        startTime = now;
-        AsyncStorage.setItem(startTimeKey, String(now));
-      }
+    const checkProgress = async () => {
+      const result = await updateApplicationProgress(id);
+      if (cancelled) return;
+      setProgressStep(result.step);
+      setProgressTimestamps(result.timestamps);
+      if (result.done) setReachedEnd(true);
+    };
 
-      const elapsed = now - startTime;
-      const calculatedStep = Math.min(Math.floor(elapsed / STEP_DURATION_MS), TOTAL_STEPS - 1);
-
-      setActiveStepOffset(calculatedStep);
-      if (calculatedStep >= TOTAL_STEPS - 1) setReachedEnd(true);
-      setStepLoaded(true);
-    });
+    checkProgress();
+    const interval = setInterval(checkProgress, 2000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [id]);
-
-  // Persist step offset whenever it changes
-  useEffect(() => {
-    if (!stepLoaded || !id) return;
-    AsyncStorage.setItem(storageKey, String(activeStepOffset));
-  }, [activeStepOffset, stepLoaded, id]);
-
-  // Live timer: advance steps while screen is open
-  useEffect(() => {
-    if (reachedEnd || !stepLoaded) return;
-    const interval = setInterval(() => {
-      AsyncStorage.getItem(startTimeKey).then((startStr) => {
-        if (!startStr) return;
-        const elapsed = Date.now() - parseInt(startStr, 10);
-        const step = Math.min(Math.floor(elapsed / STEP_DURATION_MS), TOTAL_STEPS - 1);
-        setActiveStepOffset(step);
-        if (step >= TOTAL_STEPS - 1) setReachedEnd(true);
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [reachedEnd, stepLoaded]);
 
   useEffect(() => {
     if (reachedEnd) return;
@@ -316,27 +281,28 @@ export default function ApplicationDetailsScreen() {
         <View style={styles.progressCard}>
           <Text style={styles.progressSectionTitle}>Application Progress</Text>
           {flowSteps.map((step, idx) => {
-            let isCompleted = step.status === 'completed';
+            let isCompleted = false;
             let isCurrent = false;
 
-            if (idx >= 2) {
-              const pendingIdx = idx - 2;
-              if (reachedEnd) {
-                isCompleted = true;
-              } else if (pendingIdx < activeStepOffset) {
-                isCompleted = true;
-              } else if (pendingIdx === activeStepOffset) {
-                isCurrent = true;
-              } else {
-                return null;
-              }
+            if (idx < progressStep) {
+              isCompleted = true;
+            } else if (idx === progressStep && !reachedEnd) {
+              isCurrent = true;
+            } else if (reachedEnd) {
+              isCompleted = true;
+            } else {
+              return null;
             }
 
             let isLastVisible = idx === flowSteps.length - 1;
-            if (!reachedEnd && idx >= 2) {
-              const pendingIdx = idx - 2;
-              isLastVisible = pendingIdx === activeStepOffset;
+            if (!reachedEnd) {
+              isLastVisible = idx === progressStep;
             }
+
+            const stepTimestamp = progressTimestamps[idx];
+            const dateLabel = stepTimestamp
+              ? new Date(stepTimestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+              : '';
 
             return (
               <View key={idx} style={styles.flowStep}>
@@ -355,7 +321,7 @@ export default function ApplicationDetailsScreen() {
                 <View style={styles.flowContent}>
                   <View style={styles.flowLabelRow}>
                     <Text style={[styles.flowLabel, isCurrent && styles.flowLabelActive]}>{step.label}</Text>
-                    {isCompleted && idx >= 2 ? <Text style={styles.flowDate}>Done</Text> : step.date ? <Text style={styles.flowDate}>{step.date}</Text> : null}
+                  {isCompleted && dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : isCurrent && dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : null}
                   </View>
                   {step.description && isCurrent ? (
                     <Text style={styles.flowDesc}>{step.description}</Text>

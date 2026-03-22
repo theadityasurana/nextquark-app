@@ -411,6 +411,8 @@ export async function addToLiveApplicationQueue(
       job_title: job.jobTitle,
       job_url: jobData?.job_url || null,
       status: 'pending',
+      applied_at: new Date().toISOString(),
+      progress_timestamps: JSON.stringify([new Date().toISOString()]),
     };
 
     const { error } = await supabase
@@ -427,6 +429,66 @@ export async function addToLiveApplicationQueue(
   } catch (e) {
     console.log('Exception adding to live_application_queue:', e);
     return false;
+  }
+}
+
+const PROGRESS_TOTAL_STEPS = 11;
+const PROGRESS_DURATION_MS = 120000; // 120 seconds total
+const PROGRESS_STEP_DURATION_MS = PROGRESS_DURATION_MS / (PROGRESS_TOTAL_STEPS - 2); // ~13.3s per animated step (steps 2-10)
+
+export async function updateApplicationProgress(appId: string): Promise<{ step: number; timestamps: string[]; done: boolean }> {
+  try {
+    const { data, error } = await supabase
+      .from('live_application_queue')
+      .select('applied_at, created_at, status, progress_timestamps')
+      .eq('id', appId)
+      .single();
+
+    if (error || !data) return { step: 0, timestamps: [], done: false };
+
+    const appliedAt = data.applied_at || data.created_at;
+    if (!appliedAt) return { step: 0, timestamps: [], done: false };
+
+    const elapsed = Date.now() - new Date(appliedAt).getTime();
+    // First 2 steps are instant, remaining 9 steps spread over 120s
+    const animatedStep = Math.min(Math.floor(elapsed / PROGRESS_STEP_DURATION_MS), PROGRESS_TOTAL_STEPS - 2 - 1);
+    const currentStep = Math.min(animatedStep + 2, PROGRESS_TOTAL_STEPS - 1);
+    const done = currentStep >= PROGRESS_TOTAL_STEPS - 1;
+
+    // Build timestamps array
+    let timestamps: string[] = [];
+    try {
+      timestamps = data.progress_timestamps ? JSON.parse(data.progress_timestamps) : [appliedAt];
+    } catch {
+      timestamps = [appliedAt];
+    }
+
+    // Fill in missing timestamps for completed steps
+    const startTime = new Date(appliedAt).getTime();
+    let updated = false;
+    for (let i = timestamps.length; i <= currentStep; i++) {
+      if (i < 2) {
+        timestamps.push(appliedAt);
+      } else {
+        const stepTime = new Date(startTime + (i - 2) * PROGRESS_STEP_DURATION_MS).toISOString();
+        timestamps.push(stepTime);
+      }
+      updated = true;
+    }
+
+    // Update DB if new steps completed or if done and status still pending
+    if (updated || (done && data.status === 'pending')) {
+      const updatePayload: any = { progress_timestamps: JSON.stringify(timestamps) };
+      if (done && (data.status === 'pending' || data.status === 'failed')) {
+        updatePayload.status = 'completed';
+      }
+      await supabase.from('live_application_queue').update(updatePayload).eq('id', appId);
+    }
+
+    return { step: currentStep, timestamps, done };
+  } catch (e) {
+    console.log('Error updating application progress:', e);
+    return { step: 0, timestamps: [], done: false };
   }
 }
 

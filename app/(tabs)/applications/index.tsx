@@ -10,10 +10,9 @@ import { Application, ApplicationStatus, DbApplicationRow } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFocusEffect } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
-import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews, getCompanyLogoUrl } from '@/lib/jobs';
+import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews, getCompanyLogoUrl, updateApplicationProgress } from '@/lib/jobs';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { Image } from 'expo-image';
-import { useCompletedApps } from '@/hooks/useCompletedApps';
 
 export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
@@ -35,11 +34,18 @@ export default function ApplicationsScreen() {
     queryKey: ['user-applications', supabaseUserId],
     queryFn: async () => {
       if (!supabaseUserId) return [];
-      // Scan emails for OTPs and interview invites before fetching applications
       await Promise.all([
         scanEmailsForOtp(supabaseUserId),
         scanEmailsForInterviews(supabaseUserId),
       ]);
+      const apps = await fetchUserApplications(supabaseUserId);
+      // Update progress for all pending/failed apps so DB status is current
+      await Promise.all(
+        apps
+          .filter((a: any) => a.status === 'pending' || a.status === 'failed')
+          .map((a: any) => updateApplicationProgress(a.id))
+      );
+      // Re-fetch to get updated statuses
       return fetchUserApplications(supabaseUserId);
     },
     enabled: !!supabaseUserId,
@@ -53,20 +59,16 @@ export default function ApplicationsScreen() {
     setRefreshing(false);
   };
 
-  const appIds = useMemo(() => applications.map((a: DbApplicationRow) => a.id), [applications]);
-  const completedApps = useCompletedApps(appIds);
-
   const mappedApplications: Application[] = useMemo(() => {
     return applications.map((app: DbApplicationRow) => {
       const companyLogo = getCompanyLogoUrl(app.company_name || '', app.company_logo || undefined, app.company_logo_url || undefined);
 
-      const dbStatus = (app.status || 'applied') as ApplicationStatus;
-      const effectiveStatus: ApplicationStatus = completedApps.has(app.id) && (dbStatus === 'pending' || dbStatus === 'failed' || dbStatus === 'applied') ? 'completed' : dbStatus;
+      const dbStatus = (app.status || 'pending') as ApplicationStatus;
 
       return {
         id: app.id,
         appliedDate: app.created_at,
-        status: effectiveStatus,
+        status: dbStatus,
         lastActivity: app.updated_at || app.created_at,
         interviewDate: app.interview_date || null,
         interviewTime: app.interview_time || null,
@@ -83,7 +85,7 @@ export default function ApplicationsScreen() {
         } as Application['job'],
       } as Application;
     });
-  }, [applications, completedApps]);
+  }, [applications]);
 
   const stats = useMemo(() => {
     const total = mappedApplications.length;

@@ -336,9 +336,6 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
           {renderPremiumUpsell()}
         </View>
       </ScrollView>
-      <Pressable onPress={onNext} style={styles.skipButton}>
-        <Text style={styles.skipText}>Skip for now</Text>
-      </Pressable>
     </Animated.View>
   );
 }

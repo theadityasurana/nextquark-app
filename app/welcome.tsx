@@ -24,6 +24,12 @@ export default function Welcome() {
         <TouchableOpacity onPress={() => router.push('/sign-in')}>
           <Text style={styles.linkText}>Already a user? Sign in</Text>
         </TouchableOpacity>
+        <Text style={styles.legalText}>
+          By signing up, you agree to our{' '}
+          <Text style={styles.legalLink} onPress={() => router.push('/privacy-policy' as any)}>Privacy Policy</Text>
+          {' '}and{' '}
+          <Text style={styles.legalLink} onPress={() => router.push('/terms-of-service' as any)}>Terms of Service</Text>
+        </Text>
       </View>
     </View>
   );
@@ -37,4 +43,6 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#fff', padding: 18, borderRadius: 12, width: '100%', marginBottom: 16 },
   buttonText: { color: '#000', textAlign: 'center', fontSize: 16, fontWeight: '600' },
   linkText: { color: '#fff', textAlign: 'center', fontSize: 14 },
+  legalText: { color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: 11, marginTop: 16, lineHeight: 16 },
+  legalLink: { textDecorationLine: 'underline' },
 });

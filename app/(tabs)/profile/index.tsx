@@ -465,27 +465,49 @@ const MAJOR_CITIES = [
       return;
     }
 
-    // Load profile data for the current authenticated user
+    console.log('[PROFILE] ===== useEffect triggered =====');
+    console.log('[PROFILE] supabaseUserId:', supabaseUserId);
+    console.log('[PROFILE] supabaseProfile:', supabaseProfile ? { id: supabaseProfile.id, name: supabaseProfile.name, email: supabaseProfile.email, headline: supabaseProfile.headline } : 'null');
+    console.log('[PROFILE] current user state:', { name: user.name, email: user.email, headline: user.headline });
+
+    // Only update when we have actual profile data from Supabase
     if (supabaseProfile && supabaseProfile.id === supabaseUserId) {
-      console.log('[PROFILE] Loading profile for user:', supabaseUserId);
-      setUser(prev => ({ ...prev, ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] }));
-    } else if (supabaseUserId && !supabaseProfile) {
-      // User is authenticated but profile hasn't loaded yet, use onboarding data
-      console.log('[PROFILE] Using onboarding data for user:', supabaseUserId);
-      setUser(buildProfileFromOnboarding(onboardingData));
+      console.log('[PROFILE] ✅ Setting user from supabaseProfile:', { name: supabaseProfile.name, email: supabaseProfile.email });
+      setUser(prev => {
+        const merged = { ...prev, ...supabaseProfile, favoriteCompanies: supabaseProfile.favoriteCompanies || [] };
+        console.log('[PROFILE] Merged user state:', { name: merged.name, email: merged.email, headline: merged.headline });
+        return merged;
+      });
+    } else {
+      console.log('[PROFILE] ⏳ supabaseProfile not ready yet, keeping current user state');
     }
-  }, [supabaseProfile, supabaseUserId, onboardingData]);
+    // Don't fall back to onboarding data when supabaseProfile is temporarily null during refetch
+  }, [supabaseProfile, supabaseUserId]);
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMountedRef = useRef(false);
+  const hasLoadedProfileRef = useRef(false);
+  
+  // Track when real profile data has been loaded to avoid syncing defaults back to Supabase
   useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
+    if (supabaseProfile && supabaseProfile.id === supabaseUserId) {
+      hasLoadedProfileRef.current = true;
+    }
+  }, [supabaseProfile, supabaseUserId]);
+
+  useEffect(() => {
+    // Don't auto-sync until real profile data has loaded at least once
+    if (!hasLoadedProfileRef.current) {
+      if (__DEV__) console.log('[PROFILE] ⏸️ Auto-sync skipped - profile not loaded yet');
+      return;
+    }
+    // Never write back obviously-default/corrupted data
+    if (!user.name || user.name === 'User' || !user.email) {
+      if (__DEV__) console.log('[PROFILE] ⏸️ Auto-sync skipped - data looks like defaults:', { name: user.name, email: user.email });
       return;
     }
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(() => {
-      console.log('Auto-syncing profile to Supabase');
+      if (__DEV__) console.log('[PROFILE] 🔄 Auto-syncing profile to Supabase');
       saveProfile(user);
     }, 3000);
     return () => {

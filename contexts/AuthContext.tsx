@@ -117,13 +117,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const fetchAndSetProfile = useCallback(async (userId: string, session: Session) => {
     try {
-      if (__DEV__) console.log('[AUTH] fetchAndSetProfile for userId:', userId);
-      
-      // Clear previous user data first to prevent data leakage
-      if (__DEV__) console.log('[AUTH] Clearing previous user data before fetching new profile');
-      setUserProfile(null);
-      setOnboardingData(defaultOnboardingData);
-      setSwipedJobIds([]);
+      console.log('[AUTH] ===== fetchAndSetProfile START =====');
+      console.log('[AUTH] userId:', userId);
+      console.log('[AUTH] current userProfile before fetch:', userProfile ? { id: userProfile.id, name: userProfile.name, email: userProfile.email } : 'null');
       
       // Register for push notifications
       registerForPushNotifications().then(token => {
@@ -144,8 +140,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         .eq('id', userId)
         .single();
 
+      console.log('[AUTH] Supabase query result - profile:', profile ? { full_name: profile.full_name, email: profile.email, headline: profile.headline, phone: profile.phone } : 'null');
+      console.log('[AUTH] Supabase query result - error:', error ? { code: error.code, message: error.message } : 'null');
+
       if (error && error.code === 'PGRST116') {
-        if (__DEV__) console.log('No profile found, creating new one for user:', userId);
+        console.log('[AUTH] No profile found (PGRST116), creating new one for user:', userId);
         const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
         const parts = name.split(' ');
         const firstName = parts[0] || '';
@@ -209,6 +208,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       if (profile) {
+        console.log('[AUTH] ===== PROFILE FOUND =====');
+        console.log('[AUTH] full_name:', profile.full_name);
+        console.log('[AUTH] email:', profile.email);
+        console.log('[AUTH] headline:', profile.headline);
+        console.log('[AUTH] phone:', profile.phone);
+        console.log('[AUTH] location:', profile.location);
+        console.log('[AUTH] is_onboarding_complete:', profile.is_onboarding_complete);
+        console.log('[AUTH] avatar_url:', profile.avatar_url);
         const isComplete = profile.is_onboarding_complete === true;
         const currentAuthState: AuthState = {
           isAuthenticated: true,
@@ -229,11 +236,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const localCache = swipedIds.slice(-MAX_LOCAL_SWIPED_IDS);
         await AsyncStorage.setItem(SWIPED_JOBS_KEY, JSON.stringify(localCache));
 
-        setUserProfile(mapDbToUserProfile(profile, userId));
+        const mappedProfile = mapDbToUserProfile(profile, userId);
+        console.log('[AUTH] ===== MAPPED PROFILE =====');
+        console.log('[AUTH] mapped name:', mappedProfile.name);
+        console.log('[AUTH] mapped email:', mappedProfile.email);
+        console.log('[AUTH] mapped headline:', mappedProfile.headline);
+        console.log('[AUTH] mapped phone:', mappedProfile.phone);
+        console.log('[AUTH] mapped id:', mappedProfile.id);
+        setUserProfile(mappedProfile);
+        console.log('[AUTH] setUserProfile called with mapped profile');
         await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(currentAuthState));
       }
     } catch (e) {
-      if (__DEV__) console.log('Exception in fetchAndSetProfile:', e);
+      console.log('[AUTH] ===== EXCEPTION in fetchAndSetProfile =====', e);
       const catchState: AuthState = {
         isAuthenticated: true,
         isOnboardingComplete: false,
@@ -287,8 +302,20 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         setUserProfile(null);
         await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
         setIsLoading(false);
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        setSupabaseUserId(session.user.id);
+      } else if (event === 'TOKEN_REFRESHED') {
+        if (session?.user) {
+          setSupabaseUserId(session.user.id);
+        } else {
+          // Token refresh failed — stale session, force sign out
+          if (__DEV__) console.log('[AUTH] TOKEN_REFRESHED with no session, clearing stale data');
+          setSupabaseUserId(null);
+          setAuthState(defaultAuthState);
+          setOnboardingData(defaultOnboardingData);
+          setUserProfile(null);
+          setSwipedJobIds([]);
+          await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+          setIsLoading(false);
+        }
       }
     });
 
@@ -576,11 +603,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const saveProfile = useCallback(async (profileData: Partial<UserProfile>): Promise<boolean> => {
     if (!supabaseUserId) {
-      if (__DEV__) console.log('No Supabase user ID, skipping profile sync');
+      console.log('[AUTH] saveProfile: No Supabase user ID, skipping');
       return false;
     }
 
     try {
+      console.log('[AUTH] ===== saveProfile called =====');
+      console.log('[AUTH] saveProfile data:', { name: profileData.name, email: profileData.email, headline: profileData.headline, phone: profileData.phone });
       const dbData: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
       if (profileData.name !== undefined) dbData.full_name = profileData.name;
@@ -629,11 +658,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       });
 
       if (error) {
-        if (__DEV__) console.log('Error saving profile to Supabase:', error.message);
+        console.log('[AUTH] saveProfile ERROR:', error.message);
         return false;
       }
 
-      if (__DEV__) console.log('Profile synced to Supabase');
+      console.log('[AUTH] saveProfile SUCCESS - dbData keys:', Object.keys(dbData));
+      console.log('[AUTH] saveProfile - full_name sent:', dbData.full_name, '| email sent:', dbData.email);
       return true;
     } catch (e) {
       if (__DEV__) console.log('Exception saving profile:', e);

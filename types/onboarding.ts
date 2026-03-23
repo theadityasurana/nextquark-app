@@ -70,7 +70,7 @@ export interface OnboardingSkill {
     gender: '',
     profilePicture: null,
     phone: '',
-    countryCode: '+1',
+    countryCode: '+91',
     location: '',
     headline: '',
     linkedInUrl: '',

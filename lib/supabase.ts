@@ -16,13 +16,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-// Handle stale refresh tokens gracefully - sign out if token is invalid
-supabase.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'TOKEN_REFRESHED' && !session) {
-    // Token refresh failed, clear stale session
-    await AsyncStorage.multiRemove(['nextquark_auth', 'nextquark_onboarding', 'nextquark_swiped_jobs']);
-  }
-});
+// Note: stale token handling is done in AuthContext's onAuthStateChange listener
+// to avoid duplicate listeners causing race conditions with React state.
 
 export function getStorageUrl(bucket: string, path: string): string {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;

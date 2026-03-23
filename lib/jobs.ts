@@ -195,82 +195,91 @@ async function enrichJobWithCompanyData(job: Job, companyName: string): Promise<
   }
 }
 
+function enrichWithCompanyData(rows: SupabaseJob[], companyDataMap: Map<string, { industry?: string; size?: string; company_type?: string; description?: string; website?: string }>): Job[] {
+  return rows.map((row) => {
+    const job = mapSupabaseJobToJob(row);
+    const companyData = companyDataMap.get(row.company_name?.toLowerCase() || '');
+    if (companyData) {
+      if (companyData.industry) job.industry = companyData.industry;
+      if (companyData.size) job.companySize = companyData.size;
+      if (companyData.company_type) job.companyType = companyData.company_type;
+      if (companyData.description) job.companyDescription = companyData.description;
+      if (companyData.website) job.companyWebsite = companyData.website;
+    }
+    return job;
+  });
+}
+
+async function buildCompanyDataMap(companyNames: string[]): Promise<Map<string, { industry?: string; size?: string; company_type?: string; description?: string; website?: string }>> {
+  const map = new Map<string, { industry?: string; size?: string; company_type?: string; description?: string; website?: string }>();
+  if (companyNames.length === 0) return map;
+  const { data: companies } = await supabase
+    .from('companies')
+    .select('name, industry, size, company_type, description, website')
+    .in('name', companyNames);
+  companies?.forEach(company => {
+    if (company.name) {
+      map.set(company.name.toLowerCase(), {
+        industry: company.industry,
+        size: company.size,
+        company_type: company.company_type,
+        description: company.description,
+        website: company.website,
+      });
+    }
+  });
+  return map;
+}
+
 export async function fetchJobsFromSupabase(): Promise<Job[]> {
   try {
-    console.log('Fetching jobs from Supabase...');
-    
-    const { count } = await supabase
+    const { data, error } = await supabase
       .from('jobs')
-      .select('*', { count: 'exact', head: true });
-    
-    console.log(`Total jobs in database: ${count}`);
-    
-    const pageSize = 1000;
-    const allData: SupabaseJob[] = [];
-    
-    if (count && count > 0) {
-      const totalPages = Math.ceil(count / pageSize);
-      
-      for (let page = 0; page < totalPages; page++) {
-        const { data, error } = await supabase
-          .from('jobs')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-        
-        if (error) {
-          console.log(`Error fetching page ${page + 1}:`, error.message);
-          break;
-        }
-        
-        if (data && data.length > 0) {
-          allData.push(...data);
-          console.log(`Fetched page ${page + 1}/${totalPages} (${data.length} jobs)`);
-        }
-      }
-    }
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
 
-    if (allData.length === 0) {
-      console.log('No jobs found in Supabase');
+    if (error || !data || data.length === 0) {
+      console.log('Error or no jobs:', error?.message);
       return [];
     }
 
-    console.log(`Successfully fetched ${allData.length} jobs from Supabase (total in DB: ${count})`);
-    
-    // Fetch company data for all companies in one query
-    const uniqueCompanies = [...new Set(allData.map(j => j.company_name).filter(Boolean))];
-    const { data: companies } = await supabase
-      .from('companies')
-      .select('name, industry, size, company_type, description, website')
-      .in('name', uniqueCompanies);
-    
-    const companyDataMap = new Map<string, { industry?: string; size?: string; company_type?: string; description?: string; website?: string }>();
-    companies?.forEach(company => {
-      if (company.name) {
-        companyDataMap.set(company.name.toLowerCase(), {
-          industry: company.industry,
-          size: company.size,
-          company_type: company.company_type,
-          description: company.description,
-          website: company.website,
-        });
-      }
-    });
-    
-    return allData.map((row: SupabaseJob) => {
-      const job = mapSupabaseJobToJob(row);
-      const companyData = companyDataMap.get(row.company_name?.toLowerCase() || '');
-      if (companyData) {
-        if (companyData.industry) job.industry = companyData.industry;
-        if (companyData.size) job.companySize = companyData.size;
-        if (companyData.company_type) job.companyType = companyData.company_type;
-        if (companyData.description) job.companyDescription = companyData.description;
-        if (companyData.website) job.companyWebsite = companyData.website;
-      }
-      return job;
-    });
+    console.log(`Fetched ${data.length} jobs (initial batch)`);
+    const uniqueCompanies = [...new Set(data.map(j => j.company_name).filter(Boolean))];
+    const companyDataMap = await buildCompanyDataMap(uniqueCompanies);
+    return enrichWithCompanyData(data, companyDataMap);
   } catch (e) {
     console.log('Exception fetching jobs:', e);
+    return [];
+  }
+}
+
+export async function fetchRemainingJobs(): Promise<Job[]> {
+  try {
+    const PAGE_SIZE = 1000;
+    const allRemaining: SupabaseJob[] = [];
+    let page = 1; // start from page 1 (offset 1000)
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (error || !data || data.length === 0) break;
+      allRemaining.push(...data);
+      page++;
+    }
+
+    if (allRemaining.length === 0) return [];
+
+    console.log(`Fetched ${allRemaining.length} remaining jobs in background`);
+    const uniqueCompanies = [...new Set(allRemaining.map(j => j.company_name).filter(Boolean))];
+    const companyDataMap = await buildCompanyDataMap(uniqueCompanies);
+    return enrichWithCompanyData(allRemaining, companyDataMap);
+  } catch (e) {
+    console.log('Exception fetching remaining jobs:', e);
     return [];
   }
 }

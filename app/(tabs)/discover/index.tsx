@@ -135,7 +135,7 @@ export default function DiscoverScreen() {
     queryFn: async () => {
       const hours = recentJobsTimeRange === '24h' ? 24 : recentJobsTimeRange === '48h' ? 48 : recentJobsTimeRange === '7d' ? 168 : 720;
       const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false });
+      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false }).limit(30);
       return data || [];
     },
   });
@@ -183,7 +183,7 @@ export default function DiscoverScreen() {
     },
   });
 
-  const { data: topCompaniesWithLogos = [] } = useQuery({
+  const { data: allCompaniesWithLogos = [] } = useQuery({
     queryKey: ['top-companies-logos'],
     queryFn: async () => {
       const { data, error } = await supabase.from('companies').select('name, logo_url').not('logo_url', 'is', null).order('name');
@@ -200,6 +200,12 @@ export default function DiscoverScreen() {
       });
     },
   });
+
+  const topCompaniesWithLogos = useMemo(() => {
+    if (allCompaniesWithLogos.length <= 10) return allCompaniesWithLogos;
+    const shuffled = [...allCompaniesWithLogos].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 10);
+  }, [allCompaniesWithLogos]);
 
   const { data: jobsByCompany = {}, refetch: refetchJobs } = useQuery({
     queryKey: ['jobs-by-favorite-companies', favoriteCompanies],

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList, Alert, Linking, Dimensions } from 'react-native';
 import { Check, MapPin, ChevronDown, Search, X, Camera, Link2 } from 'lucide-react-native';
 import { Image } from 'expo-image';
@@ -13,14 +13,9 @@ const GENDER_OPTIONS = [
   { value: 'prefer_not_to_say' as const, label: 'Prefer not to say' },
 ];
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const GEN_Z_TIPS = [
-  { emoji: '✨', text: 'This is the only job form you\'ll ever need to fill' },
-  { emoji: '🚀', text: 'One profile, unlimited opportunities' },
-  { emoji: '💯', text: 'Fill once, apply everywhere' },
-  { emoji: '🎯', text: 'Your info, your way, forever' },
-];
+const COUNTER_EPOCH = 1735689600000;
+const COUNTER_BASE = 1347892;
+const COUNTER_RATE = 3.7;
 
 export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -28,13 +23,22 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   const [locationQuery, setLocationQuery] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const [liveJobCount, setLiveJobCount] = useState(() =>
+    Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE)
+  );
 
   useEffect(() => {
     if (!data.countryCode) {
       onUpdate({ countryCode: '+91' });
     }
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveJobCount(Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE));
+    }, 50);
+    return () => clearInterval(interval);
   }, []);
 
   const isValid = 
@@ -77,44 +81,12 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <Animated.FlatList
-            data={GEN_Z_TIPS}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item, index) => index.toString()}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: false }
-            )}
-            renderItem={({ item }) => (
-              <View style={styles.tipCard}>
-                <Text style={styles.tipEmoji}>{item.emoji}</Text>
-                <Text style={styles.tipBannerText}>{item.text}</Text>
-              </View>
-            )}
-            style={styles.tipCarousel}
-            contentContainerStyle={styles.tipCarouselContent}
-          />
-          <View style={styles.dotContainer}>
-            {GEN_Z_TIPS.map((_, index) => {
-              const inputRange = [
-                (index - 1) * SCREEN_WIDTH,
-                index * SCREEN_WIDTH,
-                (index + 1) * SCREEN_WIDTH,
-              ];
-              const dotOpacity = scrollX.interpolate({
-                inputRange,
-                outputRange: [0.3, 1, 0.3],
-                extrapolate: 'clamp',
-              });
-              return (
-                <Animated.View
-                  key={index}
-                  style={[styles.dot, { opacity: dotOpacity }]}
-                />
-              );
-            })}
+          <View style={styles.counterCard}>
+            <Text style={styles.counterEmoji}>🔥</Text>
+            <View style={styles.counterTextWrap}>
+              <Text style={styles.counterNumber}>{liveJobCount.toLocaleString()}</Text>
+              <Text style={styles.counterLabel}>jobs added and counting</Text>
+            </View>
           </View>
 
           <View style={styles.titleRow}>
@@ -339,10 +311,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#FFFFFF' },
   scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24, justifyContent: 'space-between', backgroundColor: '#FFFFFF' },
   content: { paddingTop: 12 },
-  tipCarousel: { marginBottom: 12 },
-  tipCarouselContent: { paddingHorizontal: 0 },
-  tipCard: {
-    width: SCREEN_WIDTH - 48,
+  counterCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -351,28 +320,12 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#FFD54F',
-  },
-  dotContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
     marginBottom: 20,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFD54F',
-  },
-  tipEmoji: { fontSize: 24 },
-  tipBannerText: { 
-    flex: 1, 
-    fontSize: 14, 
-    fontWeight: '700' as const, 
-    color: '#F57F17',
-    lineHeight: 20,
-  },
+  counterEmoji: { fontSize: 24 },
+  counterTextWrap: { flex: 1 },
+  counterNumber: { fontSize: 18, fontWeight: '900' as const, color: '#F57F17' },
+  counterLabel: { fontSize: 13, fontWeight: '600' as const, color: '#F57F17', opacity: 0.8 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   emoji: { fontSize: 36 },
   title: { fontSize: 28, fontWeight: '900' as const, color: '#111111' },

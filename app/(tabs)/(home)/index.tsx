@@ -26,7 +26,7 @@ import JobCard from '@/components/JobCard';
 import { MAJOR_CITIES, CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
 import RangeSlider from '@/components/RangeSlider';
 import { mockUser } from '@/mocks/user';
-import { fetchJobsFromSupabase, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
+import { fetchJobsFromSupabase, fetchRemainingJobs, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
@@ -161,11 +161,55 @@ export default function HomeScreen() {
   const emptyFadeAnim = useRef(new Animated.Value(0)).current;
   const emptySlideAnim = useRef(new Animated.Value(30)).current;
 
-  const loadingWords = ['Vibe', 'Check', 'Apply'];
+  // Synced live counter: deterministic from a fixed epoch so all users see the same number
+  const COUNTER_EPOCH = 1735689600000; // Jan 1, 2025 UTC
+  const COUNTER_BASE = 1347892;
+  const COUNTER_RATE = 3.7; // jobs per second
+  const [liveJobCount, setLiveJobCount] = useState(() => {
+    return Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE);
+  });
+
+  useEffect(() => {
+    if (!isLoadingJobs) return;
+    const interval = setInterval(() => {
+      setLiveJobCount(Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isLoadingJobs]);
+
+  const loadingWords = [
+    'Stalking Your Resume 👀',
+    'Matching Your Vibe ✨',
+    'Finding Fire Roles 🔥',
+    'Checking Locations 📍',
+    'Filtering Mid Jobs 🚫',
+    'Cooking Up Matches 🍳',
+    'Rating the Opps 💯',
+    'Curating Your Feed 🎯',
+    'No Cap, Almost Done 🧢',
+    'Slay Mode Loading 💅',
+    'Yeeting Bad Fits 🗑️',
+    'Rizzing Your Profile 😏',
+    'Vibing With Algos 🤖',
+    'Lowkey Optimizing 🧠',
+    'Manifesting Offers 🔮',
+    'Hitting Up Recruiters 📲',
+    'Main Character Energy 🌟',
+    'Unlocking Hidden Gems 💎',
+    'Doing Heavy Lifting 🏋️',
+    'Bet, We\'re Ready 🚀',
+  ];
 
   const { data: supabaseJobs, isLoading: isLoadingJobs, refetch: refetchJobs } = useQuery({
     queryKey: ['supabase-jobs'],
     queryFn: fetchJobsFromSupabase,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: remainingJobs } = useQuery({
+    queryKey: ['supabase-jobs-remaining'],
+    queryFn: fetchRemainingJobs,
+    enabled: !!supabaseJobs && supabaseJobs.length > 0,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -178,6 +222,9 @@ export default function HomeScreen() {
       return;
     }
 
+    let wordTimeout: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
     const floatAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
@@ -187,17 +234,27 @@ export default function HomeScreen() {
     floatAnimation.start();
 
     const animateWord = () => {
-      Animated.timing(loadingWordOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start(() => {
-        setTimeout(() => {
-          Animated.timing(loadingWordOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => {
+      if (cancelled) return;
+      Animated.timing(loadingWordOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start(() => {
+        if (cancelled) return;
+        wordTimeout = setTimeout(() => {
+          if (cancelled) return;
+          Animated.timing(loadingWordOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+            if (cancelled) return;
             setLoadingWordIndex((prev) => (prev + 1) % loadingWords.length);
           });
-        }, 600);
+        }, 250);
       });
     };
     animateWord();
 
-    return () => { floatAnimation.stop(); };
+    return () => {
+      cancelled = true;
+      if (wordTimeout) clearTimeout(wordTimeout);
+      floatAnimation.stop();
+      loadingWordOpacity.stopAnimation();
+      loadingWordOpacity.setValue(0);
+    };
   }, [isLoadingJobs, loadingWordIndex, loadingWordOpacity, floatAnim, loadingWords.length]);
 
   useFocusEffect(
@@ -228,8 +285,6 @@ export default function HomeScreen() {
     staleTime: 1000 * 60 * 10,
   });
 
-  console.log('Companies data loaded:', allCompaniesData.length);
-
   const { data: allJobTitles = [] } = useQuery({
     queryKey: ['all-job-titles'],
     queryFn: fetchUniqueJobTitles,
@@ -252,10 +307,10 @@ export default function HomeScreen() {
   const allJobs: Job[] = useMemo(() => {
     let jobsList: Job[] = [];
     if (supabaseJobs && supabaseJobs.length > 0) {
-      console.log('Using Supabase jobs:', supabaseJobs.length);
-      jobsList = supabaseJobs;
+      jobsList = remainingJobs && remainingJobs.length > 0
+        ? [...supabaseJobs, ...remainingJobs]
+        : supabaseJobs;
     } else {
-      console.log('Falling back to mock jobs');
       jobsList = mockJobs;
     }
     
@@ -267,7 +322,7 @@ export default function HomeScreen() {
     }
     
     return shuffled;
-  }, [supabaseJobs]);
+  }, [supabaseJobs, remainingJobs]);
 
   // Calculate For You count separately (constant regardless of active section)
   const forYouCount = useMemo(() => {
@@ -1156,7 +1211,7 @@ export default function HomeScreen() {
     );
   };
 
-  const remainingJobs = jobs.length - currentIndex;
+  const remainingJobCount = jobs.length - currentIndex;
 
   return (
     <TabTransitionWrapper routeName="home">
@@ -1184,7 +1239,7 @@ export default function HomeScreen() {
               ? 'Loading jobs...' 
               : subscriptionData 
               ? `${subscriptionData.applications_remaining} applications left this month`
-              : `${remainingJobs} jobs left today`
+              : `${remainingJobCount} jobs left today`
             }
           </Text>
         </View>
@@ -1336,6 +1391,9 @@ export default function HomeScreen() {
             <Animated.Text style={[styles.loadingWordText, { color: colors.textPrimary, opacity: loadingWordOpacity }]}>
               {loadingWords[loadingWordIndex]}
             </Animated.Text>
+            <Text style={[styles.liveCounterText, { color: isDark ? '#FFFFFF' : '#000000' }]}>
+              {liveJobCount.toLocaleString()} jobs added and counting
+            </Text>
           </View>
         ) : currentIndex >= jobs.length ? (
           <EmptyState colors={colors} emptyFadeAnim={emptyFadeAnim} emptySlideAnim={emptySlideAnim} />
@@ -1873,7 +1931,7 @@ const styles = StyleSheet.create({
   notificationCompany: { fontSize: 17, fontWeight: '700' as const, color: "#000", marginBottom: 2 },
   notificationRole: { fontSize: 14, color: "#000", lineHeight: 18 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 32 },
-  loadingWordText: { fontSize: 32, fontWeight: '800' as const, letterSpacing: 1 },
+  loadingWordText: { fontSize: 20, fontWeight: '800' as const, letterSpacing: 0.5 },
   floatWrapper: { alignItems: 'center', gap: 12 },
   floatCard: { width: 280, height: 190, borderRadius: 22, borderWidth: 2, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
   floatCardInner: { flex: 1, borderRadius: 18, padding: 16 },
@@ -1883,4 +1941,5 @@ const styles = StyleSheet.create({
   floatCardChips: { flexDirection: 'row', gap: 8, marginTop: 16 },
   floatChip: { width: 60, height: 22, borderRadius: 6 },
   floatShadow: { width: 200, height: 16, borderRadius: 100, backgroundColor: '#000' },
+  liveCounterText: { fontSize: 13, fontWeight: '400' as const, marginTop: 12, opacity: 0.7 },
 });

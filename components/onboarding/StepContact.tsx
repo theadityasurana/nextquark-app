@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList } from 'react-native';
-import { MapPin, Phone, ChevronDown, Search, X } from 'lucide-react-native';
+import { MapPin, Phone, ChevronDown, Search, X, Navigation } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { countryCodes, majorCities } from '@/constants/onboarding';
+import * as Location from 'expo-location';
+import { countryCodes, majorCities, findNearestIndianCity } from '@/constants/onboarding';
 import { StepProps } from '@/types/onboarding';
 
 export default function StepContact({ data, onUpdate, onNext }: StepProps) {
@@ -10,6 +11,7 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
+  const [detectingLocation, setDetectingLocation] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const phoneRef = useRef<TextInput>(null);
 
@@ -25,6 +27,22 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
+
+  const handleDetectLocation = async () => {
+    setDetectingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { setDetectingLocation(false); return; }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const nearest = findNearestIndianCity(loc.coords.latitude, loc.coords.longitude);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onUpdate({ location: nearest });
+      setShowLocationSearch(false);
+    } catch (e) {
+      console.log('Location detect error:', e);
+    }
+    setDetectingLocation(false);
+  };
 
   const filteredCountries = countryCodes.filter(c =>
     c.country.toLowerCase().includes(countrySearch.toLowerCase()) || c.code.includes(countrySearch)
@@ -150,12 +168,16 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
               <Search size={16} color="#9E9E9E" />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search cities..."
+                placeholder={detectingLocation ? 'Detecting location...' : 'Search cities...'}
                 placeholderTextColor="#9E9E9E"
                 value={locationQuery}
                 onChangeText={setLocationQuery}
-                autoFocus
+                autoFocus={!detectingLocation}
+                editable={!detectingLocation}
               />
+              <Pressable onPress={handleDetectLocation} disabled={detectingLocation} hitSlop={8}>
+                <Navigation size={18} color={detectingLocation ? '#9E9E9E' : '#111111'} />
+              </Pressable>
             </View>
             <FlatList
               data={filteredCities}
@@ -256,4 +278,5 @@ const styles = StyleSheet.create({
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20 },
   tipIcon: { fontSize: 14 },
   tipText: { color: '#9E9E9E', fontSize: 13, flex: 1 },
+
 });

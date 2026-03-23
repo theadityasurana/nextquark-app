@@ -130,12 +130,14 @@ export default function PremiumScreen() {
 
   const getPlanPrice = () => {
     if (selectedPlan === 'free') return 0;
-    if (selectedPlan === 'pro') return 2; // TEMP: ₹2 for testing
-    return 3; // TEMP: ₹3 for testing
+    if (selectedPlan === 'pro') return isAnnual ? 225 : 20;
+    return isAnnual ? 799 : 79.99;
   };
 
   const getPlanPriceInINR = () => {
-    return getPlanPrice(); // TEMP: prices are already in INR for testing
+    const usdPrice = getPlanPrice();
+    const conversionRate = 94; // 1 USD = 94 INR (approximate)
+    return Math.round(usdPrice * conversionRate);
   };
 
   const getFinalPrice = () => {
@@ -171,7 +173,7 @@ export default function PremiumScreen() {
 
     try {
       const finalAmount = getFinalPrice();
-      const finalAmountINR = Math.round(finalAmount); // TEMP: already in INR for testing
+      const finalAmountINR = Math.round(finalAmount * 94); // Convert USD to INR
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -324,8 +326,8 @@ export default function PremiumScreen() {
             <Text style={styles.planOptionDesc}>100 applications / month</Text>
           </View>
           <View style={styles.priceCol}>
-            <Text style={styles.planOptionPrice}>₹2</Text>
-            <Text style={styles.planOptionPeriod}>/test</Text>
+            <Text style={styles.planOptionPrice}>{isAnnual ? '$225' : '$20'}</Text>
+            <Text style={styles.planOptionPeriod}>{isAnnual ? '/year' : '/month'}</Text>
           </View>
         </Pressable>
 
@@ -353,8 +355,8 @@ export default function PremiumScreen() {
             <Text style={styles.planOptionDesc}>500 applications / month</Text>
           </View>
           <View style={styles.priceCol}>
-            <Text style={styles.planOptionPrice}>₹3</Text>
-            <Text style={styles.planOptionPeriod}>/test</Text>
+            <Text style={styles.planOptionPrice}>{isAnnual ? '$799' : '$79.99'}</Text>
+            <Text style={styles.planOptionPeriod}>{isAnnual ? '/year' : '/month'}</Text>
           </View>
         </Pressable>
 
@@ -394,15 +396,15 @@ export default function PremiumScreen() {
           <View style={styles.priceBreakdown}>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Original Price:</Text>
-              <Text style={styles.priceValue}>₹{getPlanPrice()}</Text>
+              <Text style={styles.priceValue}>${getPlanPrice()}</Text>
             </View>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Discount:</Text>
-              <Text style={styles.discountValue}>-₹{(getPlanPrice() - getFinalPrice()).toFixed(2)}</Text>
+              <Text style={styles.discountValue}>-${(getPlanPrice() - getFinalPrice()).toFixed(2)}</Text>
             </View>
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total:</Text>
-              <Text style={styles.totalValue}>₹{getFinalPrice().toFixed(2)}</Text>
+              <Text style={styles.totalValue}>${getFinalPrice().toFixed(2)}</Text>
             </View>
           </View>
         )}

@@ -79,15 +79,27 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 export async function savePushToken(userId: string, pushToken: string) {
-  const { error } = await supabase
-    .from('user_push_tokens')
-    .upsert({
-      user_id: userId,
-      push_token: pushToken,
-      platform: Platform.OS,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,push_token' });
-  if (error) console.error('Error saving push token:', error);
+  try {
+    // Try upsert on user_id only — one token per user
+    const { error } = await supabase
+      .from('user_push_tokens')
+      .upsert({
+        user_id: userId,
+        push_token: pushToken,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    if (error) {
+      // Fallback: plain insert if constraint doesn't match
+      if (__DEV__) console.log('Push token upsert fallback:', error.message);
+      await supabase.from('user_push_tokens').insert({
+        user_id: userId,
+        push_token: pushToken,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  } catch (e) {
+    if (__DEV__) console.log('Error saving push token (non-critical):', e);
+  }
 }
 
 // --- Rotation helper ---
@@ -515,6 +527,125 @@ export async function scheduleFestivalNotifications(firstName: string) {
 }
 
 // ============================================================
+// 20 "WE MISS YOU" MESSAGES
+// ============================================================
+
+const MISS_YOU_MESSAGES = [
+  "We're missing you! New jobs are waiting for your swipe. Come back! 💼",
+  "It's been a while! Fresh opportunities have been added just for you. 🚀",
+  "Your dream job might have just been posted. Don't miss out! ✨",
+  "Hey, we noticed you've been away. The job market is buzzing — come check it out! 🔥",
+  "Swipe Jobs misses you! New roles from top companies are live now. 🏢",
+  "Opportunities don't wait forever. Come back and keep swiping! 💪",
+  "Your next career move could be one swipe away. We miss you! 🎯",
+  "The best candidates stay active. Come back and stay ahead! 🏆",
+  "New jobs matching your profile just dropped. Come take a look! 🌟",
+  "We've been saving the best jobs for you. Come back and explore! 💎",
+  "Your profile is still looking great. Now put it to work — come swipe! 📱",
+  "Miss swiping? We miss you too! New opportunities await. 👋",
+  "The job market never sleeps, and neither should your hustle. Come back! ⚡",
+  "Great things happen to those who show up. We're waiting for you! 🌈",
+  "Your career journey isn't over. Come back and keep building! 🏗️",
+  "Recruiters are looking for someone like you. Don't keep them waiting! 🤝",
+  "A quick swipe session could change everything. We miss you! 💫",
+  "New companies, new roles, new possibilities. Come see what's new! 🆕",
+  "Your competition is swiping. Stay in the game — come back! 🎮",
+  "We saved your spot. Come back and pick up where you left off! 🔖",
+];
+
+// ============================================================
+// SCHEDULE "WE MISS YOU" (fires 24h after last app open)
+// ============================================================
+
+export async function scheduleMissYouNotification(firstName: string) {
+  if (!Notifications) return;
+  try {
+    await cancelByType('miss_you');
+    const name = firstName || 'there';
+    const idx = Math.floor(Math.random() * MISS_YOU_MESSAGES.length);
+    const msg = MISS_YOU_MESSAGES[idx];
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `We miss you, ${name}! 👋`,
+        body: msg,
+        data: { type: 'miss_you' },
+        ...(Platform.OS === 'android' && { channelId: 'default' }),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 24 * 60 * 60, // 24 hours
+      },
+    });
+  } catch (e) {
+    if (__DEV__) console.log('Error scheduling miss-you notification:', e);
+  }
+}
+
+export async function cancelMissYouNotification() {
+  await cancelByType('miss_you');
+}
+
+// ============================================================
+// SCHEDULE TRENDING JOB (7 PM daily, random job with deep link)
+// ============================================================
+
+async function fetchRandomJob(): Promise<{ id: string; title: string; company: string } | null> {
+  try {
+    const { count } = await supabase.from('jobs').select('*', { count: 'exact', head: true });
+    if (!count || count === 0) return null;
+
+    const randomOffset = Math.floor(Math.random() * count);
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('id, title, job_title, company_name')
+      .range(randomOffset, randomOffset)
+      .limit(1)
+      .single();
+
+    if (error || !data) return null;
+    return {
+      id: data.id,
+      title: data.title || data.job_title || 'A new role',
+      company: data.company_name || 'a top company',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function scheduleTrendingJobNotification(firstName: string) {
+  if (!Notifications) return;
+  try {
+    await cancelByType('trending_job');
+    const job = await fetchRandomJob();
+    if (!job) return;
+
+    const name = firstName || 'there';
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `🔥 Trending Job Alert, ${name}!`,
+        body: `${job.title} at ${job.company} is trending right now! Tap to view details.`,
+        data: { type: 'trending_job', job_id: job.id },
+        ...(Platform.OS === 'android' && { channelId: 'default' }),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 19,
+        minute: 0,
+      },
+    });
+  } catch (e) {
+    if (__DEV__) console.log('Error scheduling trending job notification:', e);
+  }
+}
+
+export async function cancelTrendingJobNotification() {
+  await cancelByType('trending_job');
+}
+
+// ============================================================
 // MASTER SCHEDULER — call on every app open / login
 // ============================================================
 
@@ -523,6 +654,8 @@ export async function scheduleAllNotifications(firstName: string) {
   await scheduleEveningEncouragement(firstName);
   await scheduleMotivationalReminder(firstName);
   await scheduleFestivalNotifications(firstName);
+  await scheduleMissYouNotification(firstName);
+  await scheduleTrendingJobNotification(firstName);
 }
 
 // ============================================================

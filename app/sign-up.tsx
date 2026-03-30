@@ -2,10 +2,9 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Eye, EyeOff, Mail, Lock, Check, X, Gift } from 'lucide-react-native';
+import { ArrowLeft, Eye, EyeOff, Mail, Lock, Check, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
-import { applyReferralCode } from '@/lib/referral';
 
 export default function SignUpScreen() {
   const { signUpWithEmail } = useAuth();
@@ -18,11 +17,9 @@ export default function SignUpScreen() {
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [referralCode, setReferralCode] = useState('');
 
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
-  const referralRef = useRef<TextInput>(null);
   const buttonScale = useRef(new Animated.Value(1)).current;
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -43,13 +40,6 @@ export default function SignUpScreen() {
     const result = await signUpWithEmail(email, password, '');
 
     if (result.success && result.userId) {
-      // Apply referral code if provided
-      if (referralCode.trim()) {
-        const referralResult = await applyReferralCode(result.userId, referralCode.trim());
-        if (referralResult.success) {
-          Alert.alert('Success!', referralResult.message);
-        }
-      }
       console.log('Sign up successful, navigating to onboarding');
       router.replace('/onboarding' as any);
     } else {
@@ -162,8 +152,7 @@ export default function SignUpScreen() {
                     secureTextEntry={!showConfirm}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
-                    onSubmitEditing={() => referralRef.current?.focus()}
-                    returnKeyType="next"
+                    returnKeyType="done"
                     testID="confirm-password-input"
                   />
                   <Pressable onPress={() => setShowConfirm(!showConfirm)}>
@@ -172,27 +161,6 @@ export default function SignUpScreen() {
                 </View>
                 {confirmPassword.length > 0 && !passwordsMatch && (
                   <Text style={styles.errorText}>Passwords do not match</Text>
-                )}
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>REFERRAL CODE (OPTIONAL)</Text>
-                <View style={styles.inputWrapper}>
-                  <Gift size={18} color="#43A047" />
-                  <TextInput
-                    ref={referralRef}
-                    style={styles.input}
-                    placeholder="Enter referral code"
-                    placeholderTextColor="#9E9E9E"
-                    autoCapitalize="characters"
-                    value={referralCode}
-                    onChangeText={(t) => setReferralCode(t.toUpperCase())}
-                    returnKeyType="done"
-                    testID="referral-code-input"
-                  />
-                </View>
-                {referralCode.length > 0 && (
-                  <Text style={styles.referralHint}>You'll get 5 bonus swipes!</Text>
                 )}
               </View>
             </View>
@@ -255,7 +223,6 @@ const styles = StyleSheet.create({
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: '45%' as any },
   ruleText: { fontSize: 11, color: '#9E9E9E' },
   ruleTextMet: { color: '#10B981' },
-  referralHint: { color: '#43A047', fontSize: 12, marginLeft: 4, fontWeight: '600' as const },
   bottomSection: { flex: 1, justifyContent: 'flex-end', gap: 16, paddingTop: 32 },
   continueButton: {
     height: 56, borderRadius: 16, backgroundColor: '#111111',

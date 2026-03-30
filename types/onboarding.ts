@@ -43,7 +43,10 @@ export interface OnboardingSkill {
     education: OnboardingEducation[];
     skills: OnboardingSkill[];
     workPreferences: string[];
+    experienceLevel: string;
+    desiredRoleCategories: string[];
     desiredRoles: string[];
+    goal: string;
     salaryMin: number;
     salaryMax: number;
     salaryCurrency: string;
@@ -55,6 +58,8 @@ export interface OnboardingSkill {
     ethnicity: string;
     race: string;
     workAuthorizationStatus: string;
+    referralCode: string;
+    heardAboutUs: string;
   }
   
   export interface StepProps {
@@ -79,7 +84,10 @@ export interface OnboardingSkill {
     education: [],
     skills: [],
     workPreferences: [],
+    experienceLevel: '',
+    desiredRoleCategories: [],
     desiredRoles: [],
+    goal: '',
     salaryMin: 40000,
     salaryMax: 200000,
     salaryCurrency: 'USD',
@@ -91,5 +99,7 @@ export interface OnboardingSkill {
     ethnicity: '',
     race: '',
     workAuthorizationStatus: '',
+    referralCode: '',
+    heardAboutUs: '',
   };
   

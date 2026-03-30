@@ -1,11 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform, Alert, ScrollView } from 'react-native';
-import { Upload, FileText, Camera, Crown, Zap } from 'lucide-react-native';
+import { Upload, FileText } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system';
-import { useRouter } from 'expo-router';
 import { StepProps } from '@/types/onboarding';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, getStorageUploadUrl } from '@/lib/supabase';
@@ -14,7 +11,6 @@ type UserType = 'fresher' | 'job_switch' | null;
 
 export default function StepResume({ data, onUpdate, onNext }: StepProps) {
   const { supabaseUserId } = useAuth();
-  const router = useRouter();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileName, setFileName] = useState('Resume.pdf');
@@ -171,9 +167,6 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
     }
   };
 
-  const handleTakePhoto = async () => {
-    Alert.alert('Photo Upload', 'Please use the document picker to upload your resume as a PDF or document file.');
-  };
 
   const progressWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
@@ -201,39 +194,7 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
     </View>
   );
 
-  const renderPremiumUpsell = () => {
-    if (userType !== 'job_switch') return null;
-    return (
-      <View style={styles.upsellSection}>
-        <Text style={styles.upsellTitle}>⚡ Supercharge your job switch</Text>
-        <Text style={styles.upsellSubtitle}>Get more swipes and land your dream role faster</Text>
 
-        <View style={styles.planCard}>
-          <View style={styles.planHeader}>
-            <Zap size={18} color="#FFD700" />
-            <Text style={styles.planName}>Pro</Text>
-          </View>
-          <Text style={styles.planBenefit}>+200 extra swipes/month</Text>
-          <Text style={styles.planExtra}>AI auto-fill • Priority support</Text>
-        </View>
-
-        <View style={[styles.planCard, styles.planCardHighlight]}>
-          <View style={styles.planHeader}>
-            <Crown size={18} color="#FFD700" />
-            <Text style={styles.planName}>Premium</Text>
-            <View style={styles.bestBadge}><Text style={styles.bestBadgeText}>Best Value</Text></View>
-          </View>
-          <Text style={styles.planBenefit}>+500 extra swipes/month</Text>
-          <Text style={styles.planExtra}>Everything in Pro • Profile boost • Smart matching</Text>
-        </View>
-
-        <Pressable style={styles.upgradeButton} onPress={() => router.push('/premium?from=onboarding')}>
-          <Crown size={18} color="#000000" />
-          <Text style={styles.upgradeButtonText}>Upgrade Now</Text>
-        </Pressable>
-      </View>
-    );
-  };
 
   if (uploading) {
     return (
@@ -278,7 +239,6 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
               </View>
             </View>
             {renderUserTypeSelector()}
-            {renderPremiumUpsell()}
           </View>
         </ScrollView>
         <Pressable style={styles.nextButton} onPress={onNext} testID="next-button">
@@ -323,17 +283,13 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
               <Text style={styles.uploadFormats}>PDF, DOC, DOCX • Max 10MB</Text>
             </View>
           </Pressable>
-          <Pressable style={styles.photoButton} onPress={handleTakePhoto}>
-            <Camera size={18} color="#FFFFFF" />
-            <Text style={styles.photoButtonText}>Take Photo of Resume</Text>
-          </Pressable>
+
           <View style={styles.tipRow}>
             <Text style={styles.tipIcon}>💡</Text>
             <Text style={styles.tipText}>Uploading a resume boosts your profile strength by 15%</Text>
           </View>
 
           {renderUserTypeSelector()}
-          {renderPremiumUpsell()}
         </View>
       </ScrollView>
     </Animated.View>
@@ -357,11 +313,7 @@ const styles = StyleSheet.create({
   uploadInner: { alignItems: 'center', gap: 12 },
   uploadText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' as const },
   uploadFormats: { color: '#9E9E9E', fontSize: 12 },
-  photoButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: '#333333',
-  },
-  photoButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' as const },
+
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20 },
   tipIcon: { fontSize: 14 },
   tipText: { color: '#9E9E9E', fontSize: 13, flex: 1 },
@@ -414,24 +366,5 @@ const styles = StyleSheet.create({
   userTypeLabelSelected: { color: '#FFFFFF' },
   userTypeDesc: { fontSize: 12, color: '#777777', textAlign: 'center' },
 
-  // Premium upsell
-  upsellSection: { marginTop: 24, backgroundColor: '#1A1A1A', borderRadius: 18, padding: 20, borderWidth: 1, borderColor: '#333333' },
-  upsellTitle: { fontSize: 18, fontWeight: '800' as const, color: '#FFFFFF', marginBottom: 4 },
-  upsellSubtitle: { fontSize: 13, color: '#9E9E9E', marginBottom: 16 },
-  planCard: {
-    backgroundColor: '#222222', borderRadius: 14, padding: 14, marginBottom: 10,
-    borderWidth: 1, borderColor: '#333333',
-  },
-  planCardHighlight: { borderColor: '#FFD700' },
-  planHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  planName: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
-  bestBadge: { backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  bestBadgeText: { fontSize: 10, fontWeight: '800' as const, color: '#000000' },
-  planBenefit: { fontSize: 15, fontWeight: '600' as const, color: '#E0E0E0', marginBottom: 4 },
-  planExtra: { fontSize: 12, color: '#777777' },
-  upgradeButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 50, borderRadius: 14, backgroundColor: '#FFD700', marginTop: 6,
-  },
-  upgradeButtonText: { fontSize: 16, fontWeight: '800' as const, color: '#000000' },
+
 });

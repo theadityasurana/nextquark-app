@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { universities } from '@/constants/universities';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share } from 'react-native';
+import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
@@ -131,12 +132,25 @@ export default function DiscoverScreen() {
   });
 
   const { data: recentJobs = [] } = useQuery({
-    queryKey: ['recent-jobs', recentJobsTimeRange],
+    queryKey: ['recent-jobs', recentJobsTimeRange, userProfile?.desiredRoles],
     queryFn: async () => {
       const hours = recentJobsTimeRange === '24h' ? 24 : recentJobsTimeRange === '48h' ? 48 : recentJobsTimeRange === '7d' ? 168 : 720;
       const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false }).limit(30);
-      return data || [];
+      const desiredRoles = userProfile?.desiredRoles || [];
+      // Fetch more to allow client-side filtering by desired roles
+      const limit = desiredRoles.length > 0 ? 200 : 30;
+      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false }).limit(limit);
+      if (!data) return [];
+      if (desiredRoles.length === 0) return data.slice(0, 30);
+      const filtered = data.filter((job: any) =>
+        desiredRoles.some(role => {
+          const r = role.toLowerCase();
+          return job.job_title?.toLowerCase().includes(r) ||
+            job.description?.toLowerCase().includes(r) ||
+            (Array.isArray(job.skills) && job.skills.some((s: string) => s.toLowerCase().includes(r)));
+        })
+      );
+      return filtered.slice(0, 30);
     },
   });
 
@@ -251,9 +265,13 @@ export default function DiscoverScreen() {
 
   return (
     <TabTransitionWrapper routeName="discover">
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}><View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.secondary }]}>Discover</Text>
-        </View>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <AnimatedHeaderScrollView
+          largeTitle="Discover"
+          backgroundColor={colors.background}
+          largeTitleColor={colors.secondary}
+          largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
+        >
 
         {(industryFilter.length > 0 || locationFilter.length > 0) && (
           <View style={styles.activeFiltersRow}>
@@ -272,7 +290,7 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />} onTouchStart={() => setShowFriendSearch(false)}>
+        <View onTouchStart={() => setShowFriendSearch(false)}>
           <View style={styles.friendsSection}>
             <View style={styles.friendsHeader}>
               <Users size={20} color={colors.secondary} />
@@ -590,7 +608,8 @@ export default function DiscoverScreen() {
             </>
           )}
           <View style={{ height: 40 }} />
-        </ScrollView>
+        </View>
+        </AnimatedHeaderScrollView>
 
         <Modal visible={showUniversityModal} animationType="slide" transparent onRequestClose={() => setShowUniversityModal(false)}>
           <View style={styles.filterOverlay}>

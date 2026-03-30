@@ -53,22 +53,34 @@ import {
   Search,
   Moon,
   Sun,
+  Contact,
+  Heart,
+  Target,
+  Building2,
+  Laptop,
+  Sparkles,
+  ScrollText,
+  BadgeCheck,
+  Scale,
+  Rocket,
+  TrendingUp,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors, { lightColors, darkColors } from '@/constants/colors';
 import { UserProfile, WorkExperience, Education, Certification, Achievement } from '@/types';
-import { CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
-import RangeSlider from '@/components/RangeSlider';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
+import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
 import { fetchUserApplications } from '@/lib/jobs';
 import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
 import { supabase, SUPABASE_URL, getProfilePictureUrl, getCompanyLogoStorageUrl, getStorageUploadUrl } from '@/lib/supabase';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share, Clipboard } from 'react-native';
 import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboarding';
+import { getRolesGroupedByCategory } from '@/constants/roles';
 import { universities } from '@/constants/universities';
 
 type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | 'completeprofile' | null;
@@ -129,9 +141,6 @@ function buildProfileFromOnboarding(data: OnboardingData): UserProfile {
     achievements: [],
     jobPreferences: [],
     workModePreferences: data.workPreferences,
-    salaryCurrency: data.salaryCurrency,
-    salaryMinPref: data.salaryMin,
-    salaryMaxPref: data.salaryMax,
     linkedinUrl: data.linkedInUrl || undefined,
     githubUrl: undefined,
     isProfileVerified: false,
@@ -195,10 +204,6 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<UserProfile>(() => {
     // Always start with empty profile - data will be loaded from supabaseProfile
     const profile = buildProfileFromOnboarding(defaultOnboardingData);
-    // Set default salary to INR with range 0 to 1 crore
-    profile.salaryCurrency = 'INR';
-    profile.salaryMinPref = 0;
-    profile.salaryMaxPref = 10000000;
     return profile;
   });
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -330,7 +335,7 @@ export default function ProfileScreen() {
   const [contactLinkedin, setContactLinkedin] = useState(user.linkedinUrl ?? '');
   const [contactGithub, setContactGithub] = useState(user.githubUrl ?? '');
 
-  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+
   const [companySearch, setCompanySearch] = useState('');
   const [selectedVeteranStatus, setSelectedVeteranStatus] = useState(user.veteranStatus || '');
   const [selectedDisabilityStatus, setSelectedDisabilityStatus] = useState(user.disabilityStatus || '');
@@ -520,13 +525,7 @@ const MAJOR_CITIES = [
     outputRange: ['0%', '100%'],
   });
 
-  const salaryConfig = getSalaryConfig(user.salaryCurrency);
-  const currencyObj = CURRENCIES.find((c) => c.code === user.salaryCurrency);
-  const currencySymbol = currencyObj?.symbol ?? '$';
 
-  const formatSalary = useCallback((v: number) => {
-    return formatSalaryForCurrency(v, user.salaryCurrency, currencySymbol);
-  }, [user.salaryCurrency, currencySymbol]);
 
   const openAddSkillModal = useCallback(() => {
     setNewSkill('');
@@ -1054,20 +1053,7 @@ const MAJOR_CITIES = [
     });
   }, []);
 
-  const handleSalaryChange = useCallback((low: number, high: number) => {
-    setUser((prev) => ({ ...prev, salaryMinPref: low, salaryMaxPref: high }));
-  }, []);
 
-  const handleCurrencyChange = useCallback((code: string) => {
-    const config = getSalaryConfig(code);
-    setUser((prev) => ({
-      ...prev,
-      salaryCurrency: code,
-      salaryMinPref: config.min,
-      salaryMaxPref: config.max,
-    }));
-    setShowCurrencyPicker(false);
-  }, []);
 
   const handleToggleFavoriteCompany = useCallback((companyName: string) => {
     setUser((prev) => {
@@ -1221,54 +1207,54 @@ const MAJOR_CITIES = [
 
   return (
     <TabTransitionWrapper routeName="profile">
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.brandHeader}>
-        <Image source={require('@/assets/images/header.png')} style={styles.brandLogo} resizeMode="contain" />
-      </View>
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.secondary }]}>Profile</Text>
-        <View style={styles.headerActions}>
-          <Pressable
-            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
-            onPress={toggleTheme}
-            testID="theme-toggle-btn"
-          >
-            {theme === 'dark' ? (
-              <Sun size={22} color={colors.textSecondary} />
-            ) : (
-              <Moon size={22} color={colors.textSecondary} />
-            )}
-          </Pressable>
-          <Pressable
-            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
-            onPress={() => router.push('/resume-management' as any)}
-            testID="resume-btn"
-          >
-            <FileText size={22} color={colors.textSecondary} />
-            {!supabaseProfile?.resumeUrl && (
-              <View style={styles.resumeExclamation}>
-                <Text style={styles.resumeExclamationText}>!</Text>
-              </View>
-            )}
-          </Pressable>
-          <Pressable
-            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
-            onPress={() => router.push('/profile-preview' as any)}
-            testID="profile-preview-btn"
-          >
-            <Eye size={22} color={colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            style={[styles.settingsButton, { backgroundColor: colors.surface }]}
-            onPress={() => router.push('/settings' as any)}
-            testID="settings-btn"
-          >
-            <Settings size={22} color={colors.textSecondary} />
-          </Pressable>
-        </View>
-      </View>
-
-      <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={false} onRefresh={refetchProfile} tintColor={colors.primary} />}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <AnimatedHeaderScrollView
+        largeTitle="Profile"
+        backgroundColor={colors.background}
+        largeTitleColor={colors.secondary}
+        largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
+        rightComponent={
+          <View style={styles.headerActions}>
+            <Pressable
+              style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+              onPress={toggleTheme}
+              testID="theme-toggle-btn"
+            >
+              {theme === 'dark' ? (
+                <Sun size={22} color={colors.textSecondary} />
+              ) : (
+                <Moon size={22} color={colors.textSecondary} />
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+              onPress={() => router.push('/resume-management' as any)}
+              testID="resume-btn"
+            >
+              <FileText size={22} color={colors.textSecondary} />
+              {!supabaseProfile?.resumeUrl && (
+                <View style={styles.resumeExclamation}>
+                  <Text style={styles.resumeExclamationText}>!</Text>
+                </View>
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+              onPress={() => router.push('/profile-preview' as any)}
+              testID="profile-preview-btn"
+            >
+              <Eye size={22} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+              onPress={() => router.push('/settings' as any)}
+              testID="settings-btn"
+            >
+              <Settings size={22} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        }
+      >
         <View style={[styles.profileCard, { backgroundColor: theme === 'dark' ? '#1E1E1E' : '#111111' }]}>
           <View style={styles.profileTop}>
             <Pressable onPress={openAvatarModal} style={styles.avatarWrapper}>
@@ -1407,9 +1393,31 @@ const MAJOR_CITIES = [
 
 
 
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <TrendingUp size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Experience Level</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
+          </View>
+          {user.experienceLevel ? (
+            <View style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary, alignSelf: 'flex-start' }]}>
+              <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>
+                {user.experienceLevel === 'internship' ? 'Internship' : user.experienceLevel === 'entry_level' ? 'Entry Level & Graduate' : user.experienceLevel === 'junior' ? 'Junior (1-2 years)' : user.experienceLevel === 'mid' ? 'Mid Level (3-5 years)' : user.experienceLevel === 'senior' ? 'Senior (6-9 years)' : user.experienceLevel === 'expert' ? 'Expert & Leadership (10+ years)' : user.experienceLevel}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No experience level set</Text>
+          )}
+        </Pressable>
+
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={openContactModal}>
           <View style={styles.contactCardHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Contact Information</Text>
+            <View style={styles.sectionTitleRow}>
+              <Contact size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Contact Information</Text>
+            </View>
             <Pencil size={14} color={colors.textTertiary} />
           </View>
           <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
@@ -1442,15 +1450,17 @@ const MAJOR_CITIES = [
           ) : null}
         </Pressable>
 
-        <View
+        <Pressable
           style={[styles.contactCard, { backgroundColor: colors.surface }]}
           onLayout={(e) => { favoriteCompaniesY.current = e.nativeEvent.layout.y; }}
+          onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'favoritecompanies' } } as any)}
         >
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Favourite Companies</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={() => setActiveModal('favoritecompanies')}>
-              <Plus size={16} color={colors.surface} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <Heart size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Favourite Companies</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {(user.favoriteCompanies && user.favoriteCompanies.length > 0) ? (
             <View style={styles.favoriteCompaniesWrap}>
@@ -1460,12 +1470,9 @@ const MAJOR_CITIES = [
                   ? getCompanyLogoStorageUrl(companyData.logo_url)
                   : null;
                 return (
-                  <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+                  <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: theme === 'dark' ? '#FFFFFF' : '#111111', borderColor: theme === 'dark' ? '#FFFFFF' : '#111111' }]}>
                     {logoUrl && <Image source={{ uri: logoUrl }} style={styles.favoriteCompanyLogo} />}
-                    <Text style={[styles.favoriteCompanyText, { color: colors.textPrimary }]}>{company}</Text>
-                    <Pressable onPress={() => handleToggleFavoriteCompany(company)}>
-                      <X size={14} color={colors.textSecondary} />
-                    </Pressable>
+                    <Text style={[styles.favoriteCompanyText, { color: theme === 'dark' ? '#111111' : '#FFFFFF' }]}>{company}</Text>
                   </View>
                 );
               })}
@@ -1473,37 +1480,46 @@ const MAJOR_CITIES = [
           ) : (
             <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No favorite companies added yet</Text>
           )}
-        </View>
+        </Pressable>
 
-        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 20 }]}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 20 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'desiredroles' } } as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Desired Roles</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openDesiredRolesModal}>
-              <Plus size={16} color={colors.surface} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <Target size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Desired Roles</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {(user.desiredRoles && user.desiredRoles.length > 0) ? (
-            <View style={styles.chipGrid}>
-              {user.desiredRoles.map((role, idx) => (
-                <View key={idx} style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary }]}>
-                  <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>{role}</Text>
-                  <Pressable onPress={() => handleToggleDesiredRole(role)}>
-                    <X size={12} color={colors.surface} />
-                  </Pressable>
+            <View style={{ gap: 14 }}>
+              {getRolesGroupedByCategory(user.desiredRoles).map((group) => (
+                <View key={group.key}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <Text style={{ fontSize: 16 }}>{group.emoji}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textSecondary }}>{group.label}</Text>
+                  </View>
+                  <View style={styles.chipGrid}>
+                    {group.roles.map((role, idx) => (
+                      <View key={idx} style={[styles.prefChip, { backgroundColor: `${group.color}15`, borderColor: `${group.color}30` }]}>
+                        <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{role}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               ))}
             </View>
           ) : (
             <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No desired roles added yet</Text>
           )}
-        </View>
+        </Pressable>
 
-        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'preferredcities' } } as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Preferred Cities to Work</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openPreferredCitiesModal}>
-              <Plus size={16} color={colors.surface} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <MapPin size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Preferred Cities to Work</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {(user.preferredCities && user.preferredCities.length > 0) ? (
             <View style={styles.chipGrid}>
@@ -1511,116 +1527,96 @@ const MAJOR_CITIES = [
                 <View key={idx} style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary }]}>
                   <MapPin size={12} color={colors.surface} />
                   <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>{city}</Text>
-                  <Pressable onPress={() => handleTogglePreferredCity(city)}>
-                    <X size={12} color={colors.surface} />
-                  </Pressable>
                 </View>
               ))}
             </View>
           ) : (
             <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No preferred cities added yet</Text>
           )}
-        </View>
+        </Pressable>
 
-        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobtypeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Job Type Preferences</Text>
+            <View style={styles.sectionTitleRow}>
+              <Briefcase size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Job Type Preferences</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           <View style={styles.chipGrid}>
             {JOB_TYPE_OPTIONS.map((pref) => {
               const selected = user.jobPreferences.includes(pref);
               return (
-                <Pressable
+                <View
                   key={pref}
                   style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.background, borderColor: selected ? colors.secondary : colors.borderLight }]}
-                  onPress={() => handleToggleJobPref(pref)}
                 >
                   {selected && <Check size={14} color={colors.surface} />}
                   <Text style={[styles.prefChipText, { color: selected ? colors.surface : colors.textPrimary }]}>{pref}</Text>
-                </Pressable>
+                </View>
               );
             })}
           </View>
-        </View>
+        </Pressable>
 
-        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'workmodeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Work Mode Preferences</Text>
+            <View style={styles.sectionTitleRow}>
+              <Laptop size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Work Mode Preferences</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           <View style={styles.chipGrid}>
             {WORK_MODE_OPTIONS.map((mode) => {
               const selected = user.workModePreferences.includes(mode);
               return (
-                <Pressable
+                <View
                   key={mode}
                   style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.background, borderColor: selected ? colors.secondary : colors.borderLight }]}
-                  onPress={() => handleToggleWorkMode(mode)}
                 >
                   {selected && <Check size={14} color={colors.surface} />}
                   <Text style={[styles.prefChipText, { color: selected ? colors.surface : colors.textPrimary }]}>{mode}</Text>
-                </Pressable>
+                </View>
               );
             })}
           </View>
-        </View>
+        </Pressable>
 
-        <View style={styles.section}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'topskills' } } as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Salary Preferences</Text>
-            <Pressable style={[styles.currencyBtn, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => setShowCurrencyPicker(true)}>
-              <Text style={[styles.currencyBtnText, { color: colors.textPrimary }]}>{user.salaryCurrency}</Text>
-              <ChevronDown size={14} color={colors.textSecondary} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Top Skills</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
-          <View style={[styles.salarySliderContainer, { backgroundColor: colors.surface }]}>
-            <RangeSlider
-              min={salaryConfig.min}
-              max={salaryConfig.max}
-              step={salaryConfig.step}
-              low={user.salaryMinPref}
-              high={user.salaryMaxPref}
-              onChange={handleSalaryChange}
-              formatLabel={formatSalary}
-            />
-          </View>
-        </View>
-
-        <View style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Top Skills</Text>
-            <Text style={[styles.topSkillHint, { color: colors.textTertiary }]}>{user.topSkills.length}/5</Text>
-          </View>
-          <Text style={[styles.topSkillSubtext, { color: colors.textTertiary }]}>Tap to toggle top skill status</Text>
           <View style={styles.skillsWrap}>
             {user.skills.map((skill, idx) => {
               const isTop = user.topSkills.includes(skill);
               return (
-                <Pressable
+                <View
                   key={idx}
                   style={[styles.skillTag, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary }, isTop && { borderWidth: 2, borderColor: '#D4A017' }]}
-                  onPress={() => handleToggleTopSkill(skill)}
-                  onLongPress={() => handleRemoveSkill(idx)}
                 >
                   {isTop && <Star size={12} color="#D4A017" />}
                   <Text style={[styles.skillTagText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{skill}</Text>
-                </Pressable>
+                </View>
               );
             })}
-            <Pressable style={[styles.addSkillBtn, { backgroundColor: colors.secondary }]} onPress={openAddSkillModal} testID="add-skill-btn">
-              <Plus size={16} color={colors.surface} />
-            </Pressable>
           </View>
-        </View>
+        </Pressable>
 
-        <View style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]} onPress={() => router.push('/(tabs)/profile/edit-experience' as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Experience</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: theme === 'dark' ? colors.secondary : '#FFFFFF' }]} onPress={openAddExperienceModal} testID="add-experience-btn">
-              <Plus size={16} color={theme === 'dark' ? colors.surface : '#111111'} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <Briefcase size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,255,255,0.6)'} strokeWidth={2.5} />
+              <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Experience</Text>
+            </View>
+            <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {user.experience.map((exp) => (
-            <Pressable key={exp.id} style={styles.experienceItem} onPress={() => openEditExperienceModal(exp)}>
+            <View key={exp.id} style={styles.experienceItem}>
               <View style={[styles.expIcon, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
                 <Briefcase size={18} color="#FFFFFF" />
               </View>
@@ -1647,30 +1643,21 @@ const MAJOR_CITIES = [
                   </View>
                 ) : null}
                 {exp.description ? <Text style={[styles.expDesc, { color: 'rgba(255,255,255,0.6)' }]} numberOfLines={3}>{exp.description}</Text> : null}
-                {exp.skills && exp.skills.length > 0 ? (
-                  <View style={styles.expSkillsRow}>
-                    {exp.skills.map((skill, idx) => (
-                      <View key={idx} style={[styles.expTagChip, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                        <Text style={[styles.expTagText, { color: 'rgba(255,255,255,0.8)' }]}>{skill}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
               </View>
-              <Pencil size={14} color="rgba(255,255,255,0.4)" />
-            </Pressable>
+            </View>
           ))}
-        </View>
+        </Pressable>
 
-        <View style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-education' as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Education</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openAddEducationModal} testID="add-education-btn">
-              <Plus size={16} color={colors.surface} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <GraduationCap size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Education</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {user.education.map((edu) => (
-            <Pressable key={edu.id} style={styles.experienceItem} onPress={() => openEditEducationModal(edu)}>
+            <View key={edu.id} style={styles.experienceItem}>
               <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
                 <GraduationCap size={18} color={colors.accent} />
               </View>
@@ -1678,34 +1665,21 @@ const MAJOR_CITIES = [
                 <Text style={[styles.expTitle, { color: colors.secondary }]}>{edu.degree} in {edu.field}</Text>
                 <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{edu.institution}</Text>
                 <Text style={[styles.expDate, { color: colors.textTertiary }]}>{edu.startDate} — {edu.endDate}</Text>
-                {edu.description ? <Text style={[styles.expDesc, { color: colors.textTertiary }]} numberOfLines={3}>{edu.description}</Text> : null}
-                {edu.achievements ? (
-                  <View style={styles.eduDetailRow}>
-                    <Text style={[styles.eduDetailLabel, { color: colors.textSecondary }]}>Achievements: </Text>
-                    <Text style={[styles.eduDetailText, { color: colors.textSecondary }]} numberOfLines={2}>{edu.achievements}</Text>
-                  </View>
-                ) : null}
-                {edu.extracurriculars ? (
-                  <View style={styles.eduDetailRow}>
-                    <Text style={[styles.eduDetailLabel, { color: colors.textSecondary }]}>Extracurriculars: </Text>
-                    <Text style={[styles.eduDetailText, { color: colors.textSecondary }]} numberOfLines={2}>{edu.extracurriculars}</Text>
-                  </View>
-                ) : null}
               </View>
-              <Pencil size={14} color={colors.textTertiary} />
-            </Pressable>
+            </View>
           ))}
-        </View>
+        </Pressable>
 
-        <View style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]} onPress={() => router.push('/(tabs)/profile/edit-achievements' as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Achievements & Honors</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: theme === 'dark' ? colors.secondary : '#FFFFFF' }]} onPress={openAddAchievementModal} testID="add-achievement-btn">
-              <Plus size={16} color={theme === 'dark' ? colors.surface : '#111111'} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <Trophy size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,215,0,0.8)'} strokeWidth={2.5} />
+              <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Achievements & Honors</Text>
+            </View>
+            <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {user.achievements.map((ach) => (
-            <Pressable key={ach.id} style={styles.experienceItem} onPress={() => openEditAchievementModal(ach)}>
+            <View key={ach.id} style={styles.experienceItem}>
               <View style={[styles.expIcon, { backgroundColor: 'rgba(255,215,0,0.15)' }]}>
                 <Trophy size={18} color="#FFD700" />
               </View>
@@ -1713,48 +1687,31 @@ const MAJOR_CITIES = [
                 <Text style={[styles.expTitle, { color: '#FFFFFF' }]}>{ach.title}</Text>
                 <Text style={[styles.expCompany, { color: 'rgba(255,255,255,0.6)' }]}>{ach.issuer}</Text>
                 <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>{ach.date}</Text>
-                {ach.description ? <Text style={[styles.expDesc, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={2}>{ach.description}</Text> : null}
               </View>
-              <Pencil size={14} color="rgba(255,255,255,0.4)" />
-            </Pressable>
+            </View>
           ))}
-        </View>
+        </Pressable>
 
-        <View style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-certifications' as any)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Licenses & Certifications</Text>
-            <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={openAddCertificationModal} testID="add-cert-btn">
-              <Plus size={16} color={colors.surface} />
-            </Pressable>
+            <View style={styles.sectionTitleRow}>
+              <BadgeCheck size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Licenses & Certifications</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {user.certifications.map((cert) => (
-            <Pressable key={cert.id} style={styles.experienceItem} onPress={() => openEditCertificationModal(cert)}>
+            <View key={cert.id} style={styles.experienceItem}>
               <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.warningSoft : '#FFF3E0' }]}>
                 <Award size={18} color={colors.warning} />
               </View>
               <View style={styles.expContent}>
                 <Text style={[styles.expTitle, { color: colors.secondary }]}>{cert.name}</Text>
                 <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{cert.issuingOrganization}</Text>
-                {cert.credentialUrl ? (
-                  <View style={styles.credUrlRow}>
-                    <Link2 size={11} color={colors.accent} />
-                    <Text style={[styles.credUrlText, { color: colors.accent }]} numberOfLines={1}>{cert.credentialUrl}</Text>
-                  </View>
-                ) : null}
-                {cert.skills.length > 0 && (
-                  <View style={styles.certSkillsRow}>
-                    {cert.skills.map((s, i) => (
-                      <View key={i} style={[styles.certSkillChip, { backgroundColor: colors.accentSoft }]}>
-                        <Text style={[styles.certSkillChipText, { color: colors.accent }]}>{s}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
               </View>
-              <Pencil size={14} color={colors.textTertiary} />
-            </Pressable>
+            </View>
           ))}
-        </View>
+        </Pressable>
 
         <View style={[styles.menuSection, { backgroundColor: colors.surface }]}>
           {[
@@ -1771,28 +1728,24 @@ const MAJOR_CITIES = [
           ))}
         </View>
 
-        <View style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'coverletter' } } as any)}>
           <View style={styles.demoHeader}>
-            <FileText size={16} color={colors.textSecondary} />
+            <ScrollText size={16} color={colors.textSecondary} strokeWidth={2.5} />
             <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Cover Letter</Text>
-            <Pressable onPress={openCoverLetterModal} style={{ marginLeft: 'auto' }}>
-              <Pencil size={14} color={colors.textTertiary} />
-            </Pressable>
+            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
           </View>
           {user.coverLetter ? (
             <Text style={[styles.coverLetterText, { color: colors.textSecondary }]} numberOfLines={4}>{user.coverLetter}</Text>
           ) : (
             <Text style={[styles.coverLetterPlaceholder, { color: colors.textTertiary }]}>Add a cover letter to personalize your applications...</Text>
           )}
-        </View>
+        </Pressable>
 
-        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={openJobRequirementsModal}>
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobrequirements' } } as any)}>
           <View style={styles.demoHeader}>
-            <ShieldCheck size={16} color={colors.textSecondary} />
+            <ShieldCheck size={16} color={colors.textSecondary} strokeWidth={2.5} />
             <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Job Requirements</Text>
-            <Pressable onPress={openJobRequirementsModal} style={{ marginLeft: 'auto' }}>
-              <Pencil size={14} color={colors.textTertiary} />
-            </Pressable>
+            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
           </View>
           <Text style={[styles.demoNote, { color: colors.textTertiary }]}>Your work authorization and visa status</Text>
           {user.workAuthorizationStatus ? (
@@ -1803,60 +1756,37 @@ const MAJOR_CITIES = [
           ) : (
             <Text style={[styles.coverLetterPlaceholder, { color: colors.textTertiary }]}>Add work authorization status...</Text>
           )}
-          {user.jobRequirements && user.jobRequirements.length > 0 ? (
-            <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Requirements</Text>
-              <View style={styles.chipGrid}>
-                {user.jobRequirements.map((req, idx) => (
-                  <View key={idx} style={[styles.prefChip, { backgroundColor: '#FFF9C4', borderColor: '#F57F17' }]}>
-                    <Text style={[styles.prefChipText, { color: '#F57F17' }]}>{req}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
         </Pressable>
 
 
 
-        <View style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'equalopportunity' } } as any)}>
           <View style={styles.demoHeader}>
-            <Lock size={16} color={colors.textTertiary} />
+            <Scale size={16} color={colors.textTertiary} strokeWidth={2.5} />
             <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Equal Opportunity Information</Text>
+            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
           </View>
           <Text style={[styles.demoNote, { color: colors.textTertiary }]}>This information is confidential and voluntary</Text>
           
-          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openVeteranStatusModal}>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
             <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Veteran Status</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.veteranStatus || 'Not specified'}</Text>
-              <Pencil size={14} color={colors.textTertiary} />
-            </View>
-          </Pressable>
+            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.veteranStatus || 'Not specified'}</Text>
+          </View>
 
-          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openDisabilityStatusModal}>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
             <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Disability Status</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.disabilityStatus || 'Not specified'}</Text>
-              <Pencil size={14} color={colors.textTertiary} />
-            </View>
-          </Pressable>
+            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.disabilityStatus || 'Not specified'}</Text>
+          </View>
 
-          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openEthnicityModal}>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
             <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Ethnicity</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.ethnicity || 'Not specified'}</Text>
-              <Pencil size={14} color={colors.textTertiary} />
-            </View>
-          </Pressable>
+            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.ethnicity || 'Not specified'}</Text>
+          </View>
 
-          <Pressable style={[styles.demoItem, { borderBottomColor: colors.borderLight }]} onPress={openRaceModal}>
+          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
             <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Race</Text>
-            <View style={styles.demoValueRow}>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.race || 'Not specified'}</Text>
-              <Pencil size={14} color={colors.textTertiary} />
-            </View>
-          </Pressable>
+            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.race || 'Not specified'}</Text>
+          </View>
 
           {user.gender ? (
             <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
@@ -1864,10 +1794,10 @@ const MAJOR_CITIES = [
               <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
             </View>
           ) : null}
-        </View>
+        </Pressable>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </AnimatedHeaderScrollView>
 
       <Modal visible={activeModal === 'completeprofile'} animationType="fade" transparent>
         <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill}>
@@ -2203,282 +2133,6 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'experience'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingExperience ? 'Edit Experience' : 'Add Experience'}</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <Text style={styles.fieldLabel}>Job Title *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Software Engineer" placeholderTextColor={Colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />
-              <Text style={styles.fieldLabel}>Company *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Google" placeholderTextColor={Colors.textTertiary} value={expCompany} onChangeText={setExpCompany} />
-              <Text style={styles.fieldLabel}>Employment Type</Text>
-              <View style={styles.chipGrid}>
-                {EXP_TYPE_OPTIONS.map((t) => (
-                  <Pressable key={t} style={[styles.prefChip, expType === t && styles.prefChipActive]} onPress={() => setExpType(t)}>
-                    {expType === t && <Check size={12} color={Colors.surface} />}
-                    <Text style={[styles.prefChipText, expType === t && styles.prefChipTextActive]}>{t}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.fieldLabel}>Work Mode</Text>
-              <View style={styles.chipGrid}>
-                {EXP_MODE_OPTIONS.map((m) => (
-                  <Pressable key={m} style={[styles.prefChip, expMode === m && styles.prefChipActive]} onPress={() => setExpMode(m)}>
-                    {expMode === m && <Check size={12} color={Colors.surface} />}
-                    <Text style={[styles.prefChipText, expMode === m && styles.prefChipTextActive]}>{m}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              {expMode !== 'Remote' && (
-                <>
-                  <Text style={styles.fieldLabel}>Job Location</Text>
-                  <TextInput style={styles.modalInput} placeholder="e.g. San Francisco, CA" placeholderTextColor={Colors.textTertiary} value={expLocation} onChangeText={setExpLocation} />
-                </>
-              )}
-              <View style={styles.dateRow}>
-                <View style={styles.dateField}>
-                  <Text style={styles.fieldLabel}>Start Date</Text>
-                  <TextInput style={styles.modalInput} placeholder="e.g. Jan 2023" placeholderTextColor={Colors.textTertiary} value={expStartDate} onChangeText={setExpStartDate} />
-                </View>
-                <View style={styles.dateField}>
-                  <Text style={styles.fieldLabel}>End Date</Text>
-                  <TextInput style={[styles.modalInput, expIsCurrent && styles.inputDisabled]} placeholder="e.g. Dec 2024" placeholderTextColor={Colors.textTertiary} value={expIsCurrent ? 'Present' : expEndDate} onChangeText={setExpEndDate} editable={!expIsCurrent} />
-                </View>
-              </View>
-              <Pressable style={styles.checkboxRow} onPress={() => setExpIsCurrent(!expIsCurrent)}>
-                <View style={[styles.checkbox, expIsCurrent && styles.checkboxActive]}>
-                  {expIsCurrent && <Check size={12} color={Colors.surface} />}
-                </View>
-                <Text style={styles.checkboxLabel}>I currently work here</Text>
-              </Pressable>
-              <Text style={styles.fieldLabel}>Skills (comma-separated)</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. React, TypeScript, GraphQL" placeholderTextColor={Colors.textTertiary} value={expSkills} onChangeText={setExpSkills} />
-              <Text style={styles.fieldLabel}>Description</Text>
-              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe your role and achievements..." placeholderTextColor={Colors.textTertiary} value={expDescription} onChangeText={handleExpDescriptionChange} multiline numberOfLines={3} />
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveExperience}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingExperience ? 'Update' : 'Add Experience'}</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'education'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingEducation ? 'Edit Education' : 'Add Education'}</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll} keyboardShouldPersistTaps="handled">
-              <Text style={styles.fieldLabel}>Institution *</Text>
-              <View style={styles.universityInputContainer}>
-                <TextInput
-                  style={styles.universityInput}
-                  placeholder="Select or type university"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={universitySearch}
-                  onChangeText={(text) => {
-                    setUniversitySearch(text);
-                    setEduInstitution(text);
-                    setShowUniversityDropdown(true);
-                  }}
-                  onFocus={() => setShowUniversityDropdown(true)}
-                />
-                <ChevronDown size={14} color={Colors.textTertiary} />
-              </View>
-              {showUniversityDropdown && (
-                <View style={styles.universityDropdown}>
-                  <ScrollView style={styles.universityDropdownScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                    {universitySearch && !universities.some(u => u.toLowerCase() === universitySearch.toLowerCase()) && (
-                      <Pressable
-                        style={styles.universityDropdownItem}
-                        onPress={() => {
-                          setEduInstitution(universitySearch);
-                          setShowUniversityDropdown(false);
-                        }}
-                      >
-                        <Plus size={16} color={Colors.primary} />
-                        <Text style={styles.universityDropdownItemTextAdd}>Add "{universitySearch}"</Text>
-                      </Pressable>
-                    )}
-                    {universities
-                      .filter(u => !universitySearch || u.toLowerCase().includes(universitySearch.toLowerCase()))
-                      .slice(0, 50)
-                      .map(uni => (
-                        <Pressable
-                          key={uni}
-                          style={styles.universityDropdownItem}
-                          onPress={() => {
-                            setEduInstitution(uni);
-                            setUniversitySearch(uni);
-                            setShowUniversityDropdown(false);
-                          }}
-                        >
-                          <Text style={styles.universityDropdownItemText}>{uni}</Text>
-                        </Pressable>
-                      ))}
-                  </ScrollView>
-                </View>
-              )}
-              <Text style={styles.fieldLabel}>Degree *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Bachelor's" placeholderTextColor={Colors.textTertiary} value={eduDegree} onChangeText={setEduDegree} />
-              <Text style={styles.fieldLabel}>Field of Study</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Computer Science" placeholderTextColor={Colors.textTertiary} value={eduField} onChangeText={setEduField} />
-              <View style={styles.dateRow}>
-                <View style={styles.dateField}>
-                  <Text style={styles.fieldLabel}>Start Year</Text>
-                  <TextInput style={styles.modalInput} placeholder="e.g. 2016" placeholderTextColor={Colors.textTertiary} value={eduStartDate} onChangeText={setEduStartDate} />
-                </View>
-                <View style={styles.dateField}>
-                  <Text style={styles.fieldLabel}>End Year</Text>
-                  <TextInput style={styles.modalInput} placeholder="e.g. 2020" placeholderTextColor={Colors.textTertiary} value={eduEndDate} onChangeText={setEduEndDate} />
-                </View>
-              </View>
-              <Text style={styles.fieldLabel}>Description</Text>
-              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe your time at this institution..." placeholderTextColor={Colors.textTertiary} value={eduDescription} onChangeText={handleEduDescriptionChange} multiline numberOfLines={3} />
-              <Text style={styles.fieldLabel}>Achievements</Text>
-              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Dean's List, Awards, Publications..." placeholderTextColor={Colors.textTertiary} value={eduAchievements} onChangeText={handleEduAchievementsChange} multiline numberOfLines={2} />
-              <Text style={styles.fieldLabel}>Extracurriculars</Text>
-              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Clubs, Sports, Volunteer work..." placeholderTextColor={Colors.textTertiary} value={eduExtracurriculars} onChangeText={handleEduExtracurricularsChange} multiline numberOfLines={2} />
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveEducation}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingEducation ? 'Update' : 'Add Education'}</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'certification'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingCertification ? 'Edit Certification' : 'Add Certification'}</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <Text style={styles.fieldLabel}>Certification Name *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. AWS Solutions Architect" placeholderTextColor={Colors.textTertiary} value={certName} onChangeText={setCertName} />
-              <Text style={styles.fieldLabel}>Issuing Organization *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Amazon Web Services" placeholderTextColor={Colors.textTertiary} value={certOrg} onChangeText={setCertOrg} />
-              <Text style={styles.fieldLabel}>Credential URL</Text>
-              <TextInput style={styles.modalInput} placeholder="https://..." placeholderTextColor={Colors.textTertiary} value={certUrl} onChangeText={setCertUrl} autoCapitalize="none" />
-              <Text style={styles.fieldLabel}>Skills (comma-separated)</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. AWS, Cloud Architecture" placeholderTextColor={Colors.textTertiary} value={certSkills} onChangeText={setCertSkills} />
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveCertification}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingCertification ? 'Update' : 'Add Certification'}</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'achievement'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingAchievement ? 'Edit Achievement' : 'Add Achievement'}</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <Text style={styles.fieldLabel}>Title *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Best Innovation Award" placeholderTextColor={Colors.textTertiary} value={achTitle} onChangeText={setAchTitle} />
-              <Text style={styles.fieldLabel}>Issuer/Organization *</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. TechCorp Hackathon" placeholderTextColor={Colors.textTertiary} value={achIssuer} onChangeText={setAchIssuer} />
-              <Text style={styles.fieldLabel}>Date</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. 2024" placeholderTextColor={Colors.textTertiary} value={achDate} onChangeText={setAchDate} />
-              <Text style={styles.fieldLabel}>Description</Text>
-              <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe this achievement..." placeholderTextColor={Colors.textTertiary} value={achDescription} onChangeText={setAchDescription} multiline numberOfLines={3} />
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveAchievement}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>{editingAchievement ? 'Update' : 'Add Achievement'}</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'coverletter'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Cover Letter</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <TextInput
-              style={[styles.modalInput, styles.modalTextArea, { minHeight: 200 }]}
-              placeholder="Write your cover letter here (up to 1000 words)..."
-              placeholderTextColor={Colors.textTertiary}
-              value={coverLetter}
-              onChangeText={(t) => { if (t.split(/\s+/).length <= 1000) setCoverLetter(t); }}
-              multiline
-              numberOfLines={10}
-              autoFocus
-            />
-            <Text style={styles.charCount}>{coverLetter.split(/\s+/).filter(w => w).length}/1000 words</Text>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveCoverLetter}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Cover Letter</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'jobrequirements'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Job Requirements</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <Text style={styles.fieldLabel}>Work Authorization Status</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. US Citizen, Green Card, H1B, etc."
-                placeholderTextColor={Colors.textTertiary}
-                value={workAuthStatus}
-                onChangeText={setWorkAuthStatus}
-              />
-              <Text style={styles.fieldLabel}>Job Requirements (comma-separated)</Text>
-              <TextInput
-                style={[styles.modalInput, styles.modalTextArea]}
-                placeholder="e.g. Security Clearance, Driver's License, etc."
-                placeholderTextColor={Colors.textTertiary}
-                value={jobReqs}
-                onChangeText={setJobReqs}
-                multiline
-                numberOfLines={3}
-              />
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveJobRequirements}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Requirements</Text>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal visible={showCurrencyPicker} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Currency</Text>
-              <Pressable onPress={() => setShowCurrencyPicker(false)} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              {CURRENCIES.map((c) => (
-                <Pressable key={c.code} style={[styles.currencyOption, user.salaryCurrency === c.code && styles.currencyOptionActive]} onPress={() => handleCurrencyChange(c.code)}>
-                  <Text style={[styles.currencyOptionText, user.salaryCurrency === c.code && styles.currencyOptionTextActive]}>{c.label}</Text>
-                  {user.salaryCurrency === c.code && <Check size={18} color={Colors.surface} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       <Modal visible={activeModal === 'referral'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -2541,281 +2195,6 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'veteranstatus'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Veteran Status</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              {VETERAN_OPTIONS.map((option) => (
-                <Pressable
-                  key={option}
-                  style={[styles.currencyOption, selectedVeteranStatus === option && styles.currencyOptionActive]}
-                  onPress={() => setSelectedVeteranStatus(option)}
-                >
-                  <Text style={[styles.currencyOptionText, selectedVeteranStatus === option && styles.currencyOptionTextActive]}>{option}</Text>
-                  {selectedVeteranStatus === option && <Check size={18} color={Colors.surface} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveVeteranStatus}>
-              <Check size={18} color={Colors.surface} />
-              <Text style={styles.modalSaveBtnText}>Save</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'disabilitystatus'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Disability Status</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              {DISABILITY_OPTIONS.map((option) => (
-                <Pressable
-                  key={option}
-                  style={[styles.currencyOption, selectedDisabilityStatus === option && styles.currencyOptionActive]}
-                  onPress={() => setSelectedDisabilityStatus(option)}
-                >
-                  <Text style={[styles.currencyOptionText, selectedDisabilityStatus === option && styles.currencyOptionTextActive]}>{option}</Text>
-                  {selectedDisabilityStatus === option && <Check size={18} color={Colors.surface} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveDisabilityStatus}>
-              <Check size={18} color={Colors.surface} />
-              <Text style={styles.modalSaveBtnText}>Save</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'ethnicity'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ethnicity</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              {ETHNICITY_OPTIONS.map((option) => (
-                <Pressable
-                  key={option}
-                  style={[styles.currencyOption, selectedEthnicity === option && styles.currencyOptionActive]}
-                  onPress={() => setSelectedEthnicity(option)}
-                >
-                  <Text style={[styles.currencyOptionText, selectedEthnicity === option && styles.currencyOptionTextActive]}>{option}</Text>
-                  {selectedEthnicity === option && <Check size={18} color={Colors.surface} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveEthnicity}>
-              <Check size={18} color={Colors.surface} />
-              <Text style={styles.modalSaveBtnText}>Save</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'race'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Race</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              {RACE_OPTIONS.map((option) => (
-                <Pressable
-                  key={option}
-                  style={[styles.currencyOption, selectedRace === option && styles.currencyOptionActive]}
-                  onPress={() => setSelectedRace(option)}
-                >
-                  <Text style={[styles.currencyOptionText, selectedRace === option && styles.currencyOptionTextActive]}>{option}</Text>
-                  {selectedRace === option && <Check size={18} color={Colors.surface} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveRace}>
-              <Check size={18} color={Colors.surface} />
-              <Text style={styles.modalSaveBtnText}>Save</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-
-      <Modal visible={activeModal === 'desiredroles'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Desired Roles</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search roles..."
-                placeholderTextColor={Colors.textTertiary}
-                value={roleQuery}
-                onChangeText={setRoleQuery}
-              />
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <View style={styles.chipGrid}>
-                {suggestedRoles
-                  .filter((r) => !roleQuery || r.toLowerCase().includes(roleQuery.toLowerCase()))
-                  .map((role, idx) => {
-                    const selected = (user.desiredRoles || []).includes(role);
-                    return (
-                      <Pressable 
-                        key={`${role}-${idx}`} 
-                        style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
-                        onPress={() => handleToggleDesiredRole(role)}
-                      >
-                        <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{role}</Text>
-                        {selected && <Check size={14} color={Colors.surface} />}
-                      </Pressable>
-                    );
-                  })}
-              </View>
-            </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
-              <Text style={styles.cityDoneBtnText}>Done ({(user.desiredRoles || []).length} selected)</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={activeModal === 'preferredcities'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Preferred Cities to Work</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search cities..."
-                placeholderTextColor={Colors.textTertiary}
-                value={cityQuery}
-                onChangeText={setCityQuery}
-              />
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <View style={styles.chipGrid}>
-                {majorCities
-                  .filter((c) => !cityQuery || c.toLowerCase().includes(cityQuery.toLowerCase()))
-                  .map((city) => {
-                    const selected = (user.preferredCities || []).includes(city);
-                    return (
-                      <Pressable 
-                        key={city} 
-                        style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
-                        onPress={() => handleTogglePreferredCity(city)}
-                      >
-                        <MapPin size={14} color={selected ? Colors.surface : Colors.textPrimary} />
-                        <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{city}</Text>
-                        {selected && <Check size={14} color={Colors.surface} />}
-                      </Pressable>
-                    );
-                  })}
-              </View>
-            </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
-              <Text style={styles.cityDoneBtnText}>Done ({(user.preferredCities || []).length} selected)</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-
-
-      <Modal visible={activeModal === 'favoritecompanies'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Favorite Companies</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search companies..."
-                placeholderTextColor={Colors.textTertiary}
-                value={companySearch}
-                onChangeText={setCompanySearch}
-              />
-            </View>
-            {isLoadingCompanies ? (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-                <Text style={{ marginTop: 12, fontSize: 13, color: Colors.textSecondary }}>Loading companies...</Text>
-              </View>
-            ) : companiesError ? (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: Colors.error, marginBottom: 8 }}>Error loading companies</Text>
-                <Text style={{ fontSize: 12, color: Colors.textTertiary, textAlign: 'center' }}>Check console for details</Text>
-              </View>
-            ) : allCompaniesData.length === 0 ? (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: Colors.textSecondary, marginBottom: 8 }}>No companies found</Text>
-                <Text style={{ fontSize: 12, color: Colors.textTertiary, textAlign: 'center' }}>Check Supabase RLS policies</Text>
-              </View>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-                <View style={styles.chipGrid}>
-                  {allCompaniesData
-                    .filter((c: { name: string; logo_url: string | null }) => !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase()))
-                    .map((company: { name: string; logo_url: string | null }) => {
-                      const selected = (user.favoriteCompanies || []).includes(company.name);
-                      const logoUrl = company.logo_url 
-                        ? getCompanyLogoStorageUrl(company.logo_url)
-                        : null;
-                      return (
-                        <Pressable 
-                          key={company.name} 
-                          style={[styles.companySelectChip, selected && styles.companySelectChipActive]} 
-                          onPress={() => handleToggleFavoriteCompany(company.name)}
-                        >
-                          {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companySelectLogo} />}
-                          <Text style={[styles.companySelectText, selected && styles.companySelectTextActive]}>{company.name}</Text>
-                          {selected && <Check size={14} color={Colors.surface} />}
-                        </Pressable>
-                      );
-                    })}
-                </View>
-              </ScrollView>
-            )}
-            <Pressable style={styles.cityDoneBtn} onPress={closeModal}>
-              <Text style={styles.cityDoneBtnText}>Done ({(user.favoriteCompanies || []).length} selected)</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
     </TabTransitionWrapper>
   );
@@ -2880,6 +2259,7 @@ const styles = StyleSheet.create({
   darkSection: { backgroundColor: '#111111', borderRadius: 16, padding: 16, borderWidth: 0, borderColor: 'transparent' },
   darkSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary },
   addButton: { width: 30, height: 30, borderRadius: 10, backgroundColor: Colors.secondary, justifyContent: 'center', alignItems: 'center' },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -2887,9 +2267,7 @@ const styles = StyleSheet.create({
   prefChipActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
   prefChipText: { fontSize: 12, fontWeight: '500' as const, color: Colors.textPrimary },
   prefChipTextActive: { color: Colors.surface },
-  currencyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight },
-  currencyBtnText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textPrimary },
-  salarySliderContainer: { backgroundColor: Colors.surface, borderRadius: 14, padding: 16 },
+
   topSkillHint: { fontSize: 13, fontWeight: '600' as const, color: Colors.textTertiary },
   topSkillSubtext: { fontSize: 12, color: Colors.textTertiary, marginBottom: 10, marginTop: -4 },
   skillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

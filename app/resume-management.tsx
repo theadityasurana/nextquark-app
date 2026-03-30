@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, FileText, Check, Upload, Trash2, Eye } from 'lucide-react-native';
+import { ArrowLeft, FileText, Check, Upload, Trash2, Eye, ExternalLink } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { WebView } from 'react-native-webview';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { Resume } from '@/types';
@@ -18,6 +19,8 @@ export default function ResumeManagementScreen() {
   const { supabaseUserId } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [loadingUrls, setLoadingUrls] = useState(false);
 
   const { data: subscriptionData } = useQuery({
     queryKey: ['subscription-status', supabaseUserId],
@@ -60,10 +63,32 @@ export default function ResumeManagementScreen() {
           isActive: idx === 0,
         }));
         setResumes(loadedResumes);
+        loadSignedUrls(loadedResumes);
       }
     } catch (error) {
       console.log('Error loading resumes:', error);
     }
+  };
+
+  const loadSignedUrls = async (resumeList: Resume[]) => {
+    if (!supabaseUserId) return;
+    setLoadingUrls(true);
+    const urls: Record<string, string> = {};
+    for (const resume of resumeList) {
+      try {
+        const filePath = `${supabaseUserId}/${resume.fileName}`;
+        const { data } = await supabase.storage
+          .from('resumes')
+          .createSignedUrl(filePath, 3600);
+        if (data?.signedUrl) {
+          urls[resume.id] = data.signedUrl;
+        }
+      } catch (e) {
+        console.log('Error getting signed URL for', resume.fileName, e);
+      }
+    }
+    setSignedUrls(urls);
+    setLoadingUrls(false);
   };
 
   const handleSetActive = (id: string) => {
@@ -253,61 +278,67 @@ export default function ResumeManagementScreen() {
           Select your active resume to use when applying for jobs.
         </Text>
 
-        {resumes.map((resume) => (
-          <Pressable
-            key={resume.id}
-            style={[styles.resumeCard, resume.isActive && styles.resumeCardActive]}
-            onPress={() => handleSetActive(resume.id)}
-          >
-            <View style={styles.resumeCardTop}>
-              <View style={[styles.fileIcon, resume.isActive && styles.fileIconActive]}>
-                <FileText size={22} color={resume.isActive ? Colors.surface : Colors.textSecondary} />
+        {resumes.map((resume) => {
+          const url = signedUrls[resume.id];
+          const previewUrl = url ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}` : null;
+          return (
+            <View key={resume.id} style={styles.resumeWrapper}>
+              <View style={styles.previewContainer}>
+                {loadingUrls ? (
+                  <View style={styles.previewLoading}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={styles.previewLoadingText}>Loading preview...</Text>
+                  </View>
+                ) : previewUrl && Platform.OS !== 'web' ? (
+                  <WebView
+                    source={{ uri: previewUrl }}
+                    style={styles.previewWebView}
+                    scalesPageToFit
+                    scrollEnabled={false}
+                    nestedScrollEnabled={false}
+                  />
+                ) : url ? (
+                  <Pressable style={styles.previewFallback} onPress={() => handleView(resume)}>
+                    <FileText size={40} color={colors.textTertiary} />
+                    <Text style={styles.previewFallbackText}>Tap to view resume</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.previewFallback}>
+                    <FileText size={40} color={colors.textTertiary} />
+                    <Text style={styles.previewFallbackText}>Preview unavailable</Text>
+                  </View>
+                )}
               </View>
-              <View style={styles.resumeInfo}>
-                <Text style={styles.resumeName}>{resume.name}</Text>
-                <Text style={styles.resumeFileName}>{resume.fileName}</Text>
-                <Text style={styles.resumeDate}>Uploaded {formatDate(resume.uploadDate)}</Text>
-              </View>
-              {resume.isActive && (
-                <View style={styles.activeBadge}>
-                  <Check size={14} color={colors.surface} />
-                  <Text style={styles.activeBadgeText}>Active</Text>
+
+              <View style={styles.resumeBottomBar}>
+                <Text style={styles.resumeNameSmall} numberOfLines={1}>{resume.name}</Text>
+                <View style={styles.resumeIconActions}>
+                  <Pressable style={styles.iconBtn} onPress={() => handleView(resume)}>
+                    <ExternalLink size={16} color={colors.accent} />
+                  </Pressable>
+                  <Pressable
+                    style={[styles.iconBtn, resume.isActive && styles.iconBtnActive]}
+                    onPress={() => handleSetActive(resume.id)}
+                  >
+                    <Check size={16} color={resume.isActive ? '#FFFFFF' : colors.textTertiary} />
+                  </Pressable>
+                  <Pressable style={styles.iconBtn} onPress={() => handleDelete(resume.id)}>
+                    <Trash2 size={16} color={colors.error} />
+                  </Pressable>
                 </View>
-              )}
+              </View>
             </View>
-            <View style={styles.resumeActions}>
-              <Pressable style={styles.viewBtn} onPress={() => handleView(resume)}>
-                <Eye size={16} color={colors.accent} />
-              </Pressable>
-              {!resume.isActive && (
-                <Pressable style={styles.setActiveBtn} onPress={() => handleSetActive(resume.id)}>
-                  <Text style={styles.setActiveBtnText}>Set as Active</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={styles.deleteBtn}
-                onPress={() => handleDelete(resume.id)}
-              >
-                <Trash2 size={16} color={colors.error} />
-              </Pressable>
-            </View>
-          </Pressable>
-        ))}
+          );
+        })}
 
         <Pressable 
-          style={[styles.uploadCard, resumes.length >= resumeLimit && styles.uploadCardDisabled]} 
+          style={[styles.uploadBtn, (uploading || resumes.length >= resumeLimit) && styles.uploadBtnDisabled]} 
           onPress={handleUpload} 
           disabled={uploading || resumes.length >= resumeLimit}
         >
-          {uploading ? (
-            <ActivityIndicator size="small" color={colors.accent} />
-          ) : (
-            <Upload size={24} color={resumes.length >= resumeLimit ? Colors.textTertiary : Colors.accent} />
-          )}
-          <Text style={[styles.uploadText, resumes.length >= resumeLimit && styles.uploadTextDisabled]}>
-            {uploading ? 'Uploading...' : resumes.length >= resumeLimit ? `Limit Reached (${resumeLimit} max)` : 'Upload New Resume'}
+          <Text style={[styles.uploadBtnText, (uploading || resumes.length >= resumeLimit) && styles.uploadBtnTextDisabled]}>
+            {uploading ? 'Uploading...' : resumes.length >= resumeLimit ? `Limit Reached (${resumeLimit} max)` : 'Upload Resume'}
           </Text>
-          <Text style={styles.uploadHint}>PDF, DOC, or DOCX (Max 5MB)</Text>
         </Pressable>
 
         <View style={styles.tipCard}>
@@ -376,126 +407,88 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: "#000",
   },
-  resumeCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+  resumeWrapper: {
+    marginBottom: 16,
   },
-  resumeCardActive: {
-    borderColor: "#DDD",
-    backgroundColor: "#FFF",
+  previewContainer: {
+    height: 520,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
-  resumeCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  fileIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#FFF",
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fileIconActive: {
-    backgroundColor: "#FFF",
-  },
-  resumeInfo: {
+  previewWebView: {
     flex: 1,
-    marginLeft: 14,
+    backgroundColor: 'transparent',
   },
-  resumeName: {
-    fontSize: 15,
-    fontWeight: '700' as const,
-    color: "#000",
-  },
-  resumeFileName: {
-    fontSize: 12,
-    color: "#000",
-    marginTop: 2,
-  },
-  resumeDate: {
-    fontSize: 12,
-    color: "#000",
-    marginTop: 2,
-  },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  activeBadgeText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: "#000",
-  },
-  resumeActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 12,
-    gap: 10,
-  },
-  viewBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#FFF",
+  previewLoading: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
   },
-  setActiveBtn: {
-    paddingHorizontal: 16,
+  previewLoadingText: {
+    fontSize: 13,
+    color: '#999',
+  },
+  previewFallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewFallbackText: {
+    fontSize: 13,
+    color: '#999',
+  },
+  resumeBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#FFF",
+    paddingHorizontal: 4,
   },
-  setActiveBtnText: {
+  resumeNameSmall: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: "#000",
+    color: '#000',
+    flex: 1,
+    marginRight: 8,
   },
-  deleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#FFF",
+  resumeIconActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  uploadCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 28,
+  iconBtnActive: {
+    backgroundColor: '#111',
+  },
+  uploadBtn: {
+    backgroundColor: '#111111',
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: "#DDD",
-    borderStyle: 'dashed',
     marginTop: 8,
   },
-  uploadCardDisabled: {
-    opacity: 0.5,
+  uploadBtnDisabled: {
+    backgroundColor: '#CCCCCC',
   },
-  uploadText: {
-    fontSize: 15,
+  uploadBtnText: {
+    fontSize: 16,
     fontWeight: '700' as const,
-    color: "#000",
-    marginTop: 10,
+    color: '#FFFFFF',
   },
-  uploadTextDisabled: {
-    color: "#000",
-  },
-  uploadHint: {
-    fontSize: 12,
-    color: "#000",
-    marginTop: 4,
+  uploadBtnTextDisabled: {
+    color: '#999999',
   },
   tipCard: {
     backgroundColor: "#FFF",

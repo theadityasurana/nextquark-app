@@ -23,8 +23,7 @@ import Colors, { darkColors } from '@/constants/colors';
 import { mockJobs } from '@/mocks/jobs';
 import { Job } from '@/types';
 import JobCard from '@/components/JobCard';
-import { MAJOR_CITIES, CURRENCIES, getSalaryConfig, formatSalaryForCurrency } from '@/constants/cities';
-import RangeSlider from '@/components/RangeSlider';
+import { MAJOR_CITIES } from '@/constants/cities';
 import { mockUser } from '@/mocks/user';
 import { fetchJobsFromSupabase, fetchRemainingJobs, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
 import { supabase } from '@/lib/supabase';
@@ -79,9 +78,6 @@ const POSTED_OPTIONS = [
 
 interface Filters {
   cities: string[];
-  salaryMin: number;
-  salaryMax: number;
-  salaryCurrency: string;
   jobTypes: string[];
   workModes: string[];
   postedWithin: string[];
@@ -96,9 +92,6 @@ interface Filters {
 
 const DEFAULT_FILTERS: Filters = {
   cities: [],
-  salaryMin: 0,
-  salaryMax: 500000,
-  salaryCurrency: 'USD',
   jobTypes: [],
   workModes: [],
   postedWithin: [],
@@ -133,7 +126,7 @@ export default function HomeScreen() {
   const [deckSwipedSnapshot, setDeckSwipedSnapshot] = useState<Set<string>>(new Set(swipedJobIds));
   const [showFilters, setShowFilters] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showRolePicker, setShowRolePicker] = useState(false);
@@ -430,7 +423,6 @@ export default function HomeScreen() {
     // ✅ Locations
     // ✅ Work Modes (Remote/Onsite/Hybrid)
     // ✅ Job Types (Full-time/Part-time/etc)
-    // ✅ Salary Range
     // ✅ Posted Within (Date Range) - NOW WORKING
     // ✅ Job Levels - NOW WORKING (filters by experienceLevel, jobTitle, description)
     // ✅ Job Requirements - NOW WORKING (H1B, Security Clearance, No Degree, Remote Only, Relocation)
@@ -545,13 +537,6 @@ export default function HomeScreen() {
           job.employmentType.toLowerCase().includes(type.toLowerCase())
         )
       );
-    }
-
-    if (filters.salaryMin > 0 || filters.salaryMax < 500000) {
-      filtered = filtered.filter(job => {
-        if (job.salaryCurrency !== filters.salaryCurrency) return true;
-        return job.salaryMax >= filters.salaryMin && job.salaryMin <= filters.salaryMax;
-      });
     }
 
     // Posted Within filter
@@ -925,7 +910,7 @@ export default function HomeScreen() {
     
     Animated.timing(positionRef, {
       toValue: { x, y },
-      duration: 300,
+      duration: 100,
       useNativeDriver: true,
     }).start(() => {
       // Safety: if setTimeout hasn't fired yet (shouldn't happen), trigger now
@@ -1034,16 +1019,6 @@ export default function HomeScreen() {
     }));
   }, []);
 
-  const handleFilterCurrencyChange = useCallback((code: string) => {
-    const config = getSalaryConfig(code);
-    setTempFilters((prev) => ({ ...prev, salaryCurrency: code, salaryMin: config.min, salaryMax: config.max }));
-    setShowCurrencyPicker(false);
-  }, []);
-
-  const handleSalaryChange = useCallback((low: number, high: number) => {
-    setTempFilters((prev) => ({ ...prev, salaryMin: low, salaryMax: high }));
-  }, []);
-
   const handleOpenFilters = useCallback(() => {
     setTempFilters({ ...filters });
     setShowFilters(true);
@@ -1074,7 +1049,6 @@ export default function HomeScreen() {
 
   const activeFilterCount = [
     filters.cities.length > 0,
-    filters.salaryMin > 0 || filters.salaryMax < 500000,
     filters.jobTypes.length > 0,
     filters.workModes.length > 0,
     filters.postedWithin.length > 0,
@@ -1087,14 +1061,6 @@ export default function HomeScreen() {
     filters.jobRequirements.length > 0,
     activeSearchTags.length > 0,
   ].filter(Boolean).length;
-
-  const filterCurrencyObj = CURRENCIES.find((c) => c.code === tempFilters.salaryCurrency);
-  const filterSalaryConfig = getSalaryConfig(tempFilters.salaryCurrency);
-
-  const formatFilterSalary = useCallback((v: number) => {
-    const sym = filterCurrencyObj?.symbol ?? '$';
-    return formatSalaryForCurrency(v, tempFilters.salaryCurrency, sym);
-  }, [tempFilters.salaryCurrency, filterCurrencyObj]);
 
   const handleKeywordSubmit = useCallback(() => {
     if (tempFilters.searchKeyword.trim()) {
@@ -1173,7 +1139,7 @@ export default function HomeScreen() {
             key={`next-${nextJob.id}`}
             style={[
               styles.cardWrapper,
-              { transform: [{ scale: nextCardScale }], opacity: nextCardOpacity, paddingHorizontal: 16 },
+              { transform: [{ scale: nextCardScale }], opacity: nextCardOpacity },
             ]}
           >
             <JobCard job={nextJob} backgroundColor={CARD_COLORS[nextJob.id.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % CARD_COLORS.length]} showMatchBadge={feedMode === 'foryou'} />
@@ -1191,7 +1157,6 @@ export default function HomeScreen() {
                 { translateY: positionRef.y },
                 { rotate: rotation },
               ],
-              paddingHorizontal: 16,
             },
           ]}
           {...panResponder.panHandlers}
@@ -1591,27 +1556,6 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.salaryHeaderRow}>
-                <Text style={styles.filterSectionTitle}>Salary Range</Text>
-                <Pressable style={styles.filterCurrencyBtn} onPress={() => setShowCurrencyPicker(true)}>
-                  <Text style={styles.filterCurrencyText}>{tempFilters.salaryCurrency}</Text>
-                  <ChevronDown size={14} color={Colors.textSecondary} />
-                </Pressable>
-              </View>
-              <View style={styles.salarySliderWrap}>
-                <RangeSlider
-                  min={filterSalaryConfig.min}
-                  max={filterSalaryConfig.max}
-                  step={filterSalaryConfig.step}
-                  low={tempFilters.salaryMin}
-                  high={tempFilters.salaryMax}
-                  onChange={handleSalaryChange}
-                  formatLabel={formatFilterSalary}
-                />
-              </View>
-
               <View style={{ height: 20 }} />
             </ScrollView>
 
@@ -1650,30 +1594,6 @@ export default function HomeScreen() {
             <Pressable style={styles.cityDoneBtn} onPress={() => setShowCityPicker(false)}>
               <Text style={styles.cityDoneBtnText}>Done ({tempFilters.cities.length} selected)</Text>
             </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showCurrencyPicker} animationType="slide" transparent>
-        <View style={styles.filterOverlay}>
-          <View style={styles.filterContent}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Select Currency</Text>
-              <Pressable onPress={() => setShowCurrencyPicker(false)} style={styles.filterCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cityList}>
-              {CURRENCIES.map((c) => {
-                const selected = tempFilters.salaryCurrency === c.code;
-                return (
-                  <Pressable key={c.code} style={[styles.cityOption, selected && styles.cityOptionActive]} onPress={() => handleFilterCurrencyChange(c.code)}>
-                    <Text style={[styles.cityOptionText, selected && styles.cityOptionTextActive]}>{c.label}</Text>
-                    {selected && <Check size={18} color={Colors.surface} />}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1838,7 +1758,7 @@ const styles = StyleSheet.create({
   activeSearchTagText: { fontSize: 13, fontWeight: '600' as const, color: '#000000' },
   clearSearchButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#000000', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#FFFFFF' },
   clearSearchText: { fontSize: 12, fontWeight: '600' as const, color: '#FFFFFF' },
-  cardsContainer: { flex: 0.9, paddingHorizontal: 12, paddingTop: 2, paddingBottom: 8 },
+  cardsContainer: { flex: 1 },
   cardWrapper: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
   overlayLabel: { position: 'absolute' as const, zIndex: 10, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
   likeLabel: { top: 40, left: 24, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#16a34a' },
@@ -1874,15 +1794,13 @@ const styles = StyleSheet.create({
   filterDivider: { height: 1, backgroundColor: "#FFF", marginVertical: 14 },
   filterScroll: { paddingHorizontal: 20 },
   filterSectionTitle: { fontSize: 15, fontWeight: '700' as const, color: "#000", marginTop: 18, marginBottom: 10 },
-  salaryHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  filterCurrencyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
-  filterCurrencyText: { fontSize: 13, fontWeight: '600' as const, color: "#000" },
+
   cityPickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, borderWidth: 1, borderColor: "#DDD", gap: 10 },
   cityPickerBtnText: { flex: 1, fontSize: 15, color: "#000" },
   selectedCitiesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   selectedCityChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: "#FFF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   selectedCityText: { fontSize: 12, color: "#000", fontWeight: '600' as const },
-  salarySliderWrap: { backgroundColor: "#FFF", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#DDD" },
+
   roleSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, gap: 8, marginBottom: 10, borderWidth: 1, borderColor: "#DDD" },
   roleSearchInput: { flex: 1, fontSize: 14, color: "#000", padding: 0 },
   keywordSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10, borderWidth: 1.5, borderColor: "#DDD" },

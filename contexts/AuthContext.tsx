@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import { UserProfile } from '@/types';
-import { supabase, getProfilePictureUrl } from '@/lib/supabase';
+import { supabase, getProfilePictureUrl, handleStaleSession } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { registerForPushNotifications, savePushToken, scheduleAllNotifications, sendWelcomeNotification } from '@/lib/notifications';
 import { getOrCreateProxyEmail } from '@/lib/resend';
@@ -92,6 +92,8 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     workAuthorizationStatus: profile.work_authorization_status || undefined,
     jobRequirements: Array.isArray(profile.job_requirements) ? profile.job_requirements : undefined,
     resumeUrl: profile.resume_url || undefined,
+    experienceLevel: profile.experience_level || undefined,
+    desiredRoleCategories: Array.isArray(profile.desired_role_categories) ? profile.desired_role_categories : undefined,
     desiredRoles: Array.isArray(profile.desired_roles) ? profile.desired_roles : undefined,
     preferredCities: Array.isArray(profile.preferred_cities) ? profile.preferred_cities : undefined,
     favoriteCompanies,
@@ -119,7 +121,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     try {
       console.log('[AUTH] ===== fetchAndSetProfile START =====');
       console.log('[AUTH] userId:', userId);
-      console.log('[AUTH] current userProfile before fetch:', userProfile ? { id: userProfile.id, name: userProfile.name, email: userProfile.email } : 'null');
       
       // Register for push notifications
       registerForPushNotifications().then(token => {
@@ -150,10 +151,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const firstName = parts[0] || '';
         const lastName = parts.slice(1).join(' ') || '';
 
-        // Create proxy email and use it as the profile email
-        const proxyEmail = await getOrCreateProxyEmail(userId, name);
-        const profileEmail = proxyEmail || session.user.email || '';
-        if (__DEV__) console.log('[AUTH] Proxy email for new profile:', profileEmail);
+        const profileEmail = session.user.email || '';
 
         const newProfile = {
           id: userId,
@@ -275,6 +273,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setIsLoading(false);
     };
 
+    const clearStaleState = async () => {
+      setSupabaseUserId(null);
+      setAuthState(defaultAuthState);
+      setOnboardingData(defaultOnboardingData);
+      setUserProfile(null);
+      setSwipedJobIds([]);
+      await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]).catch(() => {});
+      setIsLoading(false);
+    };
+
+    // Proactively check for stale refresh tokens before the listener fires
+    handleStaleSession().catch(() => {});
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (__DEV__) console.log('[AUTH] onAuthStateChange event:', event, 'hasSession:', !!session);
 
@@ -284,37 +295,21 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         await handleSession(session, 'onAuthStateChange-SIGNED_IN');
       } else if (event === 'INITIAL_SESSION' && !session) {
         if (__DEV__) console.log('[AUTH] INITIAL_SESSION with no session, clearing stale data');
-        try {
-          await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
-        } catch (e) {
-          if (__DEV__) console.log('[AUTH] Error clearing storage:', e);
-        }
+        await clearStaleState();
         if (!initialResolved) {
           initialResolved = true;
-          setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         if (__DEV__) console.log('[AUTH] Signed out');
         initialResolved = true;
-        setSupabaseUserId(null);
-        setAuthState(defaultAuthState);
-        setOnboardingData(defaultOnboardingData);
-        setUserProfile(null);
-        await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
-        setIsLoading(false);
+        await clearStaleState();
       } else if (event === 'TOKEN_REFRESHED') {
         if (session?.user) {
           setSupabaseUserId(session.user.id);
         } else {
           // Token refresh failed — stale session, force sign out
           if (__DEV__) console.log('[AUTH] TOKEN_REFRESHED with no session, clearing stale data');
-          setSupabaseUserId(null);
-          setAuthState(defaultAuthState);
-          setOnboardingData(defaultOnboardingData);
-          setUserProfile(null);
-          setSwipedJobIds([]);
-          await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
-          setIsLoading(false);
+          await clearStaleState();
         }
       }
     });
@@ -364,10 +359,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (__DEV__) console.log('Supabase signUp success, user:', data.user.id);
       setSupabaseUserId(data.user.id);
 
-      // Create proxy email and use it as the profile email
-      const proxyEmail = await getOrCreateProxyEmail(data.user.id, name);
-      const profileEmail = proxyEmail || email;
-      if (__DEV__) console.log('[AUTH] Proxy email for profile:', profileEmail);
+      const profileEmail = email;
 
       const parts = name.split(' ');
       const firstName = parts[0] || '';
@@ -515,8 +507,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           }
         }
 
-        // Use the proxy email already stored in the profile, not the auth email
-        const profileEmail = userProfile?.email || authState.userEmail;
+        // Create proxy email now that we have the user's real name
+        const fullName = `${data.firstName} ${data.lastName}`.trim();
+        let profileEmail = userProfile?.email || authState.userEmail;
+        if (supabaseUserId && fullName) {
+          const proxyEmail = await getOrCreateProxyEmail(supabaseUserId, fullName);
+          if (proxyEmail) {
+            profileEmail = proxyEmail;
+            if (__DEV__) console.log('[AUTH] Proxy email created at onboarding:', proxyEmail);
+          }
+        }
 
         const profileData = {
           id: supabaseUserId,
@@ -535,6 +535,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           resume_url: resumeUrl || null,
           skills: data.skills.map(s => s.name),
           work_preferences: data.workPreferences,
+          experience_level: data.experienceLevel || null,
+          desired_role_categories: data.desiredRoleCategories || [],
           desired_roles: data.desiredRoles,
           salary_currency: data.salaryCurrency,
           salary_min: data.salaryMin,
@@ -546,6 +548,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           experience: data.workExperience,
           education: data.education,
           work_authorization_status: data.workAuthorizationStatus || null,
+          heard_about_us: data.heardAboutUs || null,
           onboarding_data: data,
           is_onboarding_complete: true,
           updated_at: new Date().toISOString(),
@@ -554,6 +557,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const { error } = await supabase.from('profiles').upsert(profileData);
         if (error) {
           if (__DEV__) console.log('Error saving onboarding to Supabase:', error.message);
+          // Retry without new columns that may not exist yet in the DB
+          const { experience_level, desired_role_categories, ...fallbackData } = profileData as any;
+          const { error: retryError } = await supabase.from('profiles').upsert(fallbackData);
+          if (retryError) {
+            if (__DEV__) console.log('Retry also failed:', retryError.message);
+          } else {
+            if (__DEV__) console.log('Onboarding data saved to Supabase (without new columns)');
+            setUserProfile(mapDbToUserProfile(fallbackData, supabaseUserId));
+          }
         } else {
           if (__DEV__) console.log('Onboarding data saved to Supabase');
           setUserProfile(mapDbToUserProfile(profileData, supabaseUserId));
@@ -641,6 +653,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (profileData.jobRequirements !== undefined) dbData.job_requirements = profileData.jobRequirements || null;
       if (profileData.resumeUrl !== undefined) dbData.resume_url = profileData.resumeUrl || null;
       if (profileData.favoriteCompanies !== undefined) dbData.favorite_companies = profileData.favoriteCompanies;
+      if (profileData.experienceLevel !== undefined) dbData.experience_level = profileData.experienceLevel || null;
+      if (profileData.desiredRoleCategories !== undefined) dbData.desired_role_categories = profileData.desiredRoleCategories;
       if (profileData.desiredRoles !== undefined) dbData.desired_roles = profileData.desiredRoles;
       if (profileData.preferredCities !== undefined) dbData.preferred_cities = profileData.preferredCities;
       if (profileData.workdayEmail !== undefined) dbData.workday_email = profileData.workdayEmail || null;
@@ -659,7 +673,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (error) {
         console.log('[AUTH] saveProfile ERROR:', error.message);
-        return false;
+        // Retry without columns that may not exist yet
+        const { experience_level, desired_role_categories, ...safeData } = dbData as any;
+        const { error: retryErr } = await supabase.from('profiles').upsert({
+          id: supabaseUserId,
+          ...safeData,
+        });
+        if (retryErr) {
+          console.log('[AUTH] saveProfile retry also failed:', retryErr.message);
+          return false;
+        }
+        console.log('[AUTH] saveProfile SUCCESS (without new columns)');
+        return true;
       }
 
       console.log('[AUTH] saveProfile SUCCESS - dbData keys:', Object.keys(dbData));
@@ -818,14 +843,25 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const refetchProfile = useCallback(async () => {
     if (!supabaseUserId) return;
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (session?.session) {
-        await fetchAndSetProfile(supabaseUserId, session.session);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        // Session is invalid (e.g. refresh token expired) — force sign out
+        if (__DEV__) console.log('[AUTH] refetchProfile: session error, signing out:', sessionError.message);
+        await logout();
+        return;
       }
-    } catch (e) {
-      if (__DEV__) console.log('Error refetching profile:', e);
+      if (sessionData?.session) {
+        await fetchAndSetProfile(supabaseUserId, sessionData.session);
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('Refresh Token') || e?.name === 'AuthApiError') {
+        if (__DEV__) console.log('[AUTH] refetchProfile: stale token caught, signing out');
+        await logout();
+      } else {
+        if (__DEV__) console.log('Error refetching profile:', e);
+      }
     }
-  }, [supabaseUserId, fetchAndSetProfile]);
+  }, [supabaseUserId, fetchAndSetProfile, logout]);
 
   return {
     ...authState,

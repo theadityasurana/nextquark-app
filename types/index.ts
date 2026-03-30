@@ -223,6 +223,8 @@ export interface Job {
     gender?: string;
     countryCode?: string;
     resumeUrl?: string;
+    experienceLevel?: string;
+    desiredRoleCategories?: string[];
     desiredRoles?: string[];
     preferredCities?: string[];
     workProfessions?: string[];

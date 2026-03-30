@@ -57,131 +57,97 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
   return (
     <View style={[styles.card, backgroundColor && { backgroundColor }]}>
       <View style={[styles.fixedHeader, backgroundColor && { backgroundColor }]}>
-        <View style={styles.companyRow}>
-          <Pressable onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: job.companyName } })} hitSlop={4}>
-            <Image 
-              source={{ uri: job.companyLogo }} 
-              style={styles.companyLogo}
-              contentFit="contain"
-              transition={200}
-              cachePolicy="memory-disk"
-            />
-          </Pressable>
-          <View style={styles.companyInfo}>
-            <View style={styles.companyNameRow}>
-              <Pressable onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: job.companyName } })} hitSlop={4}>
-                <Text style={styles.companyName}>{job.companyName}</Text>
-              </Pressable>
-              {job.companyLinkedIn && (
-                <Pressable onPress={handleLinkedIn} hitSlop={8}>
-                  <Linkedin size={14} color="#0A66C2" />
-                </Pressable>
-              )}
-            </View>
-            <View style={styles.locationRow}>
-              <LocationIcon size={13} color={Colors.textSecondary} />
-              <Text style={styles.locationText}>{job.location}</Text>
-            </View>
-          </View>
-          <View style={styles.matchAndExp}>
-            {showMatchBadge && <MatchScoreBadge score={job.matchScore} />}
-          </View>
-        </View>
-        {(job.industry || job.companyType) && (
-          <View style={styles.industryRow}>
-            {job.industry && (
-              <View style={styles.industryChip}>
-                <Factory size={11} color="#3F51B5" />
-                <Text style={styles.industryText}>{job.industry}</Text>
-              </View>
-            )}
-            {job.companyType && (
-              <View style={[styles.industryChip, { backgroundColor: '#E8F5E9' }]}>
-                <Text style={[styles.industryText, { color: '#2E7D32' }]}>{job.companyType}</Text>
-              </View>
-            )}
+        {showMatchBadge && (
+          <View style={styles.matchBadgeRow}>
+            <MatchScoreBadge score={job.matchScore} />
           </View>
         )}
+        <Pressable onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: job.companyName } })} style={styles.logoWrapper} hitSlop={4}>
+          <Image 
+            source={{ uri: job.companyLogo }} 
+            style={styles.companyLogo}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        </Pressable>
+        <View style={styles.companyNameRow}>
+          <Pressable onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: job.companyName } })} hitSlop={4}>
+            <Text style={styles.companyName}>{job.companyName}</Text>
+          </Pressable>
+          {job.companyLinkedIn && (
+            <Pressable onPress={handleLinkedIn} hitSlop={8}>
+              <Linkedin size={16} color="#0A66C2" />
+            </Pressable>
+          )}
+        </View>
         <Text style={styles.jobTitle} numberOfLines={2}>{job.jobTitle}</Text>
+        <View style={styles.locationRow}>
+          <LocationIcon size={13} color={Colors.textSecondary} />
+          <Text style={styles.locationText}>{job.location}</Text>
+        </View>
+
+        <View style={styles.chipsContainer}>
+          {job.industry && (
+            <View style={[styles.metaChip, { backgroundColor: '#E8EAF6' }]}>
+              <Factory size={12} color="#3F51B5" />
+              <Text style={[styles.metaText, { color: '#3F51B5' }]}>{job.industry}</Text>
+            </View>
+          )}
+          {job.companyType && (
+            <View style={[styles.metaChip, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={[styles.metaText, { color: '#2E7D32' }]}>{job.companyType}</Text>
+            </View>
+          )}
+          <View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}>
+            <Briefcase size={12} color="#E65100" />
+            <Text style={[styles.metaText, { color: '#E65100' }]}>{job.employmentType}</Text>
+          </View>
+          <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}>
+            <LocationIcon size={12} color={Colors.primary} />
+            <Text style={[styles.metaText, { color: Colors.primary }]}>{job.locationType}</Text>
+          </View>
+          <View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}>
+            <GraduationCap size={12} color="#1565C0" />
+            <Text style={[styles.metaText, { color: '#1565C0' }]}>{expBanner}</Text>
+          </View>
+          <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}>
+            <Clock size={12} color={Colors.primary} />
+            <Text style={[styles.metaText, { color: Colors.primary }]}>{job.postedDate}</Text>
+          </View>
+          <View style={[styles.metaChip, { backgroundColor: '#F3E5F5' }]}>
+            <Users size={12} color="#7B1FA2" />
+            <Text style={[styles.metaText, { color: '#7B1FA2' }]}>{job.applicantsCount} applicants</Text>
+          </View>
+          <View style={[styles.metaChip, { backgroundColor: '#EDF5FF' }]}>
+            <Text style={[styles.metaText, { color: Colors.secondary }]}>{formatSalary()} /{job.salaryPeriod}</Text>
+          </View>
+          {job.jobLevel && (
+            <View style={[styles.metaChip, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={[styles.metaText, { color: '#2E7D32' }]}>{job.jobLevel}</Text>
+            </View>
+          )}
+          {job.jobRequirements && job.jobRequirements.length > 0 && job.jobRequirements.map((req, idx) => (
+            <View key={idx} style={[styles.metaChip, { backgroundColor: '#FFF9C4' }]}>
+              <Text style={[styles.metaText, { color: '#F57F17' }]}>{req}</Text>
+            </View>
+          ))}
+          {job.educationLevel && (
+            <View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}>
+              <GraduationCap size={12} color="#1565C0" />
+              <Text style={[styles.metaText, { color: '#1565C0' }]}>{job.educationLevel}</Text>
+            </View>
+          )}
+          {job.workAuthorization && (
+            <View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}>
+              <Shield size={12} color="#E65100" />
+              <Text style={[styles.metaText, { color: '#E65100' }]}>{job.workAuthorization}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-        <View style={styles.metaSectionContainer}>
-          <Text style={styles.metaSectionTitle}>Job Details</Text>
-          <View style={styles.metaRow}>
-            <View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}>
-              <Briefcase size={12} color="#E65100" />
-              <Text style={[styles.metaText, { color: '#E65100' }]}>{job.employmentType}</Text>
-            </View>
-            <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}>
-              <LocationIcon size={12} color={Colors.primary} />
-              <Text style={[styles.metaText, { color: Colors.primary }]}>{job.locationType}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.metaSectionContainer}>
-          <Text style={styles.metaSectionTitle}>Experience Level</Text>
-          <View style={styles.metaRow}>
-            <View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}>
-              <GraduationCap size={12} color="#1565C0" />
-              <Text style={[styles.metaText, { color: '#1565C0' }]}>{expBanner}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.metaSectionContainer}>
-          <Text style={styles.metaSectionTitle}>Posted & Applicants</Text>
-          <View style={styles.metaRow}>
-            <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}>
-              <Clock size={12} color={Colors.primary} />
-              <Text style={[styles.metaText, { color: Colors.primary }]}>{job.postedDate}</Text>
-            </View>
-            <View style={[styles.metaChip, { backgroundColor: '#F3E5F5' }]}>
-              <Users size={12} color="#7B1FA2" />
-              <Text style={[styles.metaText, { color: '#7B1FA2' }]}>{job.applicantsCount} applicants</Text>
-            </View>
-          </View>
-        </View>
-
-        {(job.jobLevel || job.jobRequirements || job.educationLevel || job.workAuthorization) && (
-          <View style={styles.metaSectionContainer}>
-            <Text style={styles.metaSectionTitle}>Additional Info</Text>
-            <View style={styles.metaRow}>
-              {job.jobLevel && (
-                <View style={[styles.metaChip, { backgroundColor: '#E8F5E9' }]}>
-                  <Text style={[styles.metaText, { color: '#2E7D32' }]}>{job.jobLevel}</Text>
-                </View>
-              )}
-              {job.jobRequirements && job.jobRequirements.length > 0 && job.jobRequirements.map((req, idx) => (
-                <View key={idx} style={[styles.metaChip, { backgroundColor: '#FFF9C4' }]}>
-                  <Text style={[styles.metaText, { color: '#F57F17' }]}>{req}</Text>
-                </View>
-              ))}
-              {job.educationLevel && (
-                <View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}>
-                  <GraduationCap size={12} color="#1565C0" />
-                  <Text style={[styles.metaText, { color: '#1565C0' }]}>{job.educationLevel}</Text>
-                </View>
-              )}
-              {job.workAuthorization && (
-                <View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}>
-                  <Shield size={12} color="#E65100" />
-                  <Text style={[styles.metaText, { color: '#E65100' }]}>{job.workAuthorization}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        <View style={styles.metaSectionContainer}>
-          <Text style={styles.metaSectionTitle}>Compensation</Text>
-          <View style={styles.metaRow}>
-            <View style={[styles.metaChip, { backgroundColor: '#EDF5FF' }]}>
-              <Text style={[styles.metaText, { color: Colors.secondary }]}>{formatSalary()} /{job.salaryPeriod}</Text>
-            </View>
-          </View>
-        </View>
 
         {job.requirements && job.requirements.length > 0 && (
           <View style={styles.section}>
@@ -245,36 +211,29 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 0,
+    borderRadius: 20,
     overflow: 'hidden',
     flex: 1,
+    margin: 10,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
-    borderWidth: 0.5,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderWidth: 1,
+    borderColor: '#000000',
   },
-  fixedHeader: { padding: 20, paddingBottom: 12, zIndex: 10 },
-  companyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  companyLogo: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.borderLight },
-  companyInfo: { flex: 1, marginLeft: 12 },
-  companyNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  companyName: { fontSize: 17, fontWeight: '700' as const, color: Colors.textPrimary },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 },
-  locationText: { fontSize: 12, color: Colors.textPrimary },
-  industryRow: { marginBottom: 8, marginTop: -4, flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  industryChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#E8EAF6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
-  industryText: { fontSize: 11, color: '#3F51B5', fontWeight: '600' as const },
-  industryRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  industryTextCompact: { fontSize: 11, color: '#3F51B5', fontWeight: '600' as const },
-  matchAndExp: { alignItems: 'flex-end', gap: 4 },
-  jobTitle: { fontSize: 24, fontWeight: '800' as const, color: Colors.secondary, lineHeight: 30 },
+  fixedHeader: { padding: 20, paddingBottom: 12, zIndex: 10, alignItems: 'center' as const },
+  matchBadgeRow: { position: 'absolute' as const, top: 16, right: 16, zIndex: 20 },
+  logoWrapper: { alignItems: 'center' as const, marginBottom: 10 },
+  companyLogo: { width: 144, height: 144, borderRadius: 36, backgroundColor: Colors.borderLight },
+  companyNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  companyName: { fontSize: 17, fontWeight: '700' as const, color: Colors.textPrimary, textAlign: 'center' as const },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
+  locationText: { fontSize: 13, color: Colors.textSecondary },
+  jobTitle: { fontSize: 24, fontWeight: '800' as const, color: Colors.secondary, lineHeight: 30, textAlign: 'center' as const, marginBottom: 4 },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' as const, marginTop: 4 },
   scrollContent: { flex: 1, paddingHorizontal: 20, paddingTop: 8 },
-  metaSectionContainer: { marginBottom: 10 },
-  metaSectionTitle: { fontSize: 11, fontWeight: '700' as const, color: Colors.textTertiary, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 6 },
-  metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   metaChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, gap: 5 },
   metaText: { fontSize: 12, fontWeight: '500' as const },
 

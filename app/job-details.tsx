@@ -8,14 +8,16 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { fetchJobById, incrementRightSwipe, addToLiveApplicationQueue } from '@/lib/jobs';
-import MatchScoreBadge from '@/components/MatchScoreBadge';
 import { useAuth } from '@/contexts/AuthContext';
+import { decrementApplicationCount } from '@/lib/subscription';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function JobDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { supabaseUserId, userProfile, addSwipedJobId } = useAuth();
+  const queryClient = useQueryClient();
   const colors = useColors();
 
   const [isSaved, setIsSaved] = useState(false);
@@ -54,6 +56,12 @@ export default function JobDetailsScreen() {
     addSwipedJobId(job.id);
     
     await incrementRightSwipe(job.id);
+
+    if (supabaseUserId) {
+      decrementApplicationCount(supabaseUserId).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
+      });
+    }
     
     if (supabaseUserId && userProfile) {
       await addToLiveApplicationQueue(supabaseUserId, job, userProfile);
@@ -102,7 +110,7 @@ export default function JobDetailsScreen() {
               <Text style={styles.typeBadgeText}>{job.locationType}</Text>
             </View>
           </View>
-          <MatchScoreBadge score={job.matchScore} size="large" />
+
         </View>
 
         <View style={styles.infoCards}>
@@ -133,10 +141,7 @@ export default function JobDetailsScreen() {
           </View>
         )}
 
-        <View style={styles.salaryCard}>
-          <Text style={styles.salaryLabel}>Salary Range</Text>
-          <Text style={styles.salaryValue}>{formatSalary()}<Text style={styles.salaryPeriod}> /{job.salaryPeriod}</Text></Text>
-        </View>
+
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.secondary }]}>About the Role</Text>
@@ -378,30 +383,7 @@ const styles = StyleSheet.create({
     color: "#000",
     textAlign: 'center',
   },
-  salaryCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#EEEEEE',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-  },
-  salaryLabel: {
-    fontSize: 14,
-    color: "#000",
-    fontWeight: '600' as const,
-  },
-  salaryValue: {
-    fontSize: 20,
-    fontWeight: '800' as const,
-    color: "#000",
-  },
-  salaryPeriod: {
-    fontSize: 14,
-    fontWeight: '400' as const,
-    color: "#000",
-  },
+
   companySizeCard: {
     flexDirection: 'row',
     alignItems: 'center',

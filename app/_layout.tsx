@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import TutorialModal from '@/components/TutorialModal';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { handleStaleSession } from '@/lib/supabase';
 
 let Notifications: any;
 try {
@@ -84,6 +85,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated && !inAuthGroup && !inOnboarding) {
       console.log('Redirecting to welcome - not authenticated');
       router.replace('/welcome' as any);
+    } else if (isAuthenticated && !isOnboardingComplete && !inOnboarding) {
+      console.log('Redirecting to onboarding - profile incomplete');
+      router.replace('/onboarding' as any);
     } else if (isAuthenticated && isOnboardingComplete && (inAuthGroup || inOnboarding)) {
       console.log('Redirecting to home - fully authenticated');
       router.replace('/(tabs)' as any);
@@ -293,6 +297,17 @@ function RootLayoutNav() {
 function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+
+    // Catch unhandled refresh token errors globally
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+      if (error?.message?.includes('Refresh Token') || error?.name === 'AuthApiError') {
+        console.log('[GLOBAL] Caught stale refresh token error, forcing sign-out');
+        handleStaleSession().catch(() => {});
+        return; // Don't crash the app for auth errors
+      }
+      originalHandler(error, isFatal);
+    });
   }, []);
 
   return (

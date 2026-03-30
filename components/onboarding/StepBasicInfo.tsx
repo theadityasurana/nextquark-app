@@ -20,8 +20,10 @@ const COUNTER_RATE = 3.7;
 export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showLocationSearch, setShowLocationSearch] = useState(false);
+
   const [locationQuery, setLocationQuery] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [liveJobCount, setLiveJobCount] = useState(() =>
     Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE)
@@ -151,7 +153,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
                     }}
                   >
                     <Text style={[styles.genderOptionText, selected && styles.genderOptionTextSelected]}>{opt.label}</Text>
-                    {selected && <Check size={16} color="#FFFFFF" />}
+                    {selected && <Check size={16} color="#111111" />}
                   </Pressable>
                 );
               })}
@@ -308,14 +310,14 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24, justifyContent: 'space-between', backgroundColor: '#FFFFFF' },
+  flex: { flex: 1, backgroundColor: '#111111' },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24, justifyContent: 'space-between', backgroundColor: '#111111' },
   content: { paddingTop: 12 },
   counterCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FFF8E1',
+    backgroundColor: '#2A2000',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
@@ -328,19 +330,19 @@ const styles = StyleSheet.create({
   counterLabel: { fontSize: 13, fontWeight: '600' as const, color: '#F57F17', opacity: 0.8 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   emoji: { fontSize: 36 },
-  title: { fontSize: 28, fontWeight: '900' as const, color: '#111111' },
-  subtitle: { fontSize: 16, color: '#616161', marginBottom: 24 },
+  title: { fontSize: 28, fontWeight: '900' as const, color: '#FFFFFF' },
+  subtitle: { fontSize: 16, color: '#9E9E9E', marginBottom: 24 },
   photoSection: { marginBottom: 20 },
-  sectionLabel: { fontSize: 12, fontWeight: '700' as const, color: '#616161', letterSpacing: 1, marginBottom: 8 },
+  sectionLabel: { fontSize: 12, fontWeight: '700' as const, color: '#9E9E9E', letterSpacing: 1, marginBottom: 8 },
   photoUpload: { alignSelf: 'center' },
   photoPreview: { width: 100, height: 100, borderRadius: 50 },
   photoPlaceholder: { 
     width: 100, 
     height: 100, 
     borderRadius: 50, 
-    backgroundColor: '#F5F5F5', 
+    backgroundColor: '#1E1E1E', 
     borderWidth: 2, 
-    borderColor: '#E0E0E0', 
+    borderColor: '#333333', 
     borderStyle: 'dashed' as const,
     alignItems: 'center', 
     justifyContent: 'center',
@@ -348,57 +350,57 @@ const styles = StyleSheet.create({
   },
   photoPlaceholderText: { fontSize: 12, color: '#9E9E9E', fontWeight: '600' as const },
   inputGroup: { marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: '700' as const, color: '#616161', letterSpacing: 1, marginBottom: 8 },
+  label: { fontSize: 12, fontWeight: '700' as const, color: '#9E9E9E', letterSpacing: 1, marginBottom: 8 },
   input: {
     height: 50, borderRadius: 12, paddingHorizontal: 16,
-    backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
-    color: '#111111', fontSize: 15,
+    backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#333333',
+    color: '#FFFFFF', fontSize: 15,
   },
   genderOptions: { gap: 8 },
   genderOption: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     height: 48, borderRadius: 12, paddingHorizontal: 16,
-    borderWidth: 1.5, borderColor: '#E0E0E0',
+    borderWidth: 1.5, borderColor: '#333333',
   },
-  genderOptionSelected: { borderColor: '#111111', backgroundColor: '#111111' },
-  genderOptionText: { color: '#111111', fontSize: 14, fontWeight: '600' as const },
-  genderOptionTextSelected: { color: '#FFFFFF' },
+  genderOptionSelected: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
+  genderOptionText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' as const },
+  genderOptionTextSelected: { color: '#111111' },
   phoneRow: { flexDirection: 'row', gap: 10 },
   countryCodeButton: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     height: 50, borderRadius: 12, paddingHorizontal: 12,
-    backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
+    backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#333333',
   },
   countryFlag: { fontSize: 18 },
-  countryCode: { color: '#111111', fontSize: 14, fontWeight: '600' as const },
+  countryCode: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' as const },
   phoneInput: {
     flex: 1, height: 50, borderRadius: 12, paddingHorizontal: 16,
-    backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
-    color: '#111111', fontSize: 15,
+    backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#333333',
+    color: '#FFFFFF', fontSize: 15,
   },
   locationInput: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     height: 50, borderRadius: 12, paddingHorizontal: 16,
-    backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
+    backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#333333',
   },
-  locationValue: { color: '#111111', fontSize: 15 },
+  locationValue: { color: '#FFFFFF', fontSize: 15 },
   locationPlaceholder: { color: '#9E9E9E', fontSize: 15 },
   urlInputWrapper: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     height: 50, borderRadius: 12, paddingHorizontal: 16,
-    backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
+    backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#333333',
   },
-  urlInput: { flex: 1, color: '#111111', fontSize: 15 },
+  urlInput: { flex: 1, color: '#FFFFFF', fontSize: 15 },
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 },
   tipIcon: { fontSize: 14 },
   tipText: { color: '#9E9E9E', fontSize: 13, flex: 1 },
   nextButton: {
-    height: 56, borderRadius: 16, backgroundColor: '#111111',
+    height: 56, borderRadius: 16, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center', marginTop: 24,
   },
-  nextButtonDisabled: { backgroundColor: '#E0E0E0' },
-  nextButtonText: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
-  nextButtonTextDisabled: { color: '#9E9E9E' },
+  nextButtonDisabled: { backgroundColor: '#333333' },
+  nextButtonText: { fontSize: 17, fontWeight: '700' as const, color: '#111111' },
+  nextButtonTextDisabled: { color: '#666666' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -429,4 +431,5 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
   },
   cityRowText: { color: '#111111', fontSize: 15 },
+
 });

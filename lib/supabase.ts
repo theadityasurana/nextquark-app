@@ -16,8 +16,32 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-// Note: stale token handling is done in AuthContext's onAuthStateChange listener
-// to avoid duplicate listeners causing race conditions with React state.
+/**
+ * Handle stale / invalid refresh tokens gracefully.
+ *
+ * When the stored refresh token is revoked or expired, Supabase's auto-refresh
+ * throws an AuthApiError ("Invalid Refresh Token: Refresh Token Not Found").
+ * This can happen before the onAuthStateChange listener fires, so we catch it
+ * here and force a clean sign-out so the user is redirected to the login screen
+ * instead of seeing an unhandled error.
+ */
+export async function handleStaleSession(): Promise<void> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) {
+      console.log('[SUPABASE] Stale session detected, signing out');
+      await supabase.auth.signOut();
+      await AsyncStorage.multiRemove(['nextquark_auth', 'nextquark_onboarding', 'nextquark_swiped_jobs']);
+    }
+  } catch (e: any) {
+    // If getSession itself throws (e.g. invalid refresh token), force sign-out
+    if (e?.message?.includes('Refresh Token') || e?.name === 'AuthApiError') {
+      console.log('[SUPABASE] Invalid refresh token caught, forcing sign-out');
+      try { await supabase.auth.signOut(); } catch (_) {}
+      await AsyncStorage.multiRemove(['nextquark_auth', 'nextquark_onboarding', 'nextquark_swiped_jobs']).catch(() => {});
+    }
+  }
+}
 
 export function getStorageUrl(bucket: string, path: string): string {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;

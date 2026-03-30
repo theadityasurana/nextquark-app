@@ -394,52 +394,44 @@ function MessagesScreen() {
     return groups;
   }, [listQuery.data, sidebarView]);
 
+  const matchesQuery = useCallback((item: MailItem, q: string): boolean => {
+    const subject = (item.data.subject || '').toLowerCase();
+    const bodyText = (item.data.body_text || '').toLowerCase();
+    const bodyHtmlStripped = item.kind === 'inbound' && (item.data as InboundEmail).body_html
+      ? stripHtmlToText((item.data as InboundEmail).body_html!).toLowerCase()
+      : '';
+    if (subject.includes(q) || bodyText.includes(q) || bodyHtmlStripped.includes(q)) return true;
+    if (item.kind === 'inbound') {
+      return (item.data.from_name || '').toLowerCase().includes(q) ||
+        item.data.from_email.toLowerCase().includes(q);
+    }
+    return item.data.to_email.toLowerCase().includes(q);
+  }, []);
+
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
-    // For inbox, use thread groups
     if (sidebarView === 'inbox') {
       let groups = threadGroups;
       if (q) {
+        const allItems = listQuery.data || [];
         groups = groups.filter((g) => {
-          const item = g.latestItem;
-          const subject = (item.data.subject || '').toLowerCase();
-          const bodyText = (item.data.body_text || '').toLowerCase();
-          if (item.kind === 'inbound') {
-            return (item.data.from_name || '').toLowerCase().includes(q) ||
-              item.data.from_email.toLowerCase().includes(q) ||
-              subject.includes(q) || bodyText.includes(q);
-          }
-          return item.data.to_email.toLowerCase().includes(q) ||
-            subject.includes(q) || bodyText.includes(q);
+          const threadItems = allItems.filter((m) => {
+            const tid = m.data.thread_id || computeThreadIdLocal(m.data.subject);
+            return tid === g.threadId;
+          });
+          return threadItems.some((item) => matchesQuery(item, q));
         });
       }
       return groups;
     }
 
-    // For other views, return flat list
     let items = listQuery.data || [];
     if (q) {
-      items = items.filter((item) => {
-        if (item.kind === 'inbound') {
-          const x = item.data;
-          return (
-            (x.from_name || '').toLowerCase().includes(q) ||
-            x.from_email.toLowerCase().includes(q) ||
-            (x.subject || '').toLowerCase().includes(q) ||
-            (x.body_text || '').toLowerCase().includes(q)
-          );
-        }
-        const x = item.data;
-        return (
-          x.to_email.toLowerCase().includes(q) ||
-          (x.subject || '').toLowerCase().includes(q) ||
-          (x.body_text || '').toLowerCase().includes(q)
-        );
-      });
+      items = items.filter((item) => matchesQuery(item, q));
     }
     return items;
-  }, [listQuery.data, searchQuery, sidebarView, threadGroups]);
+  }, [listQuery.data, searchQuery, sidebarView, threadGroups, matchesQuery]);
 
   const refetchAll = useCallback(() => {
     listQuery.refetch();

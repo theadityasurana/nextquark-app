@@ -13,6 +13,7 @@ import { useScrollToTop } from '@react-navigation/native';
 import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews, getCompanyLogoUrl, updateApplicationProgress } from '@/lib/jobs';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { Image } from 'expo-image';
+import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
 
 export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
@@ -109,85 +110,73 @@ export default function ApplicationsScreen() {
     <ApplicationItem application={item} />
   );
 
-  if (isLoading) {
-    return (
-      <TabTransitionWrapper routeName="applications">
+  return (
+    <TabTransitionWrapper routeName="applications">
+      {isLoading ? (
         <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </TabTransitionWrapper>
-    );
-  }
-
-  return (
-    <TabTransitionWrapper routeName="applications">
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.brandHeader}>
-        <Image source={require('@/assets/images/header.png')} style={styles.brandLogo} resizeMode="contain" />
-      </View>
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.secondary }]}>Applications</Text>
-        <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>{mappedApplications.length} total</Text>
-      </View>
-
-      <View style={styles.statsRow}>
-        <Pressable 
-          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'all' && styles.statCardActive]} 
-          onPress={() => setSelectedFilter('all')}
+      ) : (
+        <AnimatedHeaderScrollView
+          largeTitle="Applications"
+          subtitle={`${mappedApplications.length} total`}
+          backgroundColor={colors.background}
+          largeTitleColor={colors.secondary}
+          subtitleColor={colors.textTertiary}
+          largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
         >
-          <TrendingUp size={18} color={colors.textPrimary} />
-          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.total}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>All</Text>
-        </Pressable>
-        <Pressable 
-          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'cooking' && styles.statCardActive]} 
-          onPress={() => setSelectedFilter('cooking')}
-        >
-          <Clock size={18} color={colors.warning} />
-          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.cooking}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cooking</Text>
-        </Pressable>
-        <Pressable 
-          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'locked_in' && styles.statCardActive]} 
-          onPress={() => setSelectedFilter('locked_in')}
-        >
-          <FileCheck size={18} color={colors.accent} />
-          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.lockedIn}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Locked In</Text>
-        </Pressable>
-        <Pressable 
-          style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'interviewing' && styles.statCardActive]} 
-          onPress={() => setSelectedFilter('interviewing')}
-        >
-          <FileCheck size={18} color={colors.statusInterview} />
-          <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.interviewing}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Interviews</Text>
-        </Pressable>
-      </View>
-
-      <FlatList
-        ref={flatListRef}
-        data={filteredApplications}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContainer : undefined}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No applications</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {selectedFilter === 'all' 
-                ? 'Start swiping on jobs to see your applications here'
-                : `No ${selectedFilter} applications found`
-              }
-            </Text>
+          <View style={styles.statsRow}>
+            <Pressable 
+              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'all' && styles.statCardActive]} 
+              onPress={() => setSelectedFilter('all')}
+            >
+              <TrendingUp size={18} color={colors.textPrimary} />
+              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.total}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>All</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'cooking' && styles.statCardActive]} 
+              onPress={() => setSelectedFilter('cooking')}
+            >
+              <Clock size={18} color={colors.warning} />
+              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.cooking}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cooking</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'locked_in' && styles.statCardActive]} 
+              onPress={() => setSelectedFilter('locked_in')}
+            >
+              <FileCheck size={18} color={colors.accent} />
+              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.lockedIn}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Locked In</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'interviewing' && styles.statCardActive]} 
+              onPress={() => setSelectedFilter('interviewing')}
+            >
+              <FileCheck size={18} color={colors.statusInterview} />
+              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.interviewing}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Interviews</Text>
+            </Pressable>
           </View>
-        }
-      />
-    </View>
+
+          {filteredApplications.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No applications</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {selectedFilter === 'all' 
+                  ? 'Start swiping on jobs to see your applications here'
+                  : `No ${selectedFilter} applications found`
+                }
+              </Text>
+            </View>
+          ) : (
+            filteredApplications.map((item) => (
+              <ApplicationItem key={item.id} application={item} />
+            ))
+          )}
+        </AnimatedHeaderScrollView>
+      )}
     </TabTransitionWrapper>
   );
 }

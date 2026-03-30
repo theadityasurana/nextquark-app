@@ -29,6 +29,7 @@ export default function SignInScreen() {
 
     if (result.success) {
       console.log('Sign in successful');
+      // AuthGuard will redirect to onboarding or tabs based on isOnboardingComplete
     } else {
       setError(result.error || 'Invalid email or password. Please try again.');
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

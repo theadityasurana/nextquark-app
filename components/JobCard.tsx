@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Factory, Building, FileCheck, Shield } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { useColors } from '@/contexts/useColors';
 import { Job } from '@/types';
 import MatchScoreBadge from './MatchScoreBadge';
 
@@ -31,8 +32,10 @@ function getExperienceBanner(level: string): string {
 
 export default function JobCard({ job, onViewDetails, backgroundColor, showMatchBadge = true }: JobCardProps) {
   const router = useRouter();
+  const colors = useColors();
   const LocationIcon = getLocationIcon(job.locationType);
   const expBanner = getExperienceBanner(job.experienceLevel);
+  const cardBg = backgroundColor || colors.surfaceElevated;
 
   const formatSalary = () => {
     if (job.salaryRangeRaw) return job.salaryRangeRaw;
@@ -55,8 +58,8 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
   };
 
   return (
-    <View style={[styles.card, backgroundColor && { backgroundColor }]}>
-      <View style={[styles.fixedHeader, backgroundColor && { backgroundColor }]}>
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: colors.border }]}>
+      <View style={[styles.fixedHeader, { backgroundColor: cardBg }]}>
         {showMatchBadge && (
           <View style={styles.matchBadgeRow}>
             <MatchScoreBadge score={job.matchScore} />
@@ -73,7 +76,7 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
         </Pressable>
         <View style={styles.companyNameRow}>
           <Pressable onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: job.companyName } })} hitSlop={4}>
-            <Text style={styles.companyName}>{job.companyName}</Text>
+            <Text style={[styles.companyName, { color: colors.textPrimary }]}>{job.companyName}</Text>
           </Pressable>
           {job.companyLinkedIn && (
             <Pressable onPress={handleLinkedIn} hitSlop={8}>
@@ -81,10 +84,10 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
             </Pressable>
           )}
         </View>
-        <Text style={styles.jobTitle} numberOfLines={2}>{job.jobTitle}</Text>
+        <Text style={[styles.jobTitle, { color: colors.secondary }]} numberOfLines={2}>{job.jobTitle}</Text>
         <View style={styles.locationRow}>
-          <LocationIcon size={13} color={Colors.textSecondary} />
-          <Text style={styles.locationText}>{job.location}</Text>
+          <LocationIcon size={13} color={colors.textSecondary} />
+          <Text style={[styles.locationText, { color: colors.textSecondary }]}>{job.location}</Text>
         </View>
 
         <View style={styles.chipsContainer}>
@@ -151,11 +154,11 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
 
         {job.requirements && job.requirements.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Requirements</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Requirements</Text>
             {job.requirements.slice(0, 4).map((req, idx) => (
               <View key={idx} style={styles.requirementRow}>
                 <View style={styles.bullet} />
-                <Text style={styles.requirementText}>{req}</Text>
+                <Text style={[styles.requirementText, { color: colors.textSecondary }]}>{req}</Text>
               </View>
             ))}
           </View>
@@ -163,7 +166,7 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
 
         {job.skills && job.skills.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Skills</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Skills</Text>
             <View style={styles.skillsRow}>
               {job.skills.map((skill, idx) => (
                 <View key={idx} style={styles.skillChip}>
@@ -176,7 +179,7 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
 
         {job.benefits && job.benefits.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Benefits</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Benefits</Text>
             <View style={styles.skillsRow}>
               {job.benefits.map((benefit, idx) => (
                 <View key={idx} style={styles.benefitChip}>
@@ -191,8 +194,8 @@ export default function JobCard({ job, onViewDetails, backgroundColor, showMatch
          (!job.skills || job.skills.length === 0) &&
          (!job.benefits || job.benefits.length === 0) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About the Role</Text>
-            <Text style={styles.aboutRoleText}>{job.description || 'No description available.'}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.secondary }]}>About the Role</Text>
+            <Text style={[styles.aboutRoleText, { color: colors.textSecondary }]}>{job.description || 'No description available.'}</Text>
           </View>
         )}
 

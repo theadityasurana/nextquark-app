@@ -1,22 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Mail, Flag, FileText, ChevronRight, Shield, Bug, Star } from 'lucide-react-native';
+import { ArrowLeft, HelpCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 export default function HelpSupportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-
-  const supportOptions = [
-    { icon: Mail, label: 'Contact Us', description: 'Email our support team', color: '#1565C0', onPress: () => Linking.openURL('mailto:founders.nextquark@gmail.com') },
-    { icon: Flag, label: 'Report a Problem', description: 'Report bugs or issues', color: Colors.error, onPress: () => router.push('/report-ticket?type=problem' as any) },
-    { icon: Bug, label: 'Report a Bug', description: 'Found a technical issue?', color: '#FF6F00', onPress: () => router.push('/report-ticket?type=bug' as any) },
-    { icon: Shield, label: 'Safety & Security', description: 'Report suspicious activity', color: '#1A1A2E', onPress: () => router.push('/report-ticket?type=safety' as any) },
-    { icon: Star, label: 'Rate Us', description: 'Love the app? Leave a review', color: '#FFD700', onPress: () => {} },
-    { icon: FileText, label: 'Terms of Service', description: 'Read our terms', color: Colors.textSecondary, onPress: () => router.push('/terms-of-service' as any) },
-  ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -31,27 +22,21 @@ export default function HelpSupportScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
           <Text style={styles.heroTitle}>How can we help?</Text>
-          <Text style={styles.heroSubtext}>Choose an option below or reach out to our team directly.</Text>
+          <Text style={styles.heroSubtext}>Report any issue and our team will get back to you.</Text>
         </View>
 
-        <View style={styles.optionsCard}>
-          {supportOptions.map((option, idx) => (
-            <Pressable
-              key={idx}
-              style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed, idx < supportOptions.length - 1 && styles.optionBorder]}
-              onPress={option.onPress}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: `${option.color}15` }]}>
-                <option.icon size={20} color={option.color} />
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionLabel}>{option.label}</Text>
-                <Text style={styles.optionDesc}>{option.description}</Text>
-              </View>
-              <ChevronRight size={18} color={Colors.textTertiary} />
-            </Pressable>
-          ))}
-        </View>
+        <Pressable
+          style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+          onPress={() => router.push('/report-ticket' as any)}
+        >
+          <View style={[styles.optionIcon, { backgroundColor: '#1565C015' }]}>
+            <HelpCircle size={20} color="#1565C0" />
+          </View>
+          <View style={styles.optionContent}>
+            <Text style={styles.optionLabel}>Report an Issue</Text>
+            <Text style={styles.optionDesc}>Bugs, problems, safety concerns & more</Text>
+          </View>
+        </Pressable>
 
         <View style={{ height: 40 }} />
       </ScrollView>

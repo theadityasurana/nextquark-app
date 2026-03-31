@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TrendingUp, FileCheck, Clock } from 'lucide-react-native';
+import { } from 'lucide-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
@@ -20,7 +20,7 @@ export default function ApplicationsScreen() {
   const colors = useColors();
   const queryClient = useQueryClient();
   const { supabaseUserId } = useAuth();
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'cooking' | 'locked_in' | 'interviewing' | 'offer'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'pending' | 'done'>('pending');
   const flatListRef = useRef<FlatList>(null);
   useScrollToTop(flatListRef);
 
@@ -89,20 +89,14 @@ export default function ApplicationsScreen() {
   }, [applications]);
 
   const stats = useMemo(() => {
-    const total = mappedApplications.length;
-    const cooking = mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed').length;
-    const lockedIn = mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted').length;
-    const interviewing = mappedApplications.filter((a) => a.status === 'interviewing' || a.status === 'interview_scheduled').length;
-    const offers = mappedApplications.filter((a) => a.status === 'offer').length;
-    return { total, cooking, lockedIn, interviewing, offers };
+    const pending = mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed').length;
+    const done = mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted').length;
+    return { pending, done };
   }, [mappedApplications]);
 
   const filteredApplications = useMemo(() => {
-    if (selectedFilter === 'all') return mappedApplications;
-    if (selectedFilter === 'cooking') return mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed');
-    if (selectedFilter === 'locked_in') return mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted');
-    if (selectedFilter === 'interviewing') return mappedApplications.filter((a) => a.status === 'interviewing' || a.status === 'interview_scheduled');
-    if (selectedFilter === 'offer') return mappedApplications.filter((a) => a.status === 'offer');
+    if (selectedFilter === 'pending') return mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed');
+    if (selectedFilter === 'done') return mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted');
     return mappedApplications;
   }, [mappedApplications, selectedFilter]);
 
@@ -124,39 +118,22 @@ export default function ApplicationsScreen() {
           largeTitleColor={colors.secondary}
           subtitleColor={colors.textTertiary}
           largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textPrimary} />
+          }
         >
           <View style={styles.statsRow}>
             <Pressable 
-              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'all' && styles.statCardActive]} 
-              onPress={() => setSelectedFilter('all')}
+              style={[styles.statCard, { backgroundColor: selectedFilter === 'pending' ? colors.warning : colors.surface }]} 
+              onPress={() => setSelectedFilter('pending')}
             >
-              <TrendingUp size={18} color={colors.textPrimary} />
-              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.total}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>All</Text>
+              <Text style={[styles.statLabel, { color: selectedFilter === 'pending' ? '#fff' : colors.textPrimary }]}>Pending ({stats.pending})</Text>
             </Pressable>
             <Pressable 
-              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'cooking' && styles.statCardActive]} 
-              onPress={() => setSelectedFilter('cooking')}
+              style={[styles.statCard, { backgroundColor: selectedFilter === 'done' ? colors.accent : colors.surface }]} 
+              onPress={() => setSelectedFilter('done')}
             >
-              <Clock size={18} color={colors.warning} />
-              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.cooking}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cooking</Text>
-            </Pressable>
-            <Pressable 
-              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'locked_in' && styles.statCardActive]} 
-              onPress={() => setSelectedFilter('locked_in')}
-            >
-              <FileCheck size={18} color={colors.accent} />
-              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.lockedIn}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Locked In</Text>
-            </Pressable>
-            <Pressable 
-              style={[styles.statCard, { backgroundColor: colors.surface }, selectedFilter === 'interviewing' && styles.statCardActive]} 
-              onPress={() => setSelectedFilter('interviewing')}
-            >
-              <FileCheck size={18} color={colors.statusInterview} />
-              <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats.interviewing}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>Interviews</Text>
+              <Text style={[styles.statLabel, { color: selectedFilter === 'done' ? '#fff' : colors.textPrimary }]}>Done ({stats.done})</Text>
             </Pressable>
           </View>
 
@@ -164,10 +141,7 @@ export default function ApplicationsScreen() {
             <View style={styles.emptyState}>
               <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No applications</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {selectedFilter === 'all' 
-                  ? 'Start swiping on jobs to see your applications here'
-                  : `No ${selectedFilter} applications found`
-                }
+                {`No ${selectedFilter} applications found`}
               </Text>
             </View>
           ) : (
@@ -219,31 +193,20 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 8,
     marginVertical: 8,
   },
   statCard: {
     flex: 1,
-    borderRadius: 14,
-    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    gap: 8,
+    paddingVertical: 10,
   },
-  statCardActive: {
-    borderColor: '#22c55e',
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-  },
+
   statLabel: {
-    fontSize: 11,
-    color: "#000",
-    fontWeight: '500' as const,
-    textAlign: 'center' as const,
+    fontSize: 14,
+    fontWeight: '600' as const,
   },
   emptyContainer: {
     flex: 1,

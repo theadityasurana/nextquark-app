@@ -175,15 +175,20 @@ export default function EditSectionScreen() {
           </>
         );
       case 'topskills':
+        const sortedSkills = [...skills].sort((a, b) => {
+          const aTop = topSkills.includes(a) ? 0 : 1;
+          const bTop = topSkills.includes(b) ? 0 : 1;
+          return aTop - bTop;
+        });
         return (
           <>
-            <View style={[s.searchBox, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
-              <Search size={16} color={colors.textTertiary} />
-              <TextInput style={[s.searchInput, { color: colors.textPrimary }]} placeholder="Search skills..." placeholderTextColor={colors.textTertiary} value={skillQuery} onChangeText={setSkillQuery} />
+            <View style={[s.searchBoxThin, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+              <Search size={14} color={colors.textTertiary} />
+              <TextInput style={[s.searchInputThin, { color: colors.textPrimary }]} placeholder="Search skills..." placeholderTextColor={colors.textTertiary} value={skillQuery} onChangeText={setSkillQuery} />
             </View>
             {skillQuery ? (
               <View style={s.chipGrid}>
-                {suggestedSkills.filter(sk => sk.toLowerCase().includes(skillQuery.toLowerCase()) && !skills.includes(sk)).slice(0, 15).map(sk => (
+                {suggestedSkills.filter(sk => sk.toLowerCase().includes(skillQuery.toLowerCase()) && !skills.includes(sk)).slice(0, 20).map(sk => (
                   <Pressable key={sk} style={[s.chip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => { setSkills(prev => [...prev, sk]); setSkillQuery(''); }}>
                     <Plus size={12} color={colors.textPrimary} /><Text style={[s.chipText, { color: colors.textPrimary }]}>{sk}</Text>
                   </Pressable>
@@ -197,10 +202,11 @@ export default function EditSectionScreen() {
             ) : null}
             <Text style={[s.label, { color: colors.textTertiary }]}>Tap to toggle top skill (max 5). Long-press to remove. {topSkills.length}/5</Text>
             <View style={s.chipGrid}>
-              {skills.map((sk, idx) => {
+              {sortedSkills.map((sk, idx) => {
                 const isTop = topSkills.includes(sk);
+                const originalIdx = skills.indexOf(sk);
                 return (
-                  <Pressable key={idx} style={[s.chip, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary, borderColor: isTop ? '#D4A017' : colors.secondary, borderWidth: isTop ? 2 : 1 }]} onPress={() => toggleTopSkill(sk)} onLongPress={() => removeSkill(idx)}>
+                  <Pressable key={sk} style={[s.chip, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary, borderColor: isTop ? '#D4A017' : colors.secondary, borderWidth: isTop ? 2 : 1 }]} onPress={() => toggleTopSkill(sk)} onLongPress={() => removeSkill(originalIdx)}>
                     {isTop && <Star size={12} color="#D4A017" />}
                     <Text style={[s.chipText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{sk}</Text>
                   </Pressable>
@@ -431,6 +437,8 @@ const s = StyleSheet.create({
   optionText: { fontSize: 14, fontWeight: '500', flex: 1 },
   searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, borderWidth: 1 },
   searchInput: { flex: 1, fontSize: 15 },
+  searchBoxThin: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 12, gap: 6, borderWidth: 1 },
+  searchInputThin: { flex: 1, fontSize: 14 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14 },
   saveBtnText: { fontSize: 16, fontWeight: '700' },
   catRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5 },

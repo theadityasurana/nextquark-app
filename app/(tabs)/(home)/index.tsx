@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, SlidersHorizontal, MapPin, Check, ChevronDown, Search, Globe } from 'lucide-react-native';
+import { X, Heart, SlidersHorizontal, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, BarChart3, ShieldCheck, Building2, UserRound } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors, { darkColors } from '@/constants/colors';
@@ -35,7 +35,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 
-const CARD_COLORS = [Colors.surface];
+// CARD_COLORS moved inside component to support dark mode
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -119,6 +119,7 @@ export default function HomeScreen() {
   const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile } = useAuth();
   const colors = useColors();
   const isDark = colors.background === darkColors.background;
+  const CARD_COLORS = [colors.surfaceElevated];
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentIndexRef = useRef(0);
   const [swipeDirection, setSwipeDirection] = useState<string | null>(null);
@@ -1420,12 +1421,12 @@ export default function HomeScreen() {
             <ScrollView showsVerticalScrollIndicator={false} style={styles.filterScroll}>
 
 
-              <Text style={styles.filterSectionTitle}>Posted Within</Text>
+              <View style={styles.filterSectionRow}><Clock size={15} color="#000" /><Text style={styles.filterSectionTitle}>Posted Within</Text></View>
               <View style={styles.chipGrid}>
                 {POSTED_OPTIONS.map((opt) => {
                   const selected = tempFilters.postedWithin.includes(opt.value);
                   return (
-                    <Pressable key={opt.value} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => togglePostedWithin(opt.value)}>
+                    <Pressable key={opt.value} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => togglePostedWithin(opt.value)}>
                       {selected && <Check size={14} color="#FFFFFF" />}
                       <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{opt.label}</Text>
                     </Pressable>
@@ -1435,12 +1436,12 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Work Mode</Text>
+              <View style={styles.filterSectionRow}><Wifi size={15} color="#000" /><Text style={styles.filterSectionTitle}>Work Mode</Text></View>
               <View style={styles.chipGrid}>
                 {WORK_MODES.map((mode) => {
                   const selected = tempFilters.workModes.includes(mode);
                   return (
-                    <Pressable key={mode} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleWorkMode(mode)}>
+                    <Pressable key={mode} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleWorkMode(mode)}>
                       {selected && <Check size={14} color="#FFFFFF" />}
                       <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{mode}</Text>
                     </Pressable>
@@ -1450,12 +1451,12 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Job Type</Text>
+              <View style={styles.filterSectionRow}><Briefcase size={15} color="#000" /><Text style={styles.filterSectionTitle}>Job Type</Text></View>
               <View style={styles.chipGrid}>
                 {JOB_TYPES.map((type) => {
                   const selected = tempFilters.jobTypes.includes(type);
                   return (
-                    <Pressable key={type} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobType(type)}>
+                    <Pressable key={type} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobType(type)}>
                       {selected && <Check size={14} color="#FFFFFF" />}
                       <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{type}</Text>
                     </Pressable>
@@ -1465,12 +1466,12 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Job Level</Text>
+              <View style={styles.filterSectionRow}><BarChart3 size={15} color="#000" /><Text style={styles.filterSectionTitle}>Job Level</Text></View>
               <View style={styles.chipGrid}>
                 {JOB_LEVELS.map((level) => {
                   const selected = tempFilters.jobLevels.includes(level);
                   return (
-                    <Pressable key={level} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobLevel(level)}>
+                    <Pressable key={level} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobLevel(level)}>
                       {selected && <Check size={14} color="#FFFFFF" />}
                       <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{level}</Text>
                     </Pressable>
@@ -1480,12 +1481,12 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Job Requirements</Text>
+              <View style={styles.filterSectionRow}><ShieldCheck size={15} color="#000" /><Text style={styles.filterSectionTitle}>Job Requirements</Text></View>
               <View style={styles.chipGrid}>
                 {JOB_REQUIREMENTS.map((req) => {
                   const selected = tempFilters.jobRequirements.includes(req);
                   return (
-                    <Pressable key={req} style={[styles.filterChip, { backgroundColor: '#000000', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobRequirement(req)}>
+                    <Pressable key={req} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobRequirement(req)}>
                       {selected && <Check size={14} color="#FFFFFF" />}
                       <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{req}</Text>
                     </Pressable>
@@ -1495,7 +1496,7 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Company</Text>
+              <View style={styles.filterSectionRow}><Building2 size={15} color="#000" /><Text style={styles.filterSectionTitle}>Company</Text></View>
               <Pressable style={styles.cityPickerBtn} onPress={() => setShowCompanyPicker(true)}>
                 <Search size={18} color={Colors.textTertiary} />
                 <Text style={styles.cityPickerBtnText}>
@@ -1516,7 +1517,7 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Role</Text>
+              <View style={styles.filterSectionRow}><UserRound size={15} color="#000" /><Text style={styles.filterSectionTitle}>Role</Text></View>
               <Pressable style={styles.cityPickerBtn} onPress={() => setShowRolePicker(true)}>
                 <Search size={18} color={Colors.textTertiary} />
                 <Text style={styles.cityPickerBtnText}>
@@ -1537,7 +1538,7 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <Text style={styles.filterSectionTitle}>Location</Text>
+              <View style={styles.filterSectionRow}><MapPin size={15} color="#000" /><Text style={styles.filterSectionTitle}>Location</Text></View>
               <Pressable style={styles.cityPickerBtn} onPress={() => setShowLocationPicker(true)}>
                 <MapPin size={18} color={Colors.textTertiary} />
                 <Text style={styles.cityPickerBtnText}>
@@ -1789,11 +1790,12 @@ const styles = StyleSheet.create({
   filterOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   filterContent: { backgroundColor: "#FFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
-  filterTitle: { fontSize: 22, fontWeight: '800' as const, color: "#000" },
+  filterTitle: { fontSize: 26, fontWeight: '800' as const, color: "#000" },
   filterCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  filterDivider: { height: 1, backgroundColor: "#FFF", marginVertical: 14 },
+  filterDivider: { height: 1, backgroundColor: '#E0E0E0', marginVertical: 6 },
   filterScroll: { paddingHorizontal: 20 },
-  filterSectionTitle: { fontSize: 15, fontWeight: '700' as const, color: "#000", marginTop: 18, marginBottom: 10 },
+  filterSectionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7, marginBottom: 4 },
+  filterSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: "#000" },
 
   cityPickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, borderWidth: 1, borderColor: "#DDD", gap: 10 },
   cityPickerBtnText: { flex: 1, fontSize: 15, color: "#000" },

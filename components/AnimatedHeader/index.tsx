@@ -26,6 +26,7 @@ interface Props {
   smallHeaderTitleStyle?: any;
   smallHeaderSubtitleStyle?: any;
   contentContainerStyle?: any;
+  refreshControl?: React.ReactElement;
 }
 
 export const AnimatedHeaderScrollView = memo<Props>(
@@ -43,6 +44,7 @@ export const AnimatedHeaderScrollView = memo<Props>(
     smallHeaderTitleStyle,
     smallHeaderSubtitleStyle,
     contentContainerStyle,
+    refreshControl,
   }) => {
     const scrollY = useRef(new Animated.Value(0)).current;
     const insets = useSafeAreaInsets();
@@ -177,6 +179,7 @@ export const AnimatedHeaderScrollView = memo<Props>(
           )}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={showsVerticalScrollIndicator}
+          refreshControl={refreshControl}
           contentContainerStyle={[
             {
               paddingTop: insets.top + 16,

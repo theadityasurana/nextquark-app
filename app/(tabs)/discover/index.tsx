@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
-import { Plus, SlidersHorizontal, X, ChevronDown, Check, Search, Users, Crown, Building2, TrendingUp, Clock, GraduationCap, Trophy } from 'lucide-react-native';
+import { Plus, X, ChevronDown, Check, Search, Users, Building2, TrendingUp, Clock, Trophy } from 'lucide-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
@@ -13,7 +13,7 @@ import { fetchJobsByCompany } from '@/lib/jobs';
 import { Job } from '@/types';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { supabase } from '@/lib/supabase';
-import { universities } from '@/constants/universities';
+
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share } from 'react-native';
 import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
@@ -25,17 +25,17 @@ export default function DiscoverScreen() {
   const colors = useColors();
   const { userProfile, supabaseUserId } = useAuth();
   
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [industryFilter, setIndustryFilter] = useState<string[]>([]);
-  const [locationFilter, setLocationFilter] = useState<string[]>([]);
+
+
   const [refreshing, setRefreshing] = useState(false);
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
+  const [visibleJobsCount, setVisibleJobsCount] = useState<Record<string, number>>({});
+  const [visibleTopCompanies, setVisibleTopCompanies] = useState(10);
+  const [visibleRecentJobs, setVisibleRecentJobs] = useState(10);
   const [friendSearch, setFriendSearch] = useState('');
   const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'24h' | '3d' | '7d' | '30d' | '365d' | 'all'>('30d');
   const [recentJobsTimeRange, setRecentJobsTimeRange] = useState<'24h' | '48h' | '7d' | '30d'>('30d');
-  const [showUniversityModal, setShowUniversityModal] = useState(false);
-  const [universityFilter, setUniversityFilter] = useState<string[]>([]);
-  const [universitySearch, setUniversitySearch] = useState('');
+
   const [showFriendSearch, setShowFriendSearch] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
@@ -77,6 +77,15 @@ export default function DiscoverScreen() {
       case 'all': return 'All Time';
     }
   }, [analyticsTimeRange]);
+
+  const isLight = colors.background === '#F5F5F5';
+  const sectionColors = {
+    friends: isLight ? '#FFFFFF' : '#1A1A1A',
+    topCompanies: isLight ? '#FAFAFA' : '#1E1E1E',
+    recentJobs: isLight ? '#FFFFFF' : '#1A1A1A',
+    insights: isLight ? '#FAFAFA' : '#1E1E1E',
+    favorites: isLight ? '#FFFFFF' : '#1A1A1A',
+  };
 
   const favoriteCompanies = userProfile?.favoriteCompanies || [];
 
@@ -138,10 +147,10 @@ export default function DiscoverScreen() {
       const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
       const desiredRoles = userProfile?.desiredRoles || [];
       // Fetch more to allow client-side filtering by desired roles
-      const limit = desiredRoles.length > 0 ? 200 : 30;
+      const limit = desiredRoles.length > 0 ? 200 : 100;
       const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false }).limit(limit);
       if (!data) return [];
-      if (desiredRoles.length === 0) return data.slice(0, 30);
+      if (desiredRoles.length === 0) return data;
       const filtered = data.filter((job: any) =>
         desiredRoles.some(role => {
           const r = role.toLowerCase();
@@ -150,7 +159,7 @@ export default function DiscoverScreen() {
             (Array.isArray(job.skills) && job.skills.some((s: string) => s.toLowerCase().includes(r)));
         })
       );
-      return filtered.slice(0, 30);
+      return filtered;
     },
   });
 
@@ -171,19 +180,8 @@ export default function DiscoverScreen() {
     if (friendSearch) {
       profiles = profiles.filter((p: any) => p.full_name?.toLowerCase().includes(friendSearch.toLowerCase()));
     }
-    if (universityFilter.length > 0) {
-      profiles = profiles.filter((p: any) => {
-        const education = p.education || [];
-        return education.some((edu: any) => universityFilter.includes(edu.institution));
-      });
-    }
     return profiles;
-  }, [allProfiles, friendSearch, universityFilter]);
-
-  const filteredUniversities = useMemo(() => {
-    if (!universitySearch) return universities;
-    return universities.filter(u => u.toLowerCase().includes(universitySearch.toLowerCase()));
-  }, [universitySearch]);
+  }, [allProfiles, friendSearch]);
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['jobs-by-favorite-companies'] });
@@ -218,7 +216,7 @@ export default function DiscoverScreen() {
   const topCompaniesWithLogos = useMemo(() => {
     if (allCompaniesWithLogos.length <= 10) return allCompaniesWithLogos;
     const shuffled = [...allCompaniesWithLogos].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 10);
+    return shuffled;
   }, [allCompaniesWithLogos]);
 
   const { data: jobsByCompany = {}, refetch: refetchJobs } = useQuery({
@@ -234,20 +232,7 @@ export default function DiscoverScreen() {
     enabled: favoriteCompanies.length > 0,
   });
 
-  const filteredCompanies = useMemo(() => {
-    let companies = favoriteCompanies;
-    if (industryFilter.length === 0 && locationFilter.length === 0) return companies;
-    return companies.filter(company => {
-      const companyData = allCompaniesData.find((c: any) => c.name === company);
-      if (!companyData) return false;
-      const matchesIndustry = industryFilter.length === 0 || industryFilter.includes(companyData.industry);
-      const matchesLocation = locationFilter.length === 0 || locationFilter.includes(companyData.location);
-      return matchesIndustry && matchesLocation;
-    });
-  }, [favoriteCompanies, industryFilter, locationFilter, allCompaniesData]);
 
-  const uniqueIndustries = useMemo(() => [...new Set(allCompaniesData.map((c: any) => c.industry).filter(Boolean))], [allCompaniesData]);
-  const uniqueLocations = useMemo(() => [...new Set(allCompaniesData.map((c: any) => c.location).filter(Boolean))], [allCompaniesData]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -273,38 +258,14 @@ export default function DiscoverScreen() {
           largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
         >
 
-        {(industryFilter.length > 0 || locationFilter.length > 0) && (
-          <View style={styles.activeFiltersRow}>
-            {industryFilter.map(f => (
-              <Pressable key={f} style={styles.activeFilterChip} onPress={() => setIndustryFilter(prev => prev.filter(i => i !== f))}>
-                <Text style={styles.activeFilterText}>{f}</Text>
-                <X size={12} color={Colors.surface} />
-              </Pressable>
-            ))}
-            {locationFilter.map(f => (
-              <Pressable key={f} style={styles.activeFilterChip} onPress={() => setLocationFilter(prev => prev.filter(l => l !== f))}>
-                <Text style={styles.activeFilterText}>{f}</Text>
-                <X size={12} color={Colors.surface} />
-              </Pressable>
-            ))}
-          </View>
-        )}
 
         <View onTouchStart={() => setShowFriendSearch(false)}>
-          <View style={styles.friendsSection}>
+          <View style={[styles.friendsSection, { backgroundColor: sectionColors.friends }]}>
             <View style={styles.friendsHeader}>
               <Users size={20} color={colors.secondary} />
               <Text style={[styles.friendsSectionTitle, { color: colors.secondary }]}>Friends</Text>
               <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => setShowFriendSearch(!showFriendSearch)}>
                 <Search size={18} color={colors.textPrimary} />
-              </Pressable>
-              <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => setShowUniversityModal(true)}>
-                <GraduationCap size={18} color={universityFilter.length > 0 ? Colors.primary : colors.textPrimary} />
-                {universityFilter.length > 0 && (
-                  <View style={styles.iconBadge}>
-                    <Text style={styles.iconBadgeText}>{universityFilter.length}</Text>
-                  </View>
-                )}
               </Pressable>
               <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => router.push('/leaderboard' as any)}>
                 <Trophy size={18} color={colors.textPrimary} />
@@ -334,49 +295,31 @@ export default function DiscoverScreen() {
                 </Pressable>
               </View>
             )}
-            {universityFilter.length > 0 && (
-              <View style={styles.activeUniversityFilters}>
-                {universityFilter.map(uni => (
-                  <Pressable key={uni} style={styles.activeUniversityChip} onPress={() => setUniversityFilter(prev => prev.filter(u => u !== uni))}>
-                    <Text style={styles.activeUniversityText} numberOfLines={1}>{uni}</Text>
-                    <X size={12} color={Colors.surface} />
-                  </Pressable>
-                ))}
-              </View>
-            )}
             {isLoadingProfiles ? (
               <Text style={styles.loadingText}>Loading friends...</Text>
             ) : filteredProfiles.length === 0 ? (
               <Text style={[styles.emptyFriendsText, { color: colors.textSecondary }]}>No friends found</Text>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendsRow}>
-                {filteredProfiles.map((profile: any) => {
+                {filteredProfiles.map((profile: any, index: number) => {
+                  const defaultUnsplash = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d';
                   let avatarUrl;
-                  if (profile.avatar_url) {
-                    // Check if it's already a full URL
-                    if (profile.avatar_url.startsWith('http')) {
-                      avatarUrl = profile.avatar_url;
-                    } else {
-                      // It's a storage path, construct the full URL
-                      avatarUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`;
-                    }
+                  if (profile.avatar_url && !profile.avatar_url.includes(defaultUnsplash)) {
+                    avatarUrl = profile.avatar_url.startsWith('http')
+                      ? profile.avatar_url
+                      : `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/profile-pictures/${profile.avatar_url}`;
                   } else {
-                    // Fallback to UI Avatars
                     avatarUrl = 'https://api.dicebear.com/9.x/adventurer/png?seed=' + encodeURIComponent(profile.id || profile.full_name || 'User') + '&size=200';
                   }
                   
-                  const isPremium = profile.subscription_type === 'premium' || profile.subscription_type === 'pro';
-                  const badgeColor = profile.subscription_type === 'pro' ? '#FFD700' : '#9C27B0';
+                  const borderColor = profile.subscription_type === 'pro' ? '#FF8C00' : profile.subscription_type === 'premium' ? '#9C27B0' : '#DDD';
                   return (
-                    <Pressable key={profile.id} style={styles.friendBlock} onPress={() => router.push({ pathname: '/friend-profile' as any, params: { userId: profile.id } })}>
-                      {isPremium && (
-                        <View style={[styles.premiumBadge, { backgroundColor: badgeColor }]}>
-                          <Crown size={10} color="#FFFFFF" />
-                          <Text style={styles.premiumBadgeText}>{profile.subscription_type === 'pro' ? 'PRO' : 'PREMIUM'}</Text>
-                        </View>
-                      )}
-                      <Image source={{ uri: avatarUrl }} style={styles.friendAvatar} />
-                      <Text style={styles.friendName} numberOfLines={2}>{profile.full_name || 'Anonymous'}</Text>
+                    <Pressable
+                      key={profile.id}
+                      style={[styles.friendBlock, index > 0 && { marginLeft: -20 }]}
+                      onPress={() => router.push({ pathname: '/friend-profile' as any, params: { userId: profile.id } })}
+                    >
+                      <Image source={{ uri: avatarUrl }} style={[styles.friendAvatar, { borderColor }]} />
                     </Pressable>
                   );
                 })}
@@ -384,14 +327,14 @@ export default function DiscoverScreen() {
             )}
           </View>
 
-          <View style={styles.topCompaniesSection}>
+          <View style={[styles.topCompaniesSection, { backgroundColor: sectionColors.topCompanies }]}>
             <View style={styles.topCompaniesHeader}>
               <Building2 size={20} color={colors.secondary} />
               <Text style={[styles.topCompaniesSectionTitle, { color: colors.secondary }]}>Top Companies Hiring This Week</Text>
             </View>
             {topCompaniesWithLogos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topCompaniesRow}>
-                {topCompaniesWithLogos.map((company: any, index: number) => {
+                {topCompaniesWithLogos.slice(0, visibleTopCompanies).map((company: any, index: number) => {
                   const logoUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/logos/${company.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
                   
                   return (
@@ -400,13 +343,19 @@ export default function DiscoverScreen() {
                     </Pressable>
                   );
                 })}
+                {topCompaniesWithLogos.length > visibleTopCompanies && (
+                  <Pressable style={[styles.loadMoreCardSmall, { borderColor: colors.borderLight }]} onPress={() => setVisibleTopCompanies(prev => prev + 10)}>
+                    <Plus size={20} color={colors.secondary} />
+                    <Text style={[styles.loadMoreText, { color: colors.secondary }]}>More</Text>
+                  </Pressable>
+                )}
               </ScrollView>
             ) : (
               <Text style={styles.noDataText}>No companies available</Text>
             )}
           </View>
 
-          <View style={styles.recentJobsSection}>
+          <View style={[styles.recentJobsSection, { backgroundColor: sectionColors.recentJobs }]}>
             <View style={styles.recentJobsHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Clock size={20} color={colors.secondary} />
@@ -428,7 +377,7 @@ export default function DiscoverScreen() {
             </View>
             {recentJobs.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentJobsRow}>
-                {recentJobs.map((job: any) => {
+                {recentJobs.slice(0, visibleRecentJobs).map((job: any) => {
                   const mappedJob = require('@/lib/jobs').mapSupabaseJobToJob(job);
                   return (
                     <Pressable key={job.id} style={styles.recentJobCard} onPress={() => handleJobPress(mappedJob)}>
@@ -444,13 +393,19 @@ export default function DiscoverScreen() {
                     </Pressable>
                   );
                 })}
+                {recentJobs.length > visibleRecentJobs && (
+                  <Pressable style={[styles.loadMoreCard, { borderColor: colors.borderLight }]} onPress={() => setVisibleRecentJobs(prev => prev + 10)}>
+                    <Plus size={24} color={colors.secondary} />
+                    <Text style={[styles.loadMoreText, { color: colors.secondary }]}>Load More</Text>
+                  </Pressable>
+                )}
               </ScrollView>
             ) : (
               <Text style={styles.noDataText}>No recent jobs</Text>
             )}
           </View>
 
-          <View style={styles.analyticsSection}>
+          <View style={[styles.analyticsSection, { backgroundColor: sectionColors.insights }]}>
             <View style={styles.analyticsHeader}>
               <TrendingUp size={20} color={colors.secondary} />
               <Text style={[styles.analyticsSectionTitle, { color: colors.secondary }]}>Insights</Text>
@@ -551,7 +506,7 @@ export default function DiscoverScreen() {
             </ScrollView>
           </View>
 
-          {filteredCompanies.length === 0 ? (
+          {favoriteCompanies.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No Favorite Companies</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Add companies to your favorites to see their job postings here</Text>
@@ -562,40 +517,41 @@ export default function DiscoverScreen() {
             </View>
           ) : (
             <>
-              <View style={styles.companiesHeader}>
+              <View style={[styles.companiesHeader, { backgroundColor: sectionColors.favorites }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Building2 size={20} color={colors.secondary} />
                   <Text style={[styles.companiesSectionTitle, { color: colors.secondary }]}>Favorite Companies</Text>
                 </View>
-                <Pressable style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
-                  <SlidersHorizontal size={20} color={Colors.textSecondary} />
-                  {(industryFilter.length + locationFilter.length) > 0 && (
-                    <View style={styles.filterBadge}>
-                      <Text style={styles.filterBadgeText}>{industryFilter.length + locationFilter.length}</Text>
-                    </View>
-                  )}
-                </Pressable>
               </View>
-              {filteredCompanies.map(company => {
+              {favoriteCompanies.map(company => {
                 const jobs = jobsByCompany[company] || [];
                 const companyData = allCompaniesData.find((c: any) => c.name === company);
                 const logoUrl = companyData?.logo_url ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${companyData.logo_url}` : null;
+                const visible = visibleJobsCount[company] || 10;
+                const visibleJobs = jobs.slice(0, visible);
+                const hasMore = jobs.length > visible;
                 
                 return (
-                  <View key={company} style={styles.companySection}>
+                  <View key={company} style={[styles.companySection, { backgroundColor: sectionColors.favorites }]}>
                     <View style={styles.companySectionHeader}>
                       {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companyLogo} />}
                       <Text style={[styles.companyName, { color: colors.textPrimary }]}>{company}</Text>
                       <Text style={[styles.jobCount, { color: colors.textSecondary }]}>{jobs.length} jobs</Text>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.jobsRow}>
-                      {jobs.map(job => (
+                      {visibleJobs.map(job => (
                         <Pressable key={job.id} style={[styles.jobCard, appliedJobs.has(job.id) && styles.jobCardApplied]} onPress={() => handleJobPress(job)}>
                           <Image source={{ uri: job.companyLogo }} style={styles.jobCardLogo} />
                           <Text style={styles.jobCardTitle} numberOfLines={2}>{job.jobTitle}</Text>
                           <Text style={styles.jobCardLocation} numberOfLines={1}>{job.location}</Text>
                         </Pressable>
                       ))}
+                      {hasMore && (
+                        <Pressable style={[styles.loadMoreCard, { borderColor: colors.borderLight }]} onPress={() => setVisibleJobsCount(prev => ({ ...prev, [company]: visible + 10 }))}>
+                          <Plus size={24} color={colors.secondary} />
+                          <Text style={[styles.loadMoreText, { color: colors.secondary }]}>Load More</Text>
+                        </Pressable>
+                      )}
                     </ScrollView>
                   </View>
                 );
@@ -611,83 +567,9 @@ export default function DiscoverScreen() {
         </View>
         </AnimatedHeaderScrollView>
 
-        <Modal visible={showUniversityModal} animationType="slide" transparent onRequestClose={() => setShowUniversityModal(false)}>
-          <View style={styles.filterOverlay}>
-            <View style={[styles.universityModalContent, { backgroundColor: colors.surface }]}>
-              <View style={styles.filterHeader}>
-                <Text style={[styles.filterTitle, { color: colors.textPrimary }]}>Filter by University</Text>
-                <Pressable onPress={() => setShowUniversityModal(false)}>
-                  <X size={22} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-              <View style={[styles.universitySearchBar, { backgroundColor: colors.background, borderColor: colors.borderLight }]}>
-                <Search size={16} color={colors.textTertiary} />
-                <TextInput
-                  style={[styles.universitySearchInput, { color: colors.textPrimary }]}
-                  placeholder="Search universities..."
-                  placeholderTextColor={colors.textTertiary}
-                  value={universitySearch}
-                  onChangeText={setUniversitySearch}
-                />
-              </View>
-              <ScrollView style={styles.universityModalList} keyboardShouldPersistTaps="handled">
-                {filteredUniversities.map(uni => (
-                  <Pressable
-                    key={uni}
-                    style={[styles.universityItem, { borderBottomColor: colors.borderLight }, universityFilter.includes(uni) && styles.universityItemSelected]}
-                    onPress={() => {
-                      setUniversityFilter(prev =>
-                        prev.includes(uni) ? prev.filter(u => u !== uni) : [...prev, uni]
-                      );
-                    }}
-                  >
-                    {universityFilter.includes(uni) && <Check size={18} color={Colors.primary} />}
-                    <Text style={[styles.universityItemText, { color: colors.textPrimary }, universityFilter.includes(uni) && { color: Colors.primary, fontWeight: '600' }]}>{uni}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <Pressable style={[styles.applyFiltersButton, { backgroundColor: colors.secondary }]} onPress={() => setShowUniversityModal(false)}>
-                <Text style={[styles.applyFiltersText, { color: colors.surface }]}>Apply Filters</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
 
-        <Modal visible={showFilterModal} animationType="slide" transparent onRequestClose={() => setShowFilterModal(false)}>
-          <View style={styles.filterOverlay}>
-            <View style={[styles.filterContent, { backgroundColor: colors.surface }]}>
-              <View style={styles.filterHeader}>
-                <Text style={[styles.filterTitle, { color: colors.textPrimary }]}>Filters</Text>
-                <Pressable onPress={() => setShowFilterModal(false)}>
-                  <X size={22} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.filterScrollView}>
-                <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Industry</Text>
-                <View style={styles.chipGrid}>
-                  {uniqueIndustries.map(industry => (
-                    <Pressable key={industry} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, industryFilter.includes(industry) && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setIndustryFilter(prev => prev.includes(industry) ? prev.filter(i => i !== industry) : [...prev, industry])}>
-                      {industryFilter.includes(industry) && <Check size={14} color={colors.textInverse} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, industryFilter.includes(industry) && { color: colors.textInverse }]}>{industry}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Location</Text>
-                <View style={styles.chipGrid}>
-                  {uniqueLocations.map(location => (
-                    <Pressable key={location} style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.borderLight }, locationFilter.includes(location) && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setLocationFilter(prev => prev.includes(location) ? prev.filter(l => l !== location) : [...prev, location])}>
-                      {locationFilter.includes(location) && <Check size={14} color={colors.textInverse} />}
-                      <Text style={[styles.filterChipText, { color: colors.textPrimary }, locationFilter.includes(location) && { color: colors.textInverse }]}>{location}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-              <Pressable style={[styles.clearFiltersButton, { backgroundColor: colors.secondary }]} onPress={() => { setIndustryFilter([]); setLocationFilter([]); setShowFilterModal(false); }}>
-                <Text style={[styles.clearFiltersText, { color: colors.surface }]}>Clear All Filters</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
+
+
       </View>
     </TabTransitionWrapper>
   );
@@ -697,18 +579,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: "#000" },
-  filterButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  filterBadge: { position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
-  filterBadgeText: { fontSize: 10, fontWeight: '700', color: "#000" },
-  activeFiltersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 12 },
-  activeFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: "#FFF", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  activeFilterText: { fontSize: 12, color: "#000", fontWeight: '600' },
+
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, paddingTop: 100 },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: "#000", marginBottom: 8 },
   emptyText: { fontSize: 15, color: "#000", textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   addButton: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: "#FFF", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   addButtonText: { fontSize: 16, fontWeight: '700', color: "#000" },
-  companySection: { marginBottom: 24, paddingLeft: 20 },
+  companySection: { marginBottom: 6, paddingLeft: 20, paddingVertical: 12, borderRadius: 16 },
   companySectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, paddingRight: 20 },
   companyLogo: { width: 32, height: 32, borderRadius: 8 },
   companyName: { fontSize: 18, fontWeight: '700', flex: 1 },
@@ -719,9 +596,12 @@ const styles = StyleSheet.create({
   jobCardLogo: { width: 48, height: 48, borderRadius: 12, marginBottom: 8 },
   jobCardTitle: { fontSize: 15, fontWeight: '700', color: "#000", marginBottom: 6, lineHeight: 20 },
   jobCardLocation: { fontSize: 12, color: "#000", marginTop: 'auto' },
+  loadMoreCard: { width: 120, height: 180, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  loadMoreCardSmall: { width: 80, height: 80, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 4 },
+  loadMoreText: { fontSize: 13, fontWeight: '700' },
   addMoreButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 20, paddingVertical: 14, borderRadius: 12, borderWidth: 2, borderColor: "#DDD", borderStyle: 'dashed' },
   addMoreText: { fontSize: 15, fontWeight: '600', color: "#000" },
-  friendsSection: { marginBottom: 24, paddingLeft: 20 },
+  friendsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
   friendsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   friendsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000", flex: 1 },
   iconButton: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD", position: 'relative' },
@@ -731,33 +611,19 @@ const styles = StyleSheet.create({
   inviteButtonText: { fontSize: 12, fontWeight: '700', color: "#000" },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, marginRight: 20, marginBottom: 12, borderWidth: 1, borderColor: "#DDD" },
   searchInput: { flex: 1, fontSize: 15, color: "#000" },
-  activeUniversityFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12, paddingRight: 20 },
-  activeUniversityChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: "#FFF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  activeUniversityText: { fontSize: 12, color: "#000", fontWeight: '600', maxWidth: 200 },
-  universityModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
-  universitySearchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16, borderWidth: 1 },
-  universitySearchInput: { flex: 1, fontSize: 15 },
-  universityModalList: { maxHeight: 400 },
-  universityItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  universityItemSelected: { backgroundColor: 'rgba(99, 102, 241, 0.08)' },
-  universityItemText: { fontSize: 14, flex: 1 },
-  applyFiltersButton: { marginTop: 16, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  applyFiltersText: { fontSize: 16, fontWeight: '700' },
-  friendsRow: { gap: 12, paddingRight: 20 },
-  friendBlock: { width: 100, height: 120, backgroundColor: "#FFF", borderRadius: 14, padding: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: "#DDD", position: 'relative' },
-  premiumBadge: { position: 'absolute', top: 4, right: 4, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 6, zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  premiumBadgeText: { fontSize: 7, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
-  friendAvatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#FFF", marginBottom: 8 },
-  friendName: { fontSize: 12, fontWeight: '600', color: "#000", textAlign: 'center', lineHeight: 16 },
+
+  friendsRow: { paddingRight: 20, flexDirection: 'row', alignItems: 'center' },
+  friendBlock: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
+  friendAvatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: "#FFF", borderWidth: 3, borderColor: '#DDD' },
   loadingText: { fontSize: 13, color: "#000", paddingVertical: 20 },
   emptyFriendsText: { fontSize: 13, color: "#000", fontStyle: 'italic', paddingVertical: 20 },
-  topCompaniesSection: { marginBottom: 24, paddingLeft: 20 },
+  topCompaniesSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
   topCompaniesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   topCompaniesSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
   topCompaniesRow: { gap: 12, paddingRight: 20 },
   companyLogoTile: { width: 80, height: 80, backgroundColor: "#FFF", borderRadius: 12, padding: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD" },
   companyLogoImage: { width: 64, height: 64, borderRadius: 8 },
-  analyticsSection: { marginBottom: 24, paddingLeft: 20 },
+  analyticsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
   analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   analyticsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
   timeRangeSelector: { flexDirection: 'row', gap: 6, paddingRight: 20, marginBottom: 12 },
@@ -772,34 +638,28 @@ const styles = StyleSheet.create({
   barContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 6, height: 24, position: 'relative' },
   barFill: { height: '100%', borderRadius: 6, minWidth: 30 },
   barValue: { position: 'absolute', right: 8, fontSize: 11, fontWeight: '700', color: "#000" },
-  recentJobsSection: { marginBottom: 24, paddingLeft: 20 },
+  recentJobsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
   recentJobsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingRight: 20 },
   recentJobsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
   recentTimeSelector: { flexDirection: 'row', gap: 6, paddingRight: 20, marginBottom: 12 },
   recentTimeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   recentTimeText: { fontSize: 11, fontWeight: '600' },
   recentJobsRow: { gap: 12, paddingRight: 20 },
-  recentJobCard: { width: 180, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#DDD" },
+  recentJobCard: { width: 180, backgroundColor: 'slategray', borderRadius: 16, padding: 16 },
   recentJobLogo: { width: 48, height: 48, borderRadius: 12, marginBottom: 10, backgroundColor: "#FFF" },
-  recentJobTitle: { fontSize: 15, fontWeight: '700', color: "#000", marginBottom: 6, lineHeight: 20 },
-  recentJobCompany: { fontSize: 12, color: "#000", marginBottom: 8 },
+  recentJobTitle: { fontSize: 15, fontWeight: '700', color: "#FFF", marginBottom: 6, lineHeight: 20 },
+  recentJobCompany: { fontSize: 12, color: '#E0E0E0', marginBottom: 8 },
   recentJobFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' },
-  recentJobLocation: { fontSize: 11, color: "#000", flex: 1 },
+  recentJobLocation: { fontSize: 11, color: '#E0E0E0', flex: 1 },
   newBadge: { backgroundColor: '#22c55e', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  newBadgeText: { fontSize: 9, fontWeight: '800', color: "#000", letterSpacing: 0.5 },
-  companiesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
+  newBadgeText: { fontSize: 9, fontWeight: '800', color: "#FFF", letterSpacing: 0.5 },
+  companiesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 6, paddingVertical: 12, borderRadius: 16 },
   companiesSectionTitle: { fontSize: 18, fontWeight: '700', flexDirection: 'row', alignItems: 'center', gap: 8 },
   companySearchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, marginHorizontal: 20, marginBottom: 16, borderWidth: 1, borderColor: "#DDD" },
   filterOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  filterContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
+
   filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   filterTitle: { fontSize: 22, fontWeight: '800' },
-  filterScrollView: { maxHeight: 500 },
-  filterSectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 18, marginBottom: 10 },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
-  filterChipText: { fontSize: 14, fontWeight: '600' },
-  clearFiltersButton: { marginTop: 20, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  clearFiltersText: { fontSize: 16, fontWeight: '700' },
+
   timeRangeText: { fontSize: 12, fontWeight: '600' as const },
 });

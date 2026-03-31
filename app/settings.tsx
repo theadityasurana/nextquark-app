@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Bell, Shield, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, Twitter, Instagram, Linkedin, Globe, BookOpen } from 'lucide-react-native';
+import { ArrowLeft, Shield, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, Twitter, Instagram, Linkedin, Globe, BookOpen } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
@@ -30,7 +30,6 @@ export default function SettingsScreen() {
   };
 
   const menuItems = [
-    { icon: Bell, label: 'Notification Settings', route: '/notification-settings' },
     { icon: BookOpen, label: 'How to Use', action: () => setShowTutorial(true) },
     { icon: Lightbulb, label: 'Quick Tips', route: '/quick-tips' },
     { icon: Shield, label: 'Privacy Policy', route: '/privacy-policy' },

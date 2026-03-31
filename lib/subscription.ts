@@ -16,6 +16,49 @@ const SUBSCRIPTION_LIMITS = {
   premium: 500,
 };
 
+export async function activateCustomSwipes(
+  userId: string,
+  swipeCount: number,
+  paymentId?: string,
+  orderId?: string,
+  amount?: number,
+  couponCode?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: currentProfile } = await supabase
+      .from('profiles')
+      .select('applications_remaining')
+      .eq('id', userId)
+      .single();
+    const currentRemaining = currentProfile?.applications_remaining || 0;
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        applications_remaining: currentRemaining + swipeCount,
+      })
+      .eq('id', userId);
+
+    if (updateError) throw updateError;
+
+    if (paymentId || orderId) {
+      await supabase.from('payment_history').insert({
+        user_id: userId,
+        subscription_type: 'custom',
+        amount: amount || 0,
+        payment_id: paymentId,
+        order_id: orderId,
+        status: 'completed',
+        coupon_code: couponCode,
+      });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function activateSubscription(
   userId: string,
   subscriptionType: SubscriptionType,

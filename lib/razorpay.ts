@@ -5,8 +5,8 @@ const RAZORPAY_KEY_SECRET = process.env.EXPO_PUBLIC_RAZORPAY_KEY_SECRET || 'Py9X
 
 export interface PaymentOptions {
   amount: number;
-  planType: 'pro' | 'premium';
-  billingCycle: 'monthly' | 'annual';
+  planType: 'pro' | 'premium' | 'custom';
+  billingCycle: 'monthly' | 'annual' | 'one-time';
   currency?: string;
   userEmail?: string;
   userPhone?: string;

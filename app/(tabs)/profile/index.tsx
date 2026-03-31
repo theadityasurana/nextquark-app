@@ -64,6 +64,7 @@ import {
   Scale,
   Rocket,
   TrendingUp,
+  Bookmark,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors, { lightColors, darkColors } from '@/constants/colors';
@@ -1228,15 +1229,10 @@ const MAJOR_CITIES = [
             </Pressable>
             <Pressable
               style={[styles.settingsButton, { backgroundColor: colors.surface }]}
-              onPress={() => router.push('/resume-management' as any)}
-              testID="resume-btn"
+              onPress={() => router.push('/saved-jobs' as any)}
+              testID="saved-jobs-btn"
             >
-              <FileText size={22} color={colors.textSecondary} />
-              {!supabaseProfile?.resumeUrl && (
-                <View style={styles.resumeExclamation}>
-                  <Text style={styles.resumeExclamationText}>!</Text>
-                </View>
-              )}
+              <Bookmark size={22} color={colors.textSecondary} />
             </Pressable>
             <Pressable
               style={[styles.settingsButton, { backgroundColor: colors.surface }]}
@@ -1318,6 +1314,20 @@ const MAJOR_CITIES = [
           </Pressable>
         )}
 
+        <Pressable
+          style={styles.resumeCard}
+          onPress={() => router.push('/resume-management' as any)}
+        >
+          <View style={styles.resumeCardIcon}>
+            <FileText size={20} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.resumeCardText}>Resume</Text>
+            <Text style={styles.resumeCardSubtext}>Manage and update your resume</Text>
+          </View>
+          <ChevronRight size={20} color="#FFFFFF" />
+        </Pressable>
+
         {subscriptionData?.subscription_type === 'free' ? (
           <Pressable
             style={styles.premiumCard}
@@ -1379,21 +1389,20 @@ const MAJOR_CITIES = [
           </View>
         </Pressable>
 
-        <View style={[styles.statsGrid, { backgroundColor: colors.surface }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.secondary }]}>{totalApplications}</Text>
-            <Text style={[styles.statTitle, { color: colors.textTertiary }]}>Applied</Text>
+        <Pressable style={styles.statsGrid} onPress={() => router.push('/(tabs)/applications' as any)}>
+          <View style={styles.statsIconBox}>
+            <Briefcase size={20} color="#FFFFFF" />
           </View>
-          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.secondary }]}>{interviewsScheduled}</Text>
-            <Text style={[styles.statTitle, { color: colors.textTertiary }]}>Interviews</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statValue}>{totalApplications} jobs applied in total</Text>
+            <Text style={styles.statSubtext}>Tap to view all your applications</Text>
           </View>
-        </View>
+          <ChevronRight size={20} color="#FFFFFF" />
+        </Pressable>
 
 
 
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <TrendingUp size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1451,16 +1460,16 @@ const MAJOR_CITIES = [
         </Pressable>
 
         <Pressable
-          style={[styles.contactCard, { backgroundColor: colors.surface }]}
+          style={styles.favoriteCompaniesCard}
           onLayout={(e) => { favoriteCompaniesY.current = e.nativeEvent.layout.y; }}
           onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'favoritecompanies' } } as any)}
         >
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <Heart size={16} color={colors.textSecondary} strokeWidth={2.5} />
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Favourite Companies</Text>
+              <Heart size={16} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: '#FFFFFF' }]}>Favourite Companies</Text>
             </View>
-            <ChevronRight size={18} color={colors.textTertiary} />
+            <ChevronRight size={18} color="rgba(255,255,255,0.6)" />
           </View>
           {(user.favoriteCompanies && user.favoriteCompanies.length > 0) ? (
             <View style={styles.favoriteCompaniesWrap}>
@@ -1470,19 +1479,19 @@ const MAJOR_CITIES = [
                   ? getCompanyLogoStorageUrl(companyData.logo_url)
                   : null;
                 return (
-                  <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: theme === 'dark' ? '#FFFFFF' : '#111111', borderColor: theme === 'dark' ? '#FFFFFF' : '#111111' }]}>
+                  <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' }]}>
                     {logoUrl && <Image source={{ uri: logoUrl }} style={styles.favoriteCompanyLogo} />}
-                    <Text style={[styles.favoriteCompanyText, { color: theme === 'dark' ? '#111111' : '#FFFFFF' }]}>{company}</Text>
+                    <Text style={[styles.favoriteCompanyText, { color: '#000000' }]}>{company}</Text>
                   </View>
                 );
               })}
             </View>
           ) : (
-            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No favorite companies added yet</Text>
+            <Text style={[styles.emptyFavoriteText, { color: 'rgba(255,255,255,0.7)' }]}>No favorite companies added yet</Text>
           )}
         </Pressable>
 
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 20 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'desiredroles' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'desiredroles' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Target size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1513,7 +1522,7 @@ const MAJOR_CITIES = [
           )}
         </Pressable>
 
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'preferredcities' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'preferredcities' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <MapPin size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1535,7 +1544,7 @@ const MAJOR_CITIES = [
           )}
         </Pressable>
 
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobtypeprefs' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobtypeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Briefcase size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1559,7 +1568,7 @@ const MAJOR_CITIES = [
           </View>
         </Pressable>
 
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'workmodeprefs' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'workmodeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Laptop size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1583,7 +1592,7 @@ const MAJOR_CITIES = [
           </View>
         </Pressable>
 
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, marginTop: 12 }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'topskills' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'topskills' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1713,20 +1722,6 @@ const MAJOR_CITIES = [
           ))}
         </Pressable>
 
-        <View style={[styles.menuSection, { backgroundColor: colors.surface }]}>
-          {[
-            { icon: Star, label: 'Saved Jobs', color: colors.warning, onPress: () => router.push('/saved-jobs' as any) },
-            { icon: FileText, label: 'Resume', color: colors.accent, onPress: () => router.push('/resume-management' as any) },
-          ].map((item, idx) => (
-            <Pressable key={idx} style={({ pressed }) => [styles.menuItem, { borderBottomColor: colors.borderLight }, pressed && { backgroundColor: colors.background }]} onPress={item.onPress}>
-              <View style={[styles.menuIcon, { backgroundColor: `${item.color}15` }]}>
-                <item.icon size={20} color={item.color} />
-              </View>
-              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{item.label}</Text>
-              <ChevronRight size={18} color={colors.textTertiary} />
-            </Pressable>
-          ))}
-        </View>
 
         <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'coverletter' } } as any)}>
           <View style={styles.demoHeader}>
@@ -2239,22 +2234,24 @@ const styles = StyleSheet.create({
   verifyContent: { flex: 1, marginLeft: 12 },
   verifyTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
   verifySubtext: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
-  statsGrid: { flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12, shadowColor: Colors.cardShadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2 },
+  statsGrid: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1565C0', borderRadius: 16, padding: 16, marginTop: 4, gap: 12 },
+  statsIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary },
+  statValue: { fontSize: 16, fontWeight: '800' as const, color: '#FFFFFF' },
+  statSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   statTitle: { fontSize: 11, color: Colors.textTertiary, marginTop: 2, fontWeight: '500' as const },
   statDivider: { width: 1, backgroundColor: Colors.borderLight, marginVertical: 4 },
-  aiCard: { backgroundColor: Colors.accentSoft, borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: `${Colors.accent}20` },
+  aiCard: { backgroundColor: Colors.accentSoft, borderRadius: 16, padding: 18, marginTop: 6, borderWidth: 1, borderColor: `${Colors.accent}20` },
   aiCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   aiCardTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
   aiCardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
   aiOptimizeButton: { marginTop: 12, paddingVertical: 10, backgroundColor: Colors.secondary, borderRadius: 10, alignItems: 'center' },
   aiOptimizeText: { fontSize: 14, fontWeight: '700' as const, color: Colors.textInverse },
-  contactCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12 },
+  contactCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 4 },
   contactCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   contactRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   contactText: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const, flex: 1 },
-  section: { marginTop: 20 },
+  section: { marginTop: 4 },
   borderedSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
   darkSection: { backgroundColor: '#111111', borderRadius: 16, padding: 16, borderWidth: 0, borderColor: 'transparent' },
   darkSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
@@ -2296,17 +2293,21 @@ const styles = StyleSheet.create({
   eduDetailRow: { marginTop: 4 },
   eduDetailLabel: { fontSize: 11, fontWeight: '700' as const, color: Colors.textSecondary },
   eduDetailText: { fontSize: 12, color: Colors.textSecondary, lineHeight: 17, marginTop: 2 },
-  menuSection: { marginTop: 16, backgroundColor: Colors.surface, borderRadius: 16, overflow: 'hidden' as const },
+  menuSection: { marginTop: 4, backgroundColor: Colors.surface, borderRadius: 16, overflow: 'hidden' as const },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   menuItemPressed: { backgroundColor: Colors.background },
   menuIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   menuLabel: { flex: 1, fontSize: 15, fontWeight: '600' as const, color: Colors.textPrimary, marginLeft: 12 },
-  premiumCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A2E', borderRadius: 16, padding: 18, marginTop: 16 },
+  resumeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E65100', borderRadius: 16, padding: 16, marginTop: 4, gap: 12 },
+  resumeCardIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  resumeCardText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  resumeCardSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  premiumCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A2E', borderRadius: 16, padding: 18, marginTop: 4 },
   premiumIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,215,0,0.15)', justifyContent: 'center', alignItems: 'center' },
   premiumContent: { flex: 1, marginLeft: 14 },
   premiumTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFD700' },
   premiumSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
-  subscriptionBadge: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 18, marginTop: 16 },
+  subscriptionBadge: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 18, marginTop: 4 },
   subscriptionBadgeContent: { flex: 1, marginLeft: 14 },
   subscriptionBadgeTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
   subscriptionBadgeSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
@@ -2337,14 +2338,14 @@ const styles = StyleSheet.create({
   currencyOptionActive: { backgroundColor: Colors.secondary },
   currencyOptionText: { fontSize: 15, fontWeight: '600' as const, color: Colors.textPrimary },
   currencyOptionTextActive: { color: Colors.surface },
-  shareCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1.5, borderColor: '#81C784', borderStyle: 'dashed' as const },
-  shareGradient: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#43A047', justifyContent: 'center', alignItems: 'center' },
+  shareCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2E7D32', borderRadius: 16, padding: 16, marginTop: 4 },
+  shareGradient: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   shareContent: { flex: 1, marginLeft: 14 },
-  shareTitle: { fontSize: 15, fontWeight: '700' as const, color: '#2E7D32' },
-  shareSubtext: { fontSize: 12, color: '#558B2F', marginTop: 2 },
-  shareBadge: { backgroundColor: '#43A047', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  shareTitle: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
+  shareSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  shareBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   shareBadgeText: { fontSize: 11, fontWeight: '800' as const, color: '#FFFFFF' },
-  demoSection: { marginTop: 20, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
+  demoSection: { marginTop: 4, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
   demoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   demoHeaderTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
   demoNote: { fontSize: 11, color: Colors.textTertiary, marginBottom: 12 },
@@ -2354,12 +2355,13 @@ const styles = StyleSheet.create({
   demoValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   coverLetterText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20, marginTop: 8 },
   coverLetterPlaceholder: { fontSize: 13, color: Colors.textTertiary, fontStyle: 'italic' as const, marginTop: 8 },
-  completionPromptCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1, borderColor: Colors.borderLight },
+  completionPromptCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 4, borderWidth: 1, borderColor: Colors.borderLight },
   completionPromptHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   completionPromptTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.textPrimary },
   completionPromptText: { fontSize: 13, color: Colors.textSecondary, marginBottom: 8 },
   missingFieldsList: { gap: 4 },
   missingFieldItem: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' as const },
+  favoriteCompaniesCard: { backgroundColor: '#C62828', borderRadius: 16, padding: 16, marginTop: 4 },
   favoriteCompaniesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   favoriteCompanyChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.borderLight },
   favoriteCompanyLogo: { width: 20, height: 20, borderRadius: 4 },

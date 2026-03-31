@@ -63,12 +63,11 @@ export default function LeaderboardScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {leaderboardData.map((user: any, index: number) => {
             let avatarUrl;
-            if (user.avatar_url) {
-              if (user.avatar_url.startsWith('http')) {
-                avatarUrl = user.avatar_url;
-              } else {
-                avatarUrl = getProfilePictureUrl(user.avatar_url);
-              }
+            const defaultUnsplash = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d';
+            if (user.avatar_url && !user.avatar_url.includes(defaultUnsplash)) {
+              avatarUrl = user.avatar_url.startsWith('http')
+                ? user.avatar_url
+                : getProfilePictureUrl(user.avatar_url);
             } else {
               avatarUrl = 'https://api.dicebear.com/9.x/adventurer/png?seed=' + encodeURIComponent(user.id || user.full_name || 'User') + '&size=200';
             }

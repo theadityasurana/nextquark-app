@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Switch, Animated, Alert, ActivityIndicator, TextInput, Image, AppState } from 'react-native';
+import SmoothSlider from '@/components/SmoothSlider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Crown, Check, X as XIcon, Zap, Sparkles, Shield, Star, Tag } from 'lucide-react-native';
@@ -7,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { initiatePayment, checkPaymentLinkStatus } from '@/lib/razorpay';
 import { validateCoupon, calculateDiscountedPrice, type Coupon } from '@/lib/coupons';
-import { activateSubscription, getSubscriptionStatus } from '@/lib/subscription';
+import { activateSubscription, activateCustomSwipes, getSubscriptionStatus } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -40,7 +41,8 @@ export default function PremiumScreen() {
   };
   const { supabaseUserId } = useAuth();
   const queryClient = useQueryClient();
-  const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | 'premium'>('pro');
+  const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | 'premium' | 'custom'>('pro');
+  const [customSwipes, setCustomSwipes] = useState(10);
   const [isAnnual, setIsAnnual] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -48,7 +50,7 @@ export default function PremiumScreen() {
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
-  const pendingPaymentRef = useRef<{ paymentLinkId: string; planType: 'pro' | 'premium'; billingCycle: string; amount: number; couponCode?: string } | null>(null);
+  const pendingPaymentRef = useRef<{ paymentLinkId: string; planType: 'pro' | 'premium' | 'custom'; billingCycle: string; amount: number; couponCode?: string; customSwipes?: number } | null>(null);
 
   const { data: subscriptionData, refetch: refetchSubscription } = useQuery({
     queryKey: ['subscription-status', supabaseUserId],
@@ -69,22 +71,33 @@ export default function PremiumScreen() {
       for (let i = 0; i < 5; i++) {
         const status = await checkPaymentLinkStatus(pending.paymentLinkId);
         if (status.paid) {
-          const result = await activateSubscription(
-            supabaseUserId,
-            pending.planType,
-            status.paymentId,
-            pending.paymentLinkId,
-            pending.amount,
-            pending.couponCode
-          );
+          const result = pending.planType === 'custom'
+            ? await activateCustomSwipes(
+                supabaseUserId,
+                pending.customSwipes || 0,
+                status.paymentId,
+                pending.paymentLinkId,
+                pending.amount,
+                pending.couponCode
+              )
+            : await activateSubscription(
+                supabaseUserId,
+                pending.planType,
+                status.paymentId,
+                pending.paymentLinkId,
+                pending.amount,
+                pending.couponCode
+              );
 
           pendingPaymentRef.current = null;
           if (result.success) {
             await refetchSubscription();
             queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
             Alert.alert(
-              'Subscription Activated! 🎉',
-              `You are now subscribed to the ${pending.planType.toUpperCase()} plan!`,
+              pending.planType === 'custom' ? 'Swipes Added! 🎉' : 'Subscription Activated! 🎉',
+              pending.planType === 'custom'
+                ? `${pending.customSwipes} swipes have been added to your account!`
+                : `You are now subscribed to the ${pending.planType.toUpperCase()} plan!`,
               [{ text: 'OK', onPress: navigateAfterSubscription }]
             );
           } else {
@@ -130,6 +143,7 @@ export default function PremiumScreen() {
 
   const getPlanPrice = () => {
     if (selectedPlan === 'free') return 0;
+    if (selectedPlan === 'custom') return +(customSwipes * 0.15).toFixed(2);
     if (selectedPlan === 'pro') return isAnnual ? 225 : 20;
     return isAnnual ? 799 : 79.99;
   };
@@ -169,6 +183,11 @@ export default function PremiumScreen() {
       return;
     }
 
+    if (selectedPlan === 'custom' && customSwipes === 0) {
+      Alert.alert('Select Swipes', 'Please select at least 1 swipe to purchase.');
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -184,19 +203,16 @@ export default function PremiumScreen() {
       
       // If coupon makes it free, skip payment and activate directly
       if (finalAmount === 0) {
-        const result = await activateSubscription(
-          user.id,
-          selectedPlan,
-          undefined,
-          undefined,
-          0,
-          appliedCoupon?.code
-        );
+        const result = selectedPlan === 'custom'
+          ? await activateCustomSwipes(user.id, customSwipes, undefined, undefined, 0, appliedCoupon?.code)
+          : await activateSubscription(user.id, selectedPlan, undefined, undefined, 0, appliedCoupon?.code);
 
         if (result.success) {
           Alert.alert(
-            'Subscription Activated! 🎉',
-            `You are now subscribed to ${selectedPlan.toUpperCase()} plan for free!`,
+            selectedPlan === 'custom' ? 'Swipes Added! 🎉' : 'Subscription Activated! 🎉',
+            selectedPlan === 'custom'
+              ? `${customSwipes} swipes have been added to your account!`
+              : `You are now subscribed to ${selectedPlan.toUpperCase()} plan for free!`,
             [{ text: 'OK', onPress: navigateAfterSubscription }]
           );
         } else {
@@ -208,7 +224,7 @@ export default function PremiumScreen() {
       const result = await initiatePayment({
         amount: finalAmountINR,
         planType: selectedPlan,
-        billingCycle: isAnnual ? 'annual' : 'monthly',
+        billingCycle: selectedPlan === 'custom' ? 'one-time' : (isAnnual ? 'annual' : 'monthly'),
         currency: 'INR',
         userId: user.id,
         userEmail: user.email,
@@ -216,13 +232,13 @@ export default function PremiumScreen() {
       });
 
       if (result.success && result.paymentLinkId) {
-        // Store pending payment info so we can verify when user returns
         pendingPaymentRef.current = {
           paymentLinkId: result.paymentLinkId,
           planType: selectedPlan,
-          billingCycle: isAnnual ? 'annual' : 'monthly',
+          billingCycle: selectedPlan === 'custom' ? 'one-time' : (isAnnual ? 'annual' : 'monthly'),
           amount: finalAmountINR,
           couponCode: appliedCoupon?.code,
+          ...(selectedPlan === 'custom' && { customSwipes }),
         };
       } else if (!result.success) {
         Alert.alert('Error', result.error || 'Failed to initiate payment');
@@ -360,7 +376,63 @@ export default function PremiumScreen() {
           </View>
         </Pressable>
 
-        {selectedPlan !== 'free' && currentSubscription !== 'premium' && (
+        <Pressable
+          style={[styles.planOption, selectedPlan === 'custom' && styles.planOptionSelected]}
+          onPress={() => setSelectedPlan('custom')}
+        >
+          <View style={styles.planRadio}>
+            {selectedPlan === 'custom' && <View style={styles.planRadioInner} />}
+          </View>
+          <View style={styles.planOptionInfo}>
+            <View style={styles.planNameRow}>
+              <Text style={styles.planOptionName}>Custom</Text>
+              <View style={styles.customTag}>
+                <Text style={styles.customTagText}>Pay Per Swipe</Text>
+              </View>
+            </View>
+            <Text style={styles.planOptionDesc}>One-time purchase · Buy only what you need</Text>
+          </View>
+          <View style={styles.priceCol}>
+            <Text style={styles.planOptionPrice}>${(customSwipes * 0.15).toFixed(2)}</Text>
+            <Text style={styles.planOptionPeriod}>one-time</Text>
+          </View>
+        </Pressable>
+
+        {selectedPlan === 'custom' && (
+          <View style={styles.sliderSection}>
+            <View style={styles.sliderHeader}>
+              <Text style={styles.sliderLabel}>Number of swipes</Text>
+              <View style={styles.swipeCountBadge}>
+                <Text style={styles.swipeCountText}>{customSwipes}</Text>
+              </View>
+            </View>
+            <SmoothSlider
+              value={customSwipes}
+              min={0}
+              max={50}
+              step={1}
+              onValueChange={setCustomSwipes}
+              width={SCREEN_WIDTH - 64}
+              trackHeight={6}
+              thumbSize={28}
+              activeColor="#7C3AED"
+              inactiveColor="#E0E0E0"
+              thumbColor="#7C3AED"
+            />
+            <View style={styles.sliderRange}>
+              <Text style={styles.sliderRangeText}>0</Text>
+              <Text style={styles.sliderRangeText}>25</Text>
+              <Text style={styles.sliderRangeText}>50</Text>
+            </View>
+            <Text style={styles.sliderHelperText}>
+              {customSwipes === 0
+                ? 'Drag the slider to select swipes'
+                : `${customSwipes} swipe${customSwipes > 1 ? 's' : ''} — $${(customSwipes * 0.15).toFixed(2)}`}
+            </Text>
+          </View>
+        )}
+
+        {selectedPlan !== 'free' && selectedPlan !== 'custom' && currentSubscription !== 'premium' && (
           <View style={styles.couponSection}>
             <View style={styles.couponInputRow}>
               <Tag size={20} color={Colors.textSecondary} style={styles.couponIcon} />
@@ -392,7 +464,7 @@ export default function PremiumScreen() {
           </View>
         )}
 
-        {appliedCoupon && selectedPlan !== 'free' && currentSubscription !== 'premium' && (
+        {appliedCoupon && selectedPlan !== 'free' && selectedPlan !== 'custom' && currentSubscription !== 'premium' && (
           <View style={styles.priceBreakdown}>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Original Price:</Text>
@@ -412,10 +484,10 @@ export default function PremiumScreen() {
         <Pressable 
           style={[
             styles.subscribeBtn, 
-            (isProcessing || isVerifying || currentSubscription === selectedPlan) && styles.subscribeBtnDisabled
+            (isProcessing || isVerifying || currentSubscription === selectedPlan || (selectedPlan === 'custom' && customSwipes === 0)) && styles.subscribeBtnDisabled
           ]} 
           onPress={handleSubscribe} 
-          disabled={isProcessing || isVerifying || currentSubscription === selectedPlan}
+          disabled={isProcessing || isVerifying || currentSubscription === selectedPlan || (selectedPlan === 'custom' && customSwipes === 0)}
         >
           {isProcessing ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -429,7 +501,9 @@ export default function PremiumScreen() {
           ) : (
             <Text style={styles.subscribeBtnText}>
               {selectedPlan === 'free' 
-                ? 'Continue with Free' 
+                ? 'Continue with Free'
+                : selectedPlan === 'custom'
+                ? customSwipes === 0 ? 'Select swipes to buy' : `Buy ${customSwipes} swipe${customSwipes > 1 ? 's' : ''} for ₹${Math.round(customSwipes * 0.15 * 94)}`
                 : getFinalPrice() === 0
                 ? 'Activate Free Subscription'
                 : `Subscribe for ₹${getPlanPriceInINR()}${isAnnual ? '/year' : '/month'}`}
@@ -615,4 +689,14 @@ const styles = StyleSheet.create({
   featureCarousel: { flexDirection: 'row', gap: 10 },
   featureTag: { backgroundColor: Colors.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: Colors.borderLight },
   featureTagText: { fontSize: 13, fontWeight: '600' as const, color: Colors.textPrimary },
+  customTag: { backgroundColor: '#7C3AED', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  customTagText: { fontSize: 10, fontWeight: '700' as const, color: '#FFFFFF' },
+  sliderSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderLight },
+  sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sliderLabel: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
+  swipeCountBadge: { backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
+  swipeCountText: { fontSize: 16, fontWeight: '800' as const, color: '#FFFFFF' },
+  sliderRange: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  sliderRangeText: { fontSize: 11, color: Colors.textTertiary, fontWeight: '600' as const },
+  sliderHelperText: { fontSize: 13, color: '#7C3AED', fontWeight: '600' as const, textAlign: 'center' as const, marginTop: 10 },
 });

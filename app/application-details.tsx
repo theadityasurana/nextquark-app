@@ -276,6 +276,23 @@ export default function ApplicationDetailsScreen() {
           <View style={[styles.statusBadgeLarge, { backgroundColor: status.bg }]}>
             <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
           </View>
+
+          <View style={styles.appliedRow}>
+            <View style={styles.appliedDateBox}>
+              <Calendar size={14} color="#065F46" />
+              <Text style={styles.appliedDateText}>Applied on {application.appliedDate}</Text>
+            </View>
+            {application.jobId && (
+              <Pressable
+                style={styles.viewJobBtn}
+                onPress={() => router.push({ pathname: '/job-details', params: { id: application.jobId, hideApply: 'true' } })}
+              >
+                <Briefcase size={14} color="#1565C0" />
+                <Text style={styles.viewJobBtnText}>View Full JD</Text>
+                <ChevronRight size={14} color="#1565C0" />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={styles.progressCard}>
@@ -408,6 +425,11 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 13, color: "#000" },
   statusBadgeLarge: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10 },
   statusBadgeText: { fontSize: 14, fontWeight: '700' as const },
+  appliedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, width: '100%' },
+  appliedDateBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#D1FAE5' },
+  appliedDateText: { fontSize: 13, fontWeight: '600' as const, color: '#065F46' },
+  viewJobBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#E3F2FD' },
+  viewJobBtnText: { fontSize: 13, fontWeight: '600' as const, color: '#1565C0' },
   progressCard: { backgroundColor: '#111111', borderRadius: 16, padding: 18, marginBottom: 12 },
   progressSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF', marginBottom: 14 },
   flowStep: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 50 },

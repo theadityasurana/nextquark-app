@@ -19,7 +19,7 @@ import {
   Reply,
   Star,
   Trash2,
-} from 'lucide-react-native';
+} from '@/components/ProfileIcons';
 
 import { useColors } from '@/contexts/useColors';
 import {

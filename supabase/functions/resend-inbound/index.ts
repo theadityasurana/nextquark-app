@@ -58,24 +58,36 @@ serve(async (req) => {
       }
 
       const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const rand = Math.random().toString(36).slice(2, 6)
-      let alias: string
+      let baseName = ''
       if (payload.user_name && typeof payload.user_name === 'string') {
         const parts = payload.user_name.trim().split(/\s+/)
         const first = sanitize(parts[0] || '')
         const last = sanitize(parts.slice(1).join('') || '')
-        const namePart = last ? `${first}.${last}` : first
-        alias = namePart ? `${namePart}.${rand}@nextquark.in` : `u-${payload.user_id.replace(/-/g, '').slice(0, 8)}-${rand}@nextquark.in`
-      } else {
-        const short = payload.user_id.replace(/-/g, '').slice(0, 8)
-        alias = `u-${short}-${rand}@nextquark.in`
+        baseName = last ? `${first}.${last}` : first
       }
 
-      const { data, error } = await supabase
+      if (!baseName) {
+        const short = payload.user_id.replace(/-/g, '').slice(0, 8)
+        baseName = `u-${short}`
+      }
+
+      // Try clean email first, then add suffix on conflict
+      let alias = `${baseName}@nextquark.in`
+      let { data, error } = await supabase
         .from('proxy_emails')
         .insert({ user_id: payload.user_id, proxy_address: alias })
         .select('proxy_address')
         .single()
+
+      if (error) {
+        const rand = Math.random().toString(36).slice(2, 6)
+        alias = `${baseName}.${rand}@nextquark.in`
+        ;({ data, error } = await supabase
+          .from('proxy_emails')
+          .insert({ user_id: payload.user_id, proxy_address: alias })
+          .select('proxy_address')
+          .single())
+      }
 
       if (error) {
         return new Response(
@@ -128,7 +140,7 @@ serve(async (req) => {
     // Look up the user for this proxy address
     const { data: proxy, error: proxyError } = await supabase
       .from('proxy_emails')
-      .select('user_id')
+      .select('user_id, forward_to_email')
       .eq('proxy_address', toEmail)
       .single()
 
@@ -181,6 +193,30 @@ serve(async (req) => {
         JSON.stringify({ error: 'Failed to store email', detail: insertError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // Auto-forward if user has forwarding enabled
+    if (proxy.forward_to_email && RESEND_API_KEY) {
+      try {
+        const fwdFrom = `NextQuark Mail <noreply@nextquark.in>`
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: fwdFrom,
+            to: [proxy.forward_to_email],
+            subject: `Fwd: ${subject}`,
+            ...(bodyHtml ? { html: bodyHtml } : {}),
+            text: bodyText || '(no content)',
+            reply_to: fromEmail,
+          }),
+        })
+      } catch (fwdErr) {
+        console.error('[resend-inbound] Auto-forward error:', fwdErr)
+      }
     }
 
     return new Response(

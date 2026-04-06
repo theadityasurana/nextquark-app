@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Check, X, Pencil, Briefcase, MapPin } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft, Plus, Check, X, Pencil, Briefcase, MapPin } from '@/components/ProfileIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import Colors from '@/constants/colors';
 import { WorkExperience } from '@/types';
+import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
 const EXP_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'];
 const EXP_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
@@ -18,6 +19,11 @@ export default function EditExperienceScreen() {
   const { userProfile: supabaseProfile, saveProfile } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
+  const params = useLocalSearchParams<{ wizardMode?: string; wizardIndex?: string; wizardTotal?: string }>();
+  const isWizard = params.wizardMode === '1';
+  const wizardIndex = parseInt(params.wizardIndex || '0', 10);
+  const wizardTotal = parseInt(params.wizardTotal || '0', 10);
+  const incompleteSteps = isWizard ? getIncompleteSteps(supabaseProfile) : [];
 
   const [experiences, setExperiences] = useState<WorkExperience[]>(supabaseProfile?.experience || []);
   const [editing, setEditing] = useState<WorkExperience | null>(null);
@@ -90,6 +96,12 @@ export default function EditExperienceScreen() {
       await saveProfile({ ...supabaseProfile, experience: experiences });
     }
     router.back();
+  };
+
+  const handleSaveOnly = async () => {
+    if (supabaseProfile) {
+      await saveProfile({ ...supabaseProfile, experience: experiences });
+    }
   };
 
   const handleExpDescriptionChange = (text: string) => {
@@ -205,6 +217,14 @@ export default function EditExperienceScreen() {
           </Pressable>
         ))}
       </ScrollView>
+      {isWizard && (
+        <WizardFooter
+          wizardIndex={wizardIndex}
+          wizardTotal={wizardTotal}
+          incompleteSteps={incompleteSteps}
+          onSaveCurrent={handleSaveOnly}
+        />
+      )}
     </View>
   );
 }

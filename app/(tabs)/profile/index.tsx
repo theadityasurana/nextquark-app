@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import {
   View,
   Text,
@@ -15,12 +16,13 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { startWizardFlow, getIncompleteSteps as getWizardIncompleteSteps } from '@/components/WizardFooter';
 import {
   ChevronRight,
   Briefcase,
@@ -50,6 +52,8 @@ import {
   Settings,
   Share2,
   Lock,
+  Gift,
+  FileCheck,
   Search,
   Moon,
   Sun,
@@ -65,10 +69,16 @@ import {
   Rocket,
   TrendingUp,
   Bookmark,
-} from 'lucide-react-native';
+  FolderOpen,
+  Upload,
+  ExternalLink,
+  Trash2,
+} from '@/components/ProfileIcons';
+import * as DocumentPicker from 'expo-document-picker';
+import { WebView } from 'react-native-webview';
 import { useQuery } from '@tanstack/react-query';
 import Colors, { lightColors, darkColors } from '@/constants/colors';
-import { UserProfile, WorkExperience, Education, Certification, Achievement } from '@/types';
+import { UserProfile, WorkExperience, Education, Certification, Achievement, Project, UserDocument } from '@/types';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -84,17 +94,7 @@ import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboar
 import { getRolesGroupedByCategory } from '@/constants/roles';
 import { universities } from '@/constants/universities';
 
-type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | 'completeprofile' | null;
-
-type ProfileWizardStep = 'topskills' | 'education' | 'experience' | 'achievements' | 'certifications';
-
-const WIZARD_HELPER_TEXT: Record<ProfileWizardStep, string> = {
-  topskills: "your skills are literally your superpower ✨ pick the ones that make you *you*",
-  education: "drop your academic era here 🎓 flex those degrees bestie",
-  experience: "time to show off your work glow-up 💼 no cap, recruiters love this",
-  achievements: "main character energy only 🏆 what wins are you proud of?",
-  certifications: "certified iconic 📜 add your certs and watch your profile slay",
-};
+type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | null;
 
 const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
@@ -150,6 +150,11 @@ function buildProfileFromOnboarding(data: OnboardingData): UserProfile {
     ethnicity: data.ethnicity || undefined,
     gender: data.gender || undefined,
     favoriteCompanies: [],
+    projects: [],
+    documents: [],
+    salaryCurrency: 'USD',
+    salaryMinPref: 0,
+    salaryMaxPref: 0,
   };
 }
 
@@ -162,20 +167,11 @@ export default function ProfileScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
   useScrollToTop(scrollViewRef);
-  const favoriteCompaniesY = useRef(0);
-  const params = useLocalSearchParams<{ scrollTo?: string }>();
-
   useFocusEffect(
     useCallback(() => {
-      if (params.scrollTo === 'favoritecompanies') {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollTo({ y: favoriteCompaniesY.current, animated: true });
-        }, 300);
-      } else {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      }
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       refetchProfile();
-    }, [params.scrollTo, refetchProfile])
+    }, [refetchProfile])
   );
 
   const { data: applications = [] } = useQuery({
@@ -337,6 +333,16 @@ export default function ProfileScreen() {
   const [contactGithub, setContactGithub] = useState(user.githubUrl ?? '');
 
 
+  const [profileTab, setProfileTab] = useState<'personal' | 'preferences' | 'coverletter' | 'projects' | 'documents' | 'education' | 'workexperience'>('personal');
+  const [docSubTab, setDocSubTab] = useState<'resumes' | 'transcript' | 'others'>('resumes');
+
+  const [showTabArrow, setShowTabArrow] = useState(true);
+
+  // Documents state
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [previewingDocId, setPreviewingDocId] = useState<string | null>(null);
+  const [pendingDocFile, setPendingDocFile] = useState<{ uri: string; mimeType: string; originalName: string } | null>(null);
+  const [docRenameText, setDocRenameText] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [selectedVeteranStatus, setSelectedVeteranStatus] = useState(user.veteranStatus || '');
   const [selectedDisabilityStatus, setSelectedDisabilityStatus] = useState(user.disabilityStatus || '');
@@ -350,7 +356,6 @@ export default function ProfileScreen() {
   const [workdayEmail, setWorkdayEmail] = useState(user.workdayEmail || '');
   const [workdayPassword, setWorkdayPassword] = useState(user.workdayPassword || '');
   const [showWorkdayPassword, setShowWorkdayPassword] = useState(false);
-  const [wizardStepIndex, setWizardStepIndex] = useState(0);
   const [jobleverEmail, setJobleverEmail] = useState(user.jobleverEmail || '');
   const [jobleverPassword, setJobleverPassword] = useState(user.jobleverPassword || '');
   const [showJobleverPassword, setShowJobleverPassword] = useState(false);
@@ -1080,8 +1085,8 @@ const MAJOR_CITIES = [
     ]);
   }, [logout]);
 
-  const incompleteSteps = useMemo((): ProfileWizardStep[] => {
-    const steps: ProfileWizardStep[] = [];
+  const incompleteSteps = useMemo(() => {
+    const steps: string[] = [];
     if (user.topSkills.length === 0) steps.push('topskills');
     if (user.education.length === 0) steps.push('education');
     if (user.experience.length === 0) steps.push('experience');
@@ -1090,111 +1095,14 @@ const MAJOR_CITIES = [
     return steps;
   }, [user.topSkills, user.education, user.experience, user.achievements, user.certifications]);
 
-  const initWizardStep = useCallback((step: ProfileWizardStep) => {
-    if (step === 'topskills') {
-      setSkillQuery('');
-    } else if (step === 'education') {
-      setEditingEducation(null);
-      setEduInstitution(''); setEduDegree(''); setEduField('');
-      setEduStartDate(''); setEduEndDate('');
-      setEduDescription('• '); setEduAchievements('• '); setEduExtracurriculars('• ');
-      setUniversitySearch(''); setShowUniversityDropdown(false);
-    } else if (step === 'experience') {
-      setEditingExperience(null);
-      setExpTitle(''); setExpCompany(''); setExpStartDate(''); setExpEndDate('');
-      setExpDescription('• '); setExpIsCurrent(false); setExpSkills('');
-      setExpType('Full-time'); setExpMode('Onsite'); setExpLocation('');
-    } else if (step === 'achievements') {
-      setEditingAchievement(null);
-      setAchTitle(''); setAchIssuer(''); setAchDate(''); setAchDescription('');
-    } else if (step === 'certifications') {
-      setEditingCertification(null);
-      setCertName(''); setCertOrg(''); setCertUrl(''); setCertSkills('');
-    }
-  }, []);
 
   const openCompleteProfileWizard = useCallback(() => {
     if (incompleteSteps.length === 0) return;
-    setWizardStepIndex(0);
-    initWizardStep(incompleteSteps[0]);
-    setActiveModal('completeprofile');
-  }, [incompleteSteps, initWizardStep]);
+    const wizardSteps = getWizardIncompleteSteps(supabaseProfile);
+    if (wizardSteps.length === 0) return;
+    startWizardFlow(router, wizardSteps);
+  }, [incompleteSteps, supabaseProfile, router]);
 
-  const handleWizardNext = useCallback(() => {
-    const currentStep = incompleteSteps[wizardStepIndex];
-    // Save current step inline (without closing modal)
-    if (currentStep === 'education') {
-      if (!eduInstitution.trim() || !eduDegree.trim()) {
-        Alert.alert('Required', 'Please fill in institution and degree');
-        return;
-      }
-      const edu: Education = {
-        id: `ed${Date.now()}`, institution: eduInstitution.trim(), degree: eduDegree.trim(),
-        field: eduField.trim(), startDate: eduStartDate.trim(), endDate: eduEndDate.trim(),
-        description: eduDescription.trim() || undefined, achievements: eduAchievements.trim() || undefined,
-        extracurriculars: eduExtracurriculars.trim() || undefined,
-      };
-      setUser(prev => ({ ...prev, education: [...prev.education, edu] }));
-    } else if (currentStep === 'experience') {
-      if (!expTitle.trim() || !expCompany.trim()) {
-        Alert.alert('Required', 'Please fill in title and company');
-        return;
-      }
-      const exp: WorkExperience = {
-        id: `e${Date.now()}`, title: expTitle.trim(), company: expCompany.trim(),
-        startDate: expStartDate.trim(), endDate: expIsCurrent ? null : expEndDate.trim(),
-        isCurrent: expIsCurrent, description: expDescription.trim(),
-        skills: expSkills.split(',').map(s => s.trim()).filter(Boolean),
-        employmentType: expType, workMode: expMode,
-        jobLocation: expMode === 'Remote' ? 'Remote' : expLocation.trim(),
-      };
-      setUser(prev => ({ ...prev, experience: [...prev.experience, exp] }));
-    } else if (currentStep === 'achievements') {
-      if (!achTitle.trim() || !achIssuer.trim()) {
-        Alert.alert('Required', 'Please fill in the title and issuer');
-        return;
-      }
-      const ach: Achievement = {
-        id: `ach${Date.now()}`, title: achTitle.trim(), issuer: achIssuer.trim(),
-        date: achDate.trim(), description: achDescription.trim() || undefined,
-      };
-      setUser(prev => ({ ...prev, achievements: [...prev.achievements, ach] }));
-    } else if (currentStep === 'certifications') {
-      if (!certName.trim() || !certOrg.trim()) {
-        Alert.alert('Required', 'Please fill in the certification name and organization');
-        return;
-      }
-      const cert: Certification = {
-        id: `c${Date.now()}`, name: certName.trim(), issuingOrganization: certOrg.trim(),
-        credentialUrl: certUrl.trim(), skills: certSkills.split(',').map(s => s.trim()).filter(Boolean),
-      };
-      setUser(prev => ({ ...prev, certifications: [...prev.certifications, cert] }));
-    }
-    // topskills are saved inline via toggles, no extra save needed
-
-    if (wizardStepIndex < incompleteSteps.length - 1) {
-      const nextIdx = wizardStepIndex + 1;
-      setWizardStepIndex(nextIdx);
-      initWizardStep(incompleteSteps[nextIdx]);
-    } else {
-      setActiveModal(null);
-    }
-  }, [wizardStepIndex, incompleteSteps, initWizardStep,
-    eduInstitution, eduDegree, eduField, eduStartDate, eduEndDate, eduDescription, eduAchievements, eduExtracurriculars,
-    expTitle, expCompany, expStartDate, expEndDate, expDescription, expIsCurrent, expSkills, expType, expMode, expLocation,
-    achTitle, achIssuer, achDate, achDescription,
-    certName, certOrg, certUrl, certSkills,
-  ]);
-
-  const handleWizardSkip = useCallback(() => {
-    if (wizardStepIndex < incompleteSteps.length - 1) {
-      const nextIdx = wizardStepIndex + 1;
-      setWizardStepIndex(nextIdx);
-      initWizardStep(incompleteSteps[nextIdx]);
-    } else {
-      setActiveModal(null);
-    }
-  }, [wizardStepIndex, incompleteSteps]);
 
   const closeModal = useCallback(() => {
     setActiveModal(null);
@@ -1314,94 +1222,107 @@ const MAJOR_CITIES = [
           </Pressable>
         )}
 
-        <Pressable
-          style={styles.resumeCard}
-          onPress={() => router.push('/resume-management' as any)}
+        <View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickActionsRow}
         >
-          <View style={styles.resumeCardIcon}>
-            <FileText size={20} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.resumeCardText}>Resume</Text>
-            <Text style={styles.resumeCardSubtext}>Manage and update your resume</Text>
-          </View>
-          <ChevronRight size={20} color="#FFFFFF" />
-        </Pressable>
-
-        {subscriptionData?.subscription_type === 'free' ? (
           <Pressable
-            style={styles.premiumCard}
+            style={styles.quickActionBox}
             onPress={() => router.push('/premium' as any)}
           >
-            <View style={styles.premiumIcon}>
-              <Crown size={22} color="#FFD700" />
-            </View>
-            <View style={styles.premiumContent}>
-              <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
-              <Text style={styles.premiumSubtext}>Get more matches and priority visibility</Text>
-            </View>
-            <ChevronRight size={18} color="#FFD700" />
-          </Pressable>
-        ) : (
-          <Pressable 
-            style={[
-              styles.subscriptionBadge,
-              { backgroundColor: subscriptionData?.subscription_type === 'pro' ? '#FF9800' : '#9C27B0' }
-            ]}
-            onPress={() => router.push('/premium' as any)}
-          >
-            <Crown size={20} color="#FFFFFF" />
-            <View style={styles.subscriptionBadgeContent}>
-              <Text style={styles.subscriptionBadgeTitle}>
-                You are a {subscriptionData?.subscription_type === 'pro' ? 'Pro' : 'Premium'} User
+            <LinearGradient
+              colors={subscriptionData?.subscription_type === 'premium' ? ['#BA68C8', '#8E24AA', '#6A1B9A'] : subscriptionData?.subscription_type === 'pro' ? ['#FF9D2F', '#E67E22', '#C0601A'] : ['#2D2B55', '#1B1A3E', '#0F0E2A']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.quickActionGradient}
+            >
+              <Text style={styles.quickActionImpact}>
+                {subscriptionData?.applications_remaining ?? 0}
               </Text>
-              <Text style={styles.subscriptionBadgeSubtext}>
-                {subscriptionData?.applications_remaining || 0} applications remaining this month
+              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>apps left</Text>
+              <Text style={[styles.quickActionSub, { color: subscriptionData?.subscription_type === 'free' ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.6)' }]}>
+                {subscriptionData?.subscription_type === 'premium' ? '✦ Premium' : subscriptionData?.subscription_type === 'pro' ? 'Upgrade ↑' : 'Go Pro ↑'}
               </Text>
-            </View>
-            <ChevronRight size={18} color="#FFFFFF" />
+            </LinearGradient>
           </Pressable>
-        )}
 
-        <Pressable
-          style={styles.shareCard}
-          onPress={async () => {
-            if (!referralStats?.referralCode && supabaseUserId) {
-              const code = await createReferralCode(supabaseUserId, user.name);
-              if (code) {
-                await refetchReferralStats();
+          <Pressable
+            style={styles.quickActionBox}
+            onPress={async () => {
+              if (!referralStats?.referralCode && supabaseUserId) {
+                const code = await createReferralCode(supabaseUserId, user.name);
+                if (code) {
+                  await refetchReferralStats();
+                  setActiveModal('referral');
+                }
+              } else {
                 setActiveModal('referral');
               }
-            } else {
-              setActiveModal('referral');
-            }
-          }}
-        >
-          <View style={styles.shareGradient}>
-            <Share2 size={20} color="#FFFFFF" />
-          </View>
-          <View style={styles.shareContent}>
-            <Text style={styles.shareTitle}>Share & Earn Free Swipes</Text>
-            <Text style={styles.shareSubtext}>Invite friends and get 5 free swipes per registration</Text>
-          </View>
-          <View style={styles.shareBadge}>
-            <Text style={styles.shareBadgeText}>FREE</Text>
-          </View>
-        </Pressable>
+            }}
+          >
+            <LinearGradient colors={['#43E97B', '#38B866', '#1B8A4A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickActionGradient}>
+              <Gift size={32} color="#FFFFFF" strokeWidth={1.2} style={{ marginBottom: 6 }} />
+              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.95)' }]}>Share & Earn</Text>
+            </LinearGradient>
+          </Pressable>
 
-        <Pressable style={styles.statsGrid} onPress={() => router.push('/(tabs)/applications' as any)}>
-          <View style={styles.statsIconBox}>
-            <Briefcase size={20} color="#FFFFFF" />
+          <Pressable
+            style={styles.quickActionBox}
+            onPress={() => router.push('/(tabs)/applications' as any)}
+          >
+            <LinearGradient colors={['#42A5F5', '#1E88E5', '#1565C0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickActionGradient}>
+              <Text style={styles.quickActionImpact}>{totalApplications}</Text>
+              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>Jobs Applied</Text>
+            </LinearGradient>
+          </Pressable>
+
+        </ScrollView>
+        </View>
+
+        <Pressable
+          style={styles.resumeBanner}
+          onPress={() => router.push('/resume-management' as any)}
+        >
+          <View style={styles.resumeBannerIcon}>
+            <FileText size={22} color="#FFFFFF" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.statValue}>{totalApplications} jobs applied in total</Text>
-            <Text style={styles.statSubtext}>Tap to view all your applications</Text>
+            <Text style={styles.resumeBannerTitle}>Resume</Text>
+            <Text style={styles.resumeBannerSub}>Upload & manage your resume</Text>
           </View>
-          <ChevronRight size={20} color="#FFFFFF" />
+          <ChevronRight size={16} color="rgba(255,255,255,0.6)" />
         </Pressable>
 
+        <View style={{ position: 'relative' }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[styles.tabBar, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
+            contentContainerStyle={{ paddingHorizontal: 4, gap: 4 }}
+            onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+              setShowTabArrow(contentOffset.x + layoutMeasurement.width < contentSize.width - 10);
+            }}
+            scrollEventThrottle={16}
+          >
+            {([['personal', 'Personal Info'], ['documents', 'Documents'], ['preferences', 'Preferences'], ['workexperience', 'Experience'], ['education', 'Education'], ['projects', 'Projects'], ['coverletter', 'Cover Letter']] as const).map(([tab, label]) => {
+              const active = profileTab === tab;
+              return (
+                <Pressable key={tab} style={[styles.tabItem, active && { backgroundColor: colors.secondary }]} onPress={() => setProfileTab(tab as any)}>
+                  <Text style={[styles.tabItemText, { color: active ? colors.surface : colors.textSecondary }]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {showTabArrow && (
+            <View style={[styles.tabScrollHint, { backgroundColor: colors.surface }]} pointerEvents="none">
+              <ChevronRight size={16} color={colors.textTertiary} />
+            </View>
+          )}
+        </View>
 
-
+        {profileTab === 'preferences' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1411,8 +1332,8 @@ const MAJOR_CITIES = [
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {user.experienceLevel ? (
-            <View style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary, alignSelf: 'flex-start' }]}>
-              <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>
+            <View style={[styles.prefChip, { backgroundColor: '#7C4DFF28', borderColor: '#7C4DFF50', alignSelf: 'flex-start' }]}>
+              <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>
                 {user.experienceLevel === 'internship' ? 'Internship' : user.experienceLevel === 'entry_level' ? 'Entry Level & Graduate' : user.experienceLevel === 'junior' ? 'Junior (1-2 years)' : user.experienceLevel === 'mid' ? 'Mid Level (3-5 years)' : user.experienceLevel === 'senior' ? 'Senior (6-9 years)' : user.experienceLevel === 'expert' ? 'Expert & Leadership (10+ years)' : user.experienceLevel}
               </Text>
             </View>
@@ -1421,6 +1342,9 @@ const MAJOR_CITIES = [
           )}
         </Pressable>
 
+        )}
+
+        {profileTab === 'personal' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={openContactModal}>
           <View style={styles.contactCardHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1459,38 +1383,9 @@ const MAJOR_CITIES = [
           ) : null}
         </Pressable>
 
-        <Pressable
-          style={styles.favoriteCompaniesCard}
-          onLayout={(e) => { favoriteCompaniesY.current = e.nativeEvent.layout.y; }}
-          onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'favoritecompanies' } } as any)}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Heart size={16} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={[styles.sectionTitle, { color: '#FFFFFF' }]}>Favourite Companies</Text>
-            </View>
-            <ChevronRight size={18} color="rgba(255,255,255,0.6)" />
-          </View>
-          {(user.favoriteCompanies && user.favoriteCompanies.length > 0) ? (
-            <View style={styles.favoriteCompaniesWrap}>
-              {user.favoriteCompanies.map((company, idx) => {
-                const companyData = allCompaniesData.find((c: { name: string; logo_url: string | null }) => c.name === company);
-                const logoUrl = companyData?.logo_url 
-                  ? getCompanyLogoStorageUrl(companyData.logo_url)
-                  : null;
-                return (
-                  <View key={idx} style={[styles.favoriteCompanyChip, { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' }]}>
-                    {logoUrl && <Image source={{ uri: logoUrl }} style={styles.favoriteCompanyLogo} />}
-                    <Text style={[styles.favoriteCompanyText, { color: '#000000' }]}>{company}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          ) : (
-            <Text style={[styles.emptyFavoriteText, { color: 'rgba(255,255,255,0.7)' }]}>No favorite companies added yet</Text>
-          )}
-        </Pressable>
+        )}
 
+        {profileTab === 'preferences' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'desiredroles' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1509,7 +1404,7 @@ const MAJOR_CITIES = [
                   </View>
                   <View style={styles.chipGrid}>
                     {group.roles.map((role, idx) => (
-                      <View key={idx} style={[styles.prefChip, { backgroundColor: `${group.color}15`, borderColor: `${group.color}30` }]}>
+                      <View key={idx} style={[styles.prefChip, { backgroundColor: `${group.color}28`, borderColor: `${group.color}50` }]}>
                         <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{role}</Text>
                       </View>
                     ))}
@@ -1522,6 +1417,9 @@ const MAJOR_CITIES = [
           )}
         </Pressable>
 
+        )}
+
+        {profileTab === 'preferences' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'preferredcities' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1533,9 +1431,9 @@ const MAJOR_CITIES = [
           {(user.preferredCities && user.preferredCities.length > 0) ? (
             <View style={styles.chipGrid}>
               {user.preferredCities.map((city, idx) => (
-                <View key={idx} style={[styles.prefChip, styles.prefChipActive, { backgroundColor: colors.secondary, borderColor: colors.secondary }]}>
-                  <MapPin size={12} color={colors.surface} />
-                  <Text style={[styles.prefChipText, styles.prefChipTextActive, { color: colors.surface }]}>{city}</Text>
+                <View key={idx} style={[styles.prefChip, { backgroundColor: '#00897B28', borderColor: '#00897B50' }]}>
+                  <MapPin size={12} color="#00897B" />
+                  <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{city}</Text>
                 </View>
               ))}
             </View>
@@ -1544,6 +1442,9 @@ const MAJOR_CITIES = [
           )}
         </Pressable>
 
+        )}
+
+        {profileTab === 'preferences' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobtypeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1553,21 +1454,28 @@ const MAJOR_CITIES = [
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           <View style={styles.chipGrid}>
-            {JOB_TYPE_OPTIONS.map((pref) => {
-              const selected = user.jobPreferences.includes(pref);
-              return (
-                <View
-                  key={pref}
-                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.background, borderColor: selected ? colors.secondary : colors.borderLight }]}
-                >
-                  {selected && <Check size={14} color={colors.surface} />}
-                  <Text style={[styles.prefChipText, { color: selected ? colors.surface : colors.textPrimary }]}>{pref}</Text>
-                </View>
-              );
-            })}
+            {JOB_TYPE_OPTIONS.filter((pref) => user.jobPreferences.includes(pref)).map((pref) => (
+              <View
+                key={pref}
+                style={[styles.prefChip, { backgroundColor: '#1E88E528', borderColor: '#1E88E550' }]}
+              >
+                <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{pref}</Text>
+              </View>
+            ))}
+            {JOB_TYPE_OPTIONS.filter((pref) => !user.jobPreferences.includes(pref)).map((pref) => (
+              <View
+                key={pref}
+                style={[styles.prefChip, { backgroundColor: colors.background, borderColor: colors.borderLight }]}
+              >
+                <Text style={[styles.prefChipText, { color: colors.textTertiary }]}>{pref}</Text>
+              </View>
+            ))}
           </View>
         </Pressable>
 
+        )}
+
+        {profileTab === 'preferences' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'workmodeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1577,21 +1485,28 @@ const MAJOR_CITIES = [
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           <View style={styles.chipGrid}>
-            {WORK_MODE_OPTIONS.map((mode) => {
-              const selected = user.workModePreferences.includes(mode);
-              return (
-                <View
-                  key={mode}
-                  style={[styles.prefChip, { backgroundColor: selected ? colors.secondary : colors.background, borderColor: selected ? colors.secondary : colors.borderLight }]}
-                >
-                  {selected && <Check size={14} color={colors.surface} />}
-                  <Text style={[styles.prefChipText, { color: selected ? colors.surface : colors.textPrimary }]}>{mode}</Text>
-                </View>
-              );
-            })}
+            {WORK_MODE_OPTIONS.filter((mode) => user.workModePreferences.includes(mode)).map((mode) => (
+              <View
+                key={mode}
+                style={[styles.prefChip, { backgroundColor: '#F4511E28', borderColor: '#F4511E50' }]}
+              >
+                <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{mode}</Text>
+              </View>
+            ))}
+            {WORK_MODE_OPTIONS.filter((mode) => !user.workModePreferences.includes(mode)).map((mode) => (
+              <View
+                key={mode}
+                style={[styles.prefChip, { backgroundColor: colors.background, borderColor: colors.borderLight }]}
+              >
+                <Text style={[styles.prefChipText, { color: colors.textTertiary }]}>{mode}</Text>
+              </View>
+            ))}
           </View>
         </Pressable>
 
+        )}
+
+        {profileTab === 'workexperience' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'topskills' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1600,22 +1515,25 @@ const MAJOR_CITIES = [
             </View>
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
-          <View style={styles.skillsWrap}>
+          <View style={styles.chipGrid}>
             {user.skills.map((skill, idx) => {
               const isTop = user.topSkills.includes(skill);
               return (
                 <View
                   key={idx}
-                  style={[styles.skillTag, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary }, isTop && { borderWidth: 2, borderColor: '#D4A017' }]}
+                  style={[styles.prefChip, isTop ? { backgroundColor: '#D4A01728', borderColor: '#D4A01750' } : { backgroundColor: '#9E9E9E18', borderColor: '#9E9E9E35' }]}
                 >
                   {isTop && <Star size={12} color="#D4A017" />}
-                  <Text style={[styles.skillTagText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{skill}</Text>
+                  <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{skill}</Text>
                 </View>
               );
             })}
           </View>
         </Pressable>
 
+        )}
+
+        {profileTab === 'workexperience' && (
         <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]} onPress={() => router.push('/(tabs)/profile/edit-experience' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1657,6 +1575,9 @@ const MAJOR_CITIES = [
           ))}
         </Pressable>
 
+        )}
+
+        {profileTab === 'education' && (
         <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-education' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1679,6 +1600,189 @@ const MAJOR_CITIES = [
           ))}
         </Pressable>
 
+        )}
+
+        {profileTab === 'projects' && (
+        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-projects' as any)}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <FolderOpen size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Projects</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
+          </View>
+          {(user.projects || []).length === 0 && (
+            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No projects added yet. Tap to add one.</Text>
+          )}
+          {(user.projects || []).map((proj) => (
+            <View key={proj.id} style={[styles.experienceItem, { marginBottom: 16 }]}>
+              <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
+                <FolderOpen size={18} color={colors.accent} />
+              </View>
+              <View style={styles.expContent}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.expTitle, { color: colors.secondary, flex: 1 }]}>{proj.title}</Text>
+                  {proj.link ? (
+                    <Pressable onPress={() => Linking.openURL(proj.link!)}>
+                      <ExternalLink size={14} color={colors.accent} />
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{proj.organization}</Text>
+                <Text style={[styles.expDate, { color: colors.textTertiary }]}>{proj.date}</Text>
+                {proj.exposure.length > 0 && (
+                  <View style={[styles.expTagsRow, { flexWrap: 'wrap' }]}>
+                    {proj.exposure.map((tag, i) => (
+                      <View key={i} style={[styles.expTagChip, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F0F0F0' }]}>
+                        <Text style={[styles.expTagText, { color: colors.textSecondary }]}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {proj.bullets.map((b, i) => (
+                  <Text key={i} style={[styles.expDesc, { color: colors.textSecondary, marginTop: i === 0 ? 6 : 2 }]}>• {b}</Text>
+                ))}
+              </View>
+            </View>
+          ))}
+        </Pressable>
+        )}
+
+        {profileTab === 'documents' && (
+          <View style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <FileText size={16} color={colors.textSecondary} strokeWidth={2.5} />
+                <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Documents</Text>
+              </View>
+            </View>
+            <View style={styles.docSubTabs}>
+              {(['resumes', 'transcript', 'others'] as const).map((sub) => (
+                <Pressable
+                  key={sub}
+                  style={[styles.docSubTab, docSubTab === sub && styles.docSubTabActive]}
+                  onPress={() => setDocSubTab(sub)}
+                >
+                  <Text style={[styles.docSubTabText, { color: docSubTab === sub ? '#10B981' : colors.textSecondary }]}>
+                    {sub === 'resumes' ? 'Resumes' : sub === 'transcript' ? 'Transcript' : 'Others'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {docSubTab === 'resumes' && (
+              <View style={{ marginTop: 12 }}>
+                {user.resumeUrl ? (
+                  <View>
+                    <Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 8 }} onPress={() => router.push('/resume-management' as any)}>
+                      <Pencil size={14} color={colors.textTertiary} />
+                      <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 4 }}>Manage</Text>
+                    </Pressable>
+                    <View style={[styles.docPreview, { backgroundColor: colors.background, borderColor: colors.borderLight }]}>
+                      <WebView
+                        source={{ uri: user.resumeUrl.toLowerCase().endsWith('.pdf') ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(user.resumeUrl)}` : user.resumeUrl }}
+                        style={styles.docPreviewWebview}
+                        startInLoadingState
+                        renderLoading={() => <ActivityIndicator style={{ flex: 1 }} />}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => router.push('/resume-management' as any)}>
+                    <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No resume uploaded yet. Tap to upload one.</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {(docSubTab === 'transcript' || docSubTab === 'others') && (
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={async () => {
+                if (!supabaseUserId) { Alert.alert('Error', 'You must be logged in.'); return; }
+                try {
+                  const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+                  if (result.canceled || !result.assets?.[0]) return;
+                  const file = result.assets[0];
+                  const originalName = file.name || `doc_${Date.now()}`;
+                  setPendingDocFile({ uri: file.uri, mimeType: file.mimeType || 'application/octet-stream', originalName });
+                  setDocRenameText(originalName);
+                } catch (err: any) {
+                  Alert.alert('Error', err?.message || 'Could not pick file');
+                }
+              }}>
+                {isUploadingDoc ? <ActivityIndicator size="small" color={colors.surface} /> : <Upload size={16} color={colors.surface} />}
+              </Pressable>
+                </View>
+            {(user.documents || []).filter(doc => {
+              const name = (doc.name || '').toLowerCase();
+              if (docSubTab === 'transcript') return name.includes('transcript');
+              return !name.includes('transcript');
+            }).length === 0 && (
+              <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>
+                {docSubTab === 'transcript' ? 'No transcripts uploaded yet.' : 'No documents uploaded yet.'}
+              </Text>
+            )}
+            {(user.documents || []).filter(doc => {
+              const name = (doc.name || '').toLowerCase();
+              if (docSubTab === 'transcript') return name.includes('transcript');
+              return !name.includes('transcript');
+            }).map((doc) => {
+              const isPreviewing = previewingDocId === doc.id;
+              const isPdf = doc.fileName?.toLowerCase().endsWith('.pdf');
+              const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.fileName || '');
+              return (
+                <View key={doc.id} style={{ marginBottom: 12 }}>
+                  <View style={styles.experienceItem}>
+                    <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
+                      <FileText size={18} color={colors.accent} />
+                    </View>
+                    <View style={[styles.expContent, { flexDirection: 'row', alignItems: 'center' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.expTitle, { color: colors.secondary }]}>{doc.name}</Text>
+                        <Text style={[styles.expDate, { color: colors.textTertiary }]}>{new Date(doc.uploadedAt).toLocaleDateString()}</Text>
+                      </View>
+                      <Pressable onPress={() => setPreviewingDocId(isPreviewing ? null : doc.id)} style={{ marginRight: 12 }}>
+                        <Eye size={18} color={isPreviewing ? colors.accent : colors.textTertiary} />
+                      </Pressable>
+                      <Pressable onPress={() => {
+                        Alert.alert('Delete', `Remove ${doc.name}?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => {
+                            if (isPreviewing) setPreviewingDocId(null);
+                            const updatedDocs = (user.documents || []).filter(d => d.id !== doc.id);
+                            setUser(prev => ({ ...prev, documents: updatedDocs }));
+                            saveProfile({ ...user, documents: updatedDocs });
+                          }},
+                        ]);
+                      }}>
+                        <Trash2 size={18} color={colors.error || '#EF4444'} />
+                      </Pressable>
+                    </View>
+                  </View>
+                  {isPreviewing && (
+                    <View style={[styles.docPreview, { backgroundColor: colors.background, borderColor: colors.borderLight }]}>
+                      {isImage ? (
+                        <Image source={{ uri: doc.fileUrl }} style={styles.docPreviewImage} contentFit="contain" />
+                      ) : (
+                        <WebView
+                          source={{ uri: isPdf ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.fileUrl)}` : doc.fileUrl }}
+                          style={styles.docPreviewWebview}
+                          startInLoadingState
+                          renderLoading={() => <ActivityIndicator style={{ flex: 1 }} />}
+                        />
+                      )}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+              </View>
+            )}
+          </View>
+        )}
+
+        {profileTab === 'workexperience' && (
         <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]} onPress={() => router.push('/(tabs)/profile/edit-achievements' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1701,6 +1805,9 @@ const MAJOR_CITIES = [
           ))}
         </Pressable>
 
+        )}
+
+        {profileTab === 'workexperience' && (
         <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-certifications' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -1723,6 +1830,9 @@ const MAJOR_CITIES = [
         </Pressable>
 
 
+        )}
+
+        {profileTab === 'coverletter' && (
         <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'coverletter' } } as any)}>
           <View style={styles.demoHeader}>
             <ScrollText size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1736,6 +1846,9 @@ const MAJOR_CITIES = [
           )}
         </Pressable>
 
+        )}
+
+        {profileTab === 'personal' && (
         <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobrequirements' } } as any)}>
           <View style={styles.demoHeader}>
             <ShieldCheck size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1755,202 +1868,75 @@ const MAJOR_CITIES = [
 
 
 
+        )}
+
+        {profileTab === 'personal' && (
         <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'equalopportunity' } } as any)}>
-          <View style={styles.demoHeader}>
-            <Scale size={16} color={colors.textTertiary} strokeWidth={2.5} />
-            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Equal Opportunity Information</Text>
-            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Scale size={16} color={colors.textSecondary} strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Equal Opportunity Information</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           <Text style={[styles.demoNote, { color: colors.textTertiary }]}>This information is confidential and voluntary</Text>
           
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Veteran Status</Text>
-            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.veteranStatus || 'Not specified'}</Text>
+          <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
+            <View style={[styles.eeoIconWrap, { backgroundColor: '#8B5CF620' }]}>
+              <ShieldCheck size={16} color="#8B5CF6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Veteran Status</Text>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.veteranStatus || 'Not specified'}</Text>
+            </View>
           </View>
 
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Disability Status</Text>
-            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.disabilityStatus || 'Not specified'}</Text>
+          <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
+            <View style={[styles.eeoIconWrap, { backgroundColor: '#EF444420' }]}>
+              <Heart size={16} color="#EF4444" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Disability Status</Text>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.disabilityStatus || 'Not specified'}</Text>
+            </View>
           </View>
 
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Ethnicity</Text>
-            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.ethnicity || 'Not specified'}</Text>
+          <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
+            <View style={[styles.eeoIconWrap, { backgroundColor: '#3B82F620' }]}>
+              <Laptop size={16} color="#3B82F6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Ethnicity</Text>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.ethnicity || 'Not specified'}</Text>
+            </View>
           </View>
 
-          <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-            <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Race</Text>
-            <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.race || 'Not specified'}</Text>
+          <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
+            <View style={[styles.eeoIconWrap, { backgroundColor: '#10B98120' }]}>
+              <Target size={16} color="#10B981" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Race</Text>
+              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.race || 'Not specified'}</Text>
+            </View>
           </View>
 
           {user.gender ? (
-            <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Gender</Text>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
+            <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
+              <View style={[styles.eeoIconWrap, { backgroundColor: '#F59E0B20' }]}>
+                <Star size={16} color="#F59E0B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Gender</Text>
+                <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
+              </View>
             </View>
           ) : null}
         </Pressable>
+        )}
 
         <View style={{ height: 40 }} />
       </AnimatedHeaderScrollView>
-
-      <Modal visible={activeModal === 'completeprofile'} animationType="fade" transparent>
-        <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill}>
-          <View style={[wizStyles.overlay, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)' }]}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[wizStyles.card, { backgroundColor: colors.surface }]}>
-              <View style={wizStyles.header}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[wizStyles.stepCounter, { color: colors.textTertiary }]}>
-                    {wizardStepIndex + 1} of {incompleteSteps.length}
-                  </Text>
-                  <Text style={[wizStyles.title, { color: colors.secondary }]}>
-                    {incompleteSteps[wizardStepIndex] === 'topskills' && 'Top Skills'}
-                    {incompleteSteps[wizardStepIndex] === 'education' && 'Education'}
-                    {incompleteSteps[wizardStepIndex] === 'experience' && 'Work Experience'}
-                    {incompleteSteps[wizardStepIndex] === 'achievements' && 'Achievements & Honors'}
-                    {incompleteSteps[wizardStepIndex] === 'certifications' && 'Certifications'}
-                  </Text>
-                </View>
-                <Pressable onPress={closeModal} style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}>
-                  <X size={22} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-              <Text style={[wizStyles.helperText, { color: colors.textSecondary }]}>
-                {WIZARD_HELPER_TEXT[incompleteSteps[wizardStepIndex]]}
-              </Text>
-              <View style={[wizStyles.progressTrack, { backgroundColor: colors.borderLight }]}>
-                <View style={[wizStyles.progressFill, { width: `${((wizardStepIndex + 1) / incompleteSteps.length) * 100}%` }]} />
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} style={wizStyles.body} keyboardShouldPersistTaps="handled">
-                {/* Top Skills Step */}
-                {incompleteSteps[wizardStepIndex] === 'topskills' && (
-                  <View>
-                    <Text style={[styles.topSkillSubtext, { color: colors.textTertiary }]}>Tap to toggle top skill (max 5). Long-press to remove.</Text>
-                    <View style={styles.skillsWrap}>
-                      {user.skills.map((skill, idx) => {
-                        const isTop = user.topSkills.includes(skill);
-                        return (
-                          <Pressable
-                            key={idx}
-                            style={[styles.skillTag, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary }, isTop && { borderWidth: 2, borderColor: '#D4A017' }]}
-                            onPress={() => handleToggleTopSkill(skill)}
-                            onLongPress={() => handleRemoveSkill(idx)}
-                          >
-                            {isTop && <Star size={12} color="#D4A017" />}
-                            <Text style={[styles.skillTagText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{skill}</Text>
-                          </Pressable>
-                        );
-                      })}
-                      <Pressable style={[styles.addSkillBtn, { backgroundColor: colors.secondary }]} onPress={openAddSkillModal}>
-                        <Plus size={16} color={colors.surface} />
-                      </Pressable>
-                    </View>
-                    <Text style={[wizStyles.selectionCount, { color: colors.textTertiary }]}>{user.topSkills.length}/5 selected</Text>
-                  </View>
-                )}
-                {/* Education Step */}
-                {incompleteSteps[wizardStepIndex] === 'education' && (
-                  <View>
-                    <Text style={styles.fieldLabel}>Institution *</Text>
-                    <View style={styles.universityInputContainer}>
-                      <TextInput style={styles.universityInput} placeholder="Select or type university" placeholderTextColor={Colors.textTertiary} value={universitySearch} onChangeText={(text) => { setUniversitySearch(text); setEduInstitution(text); setShowUniversityDropdown(true); }} onFocus={() => setShowUniversityDropdown(true)} />
-                      <ChevronDown size={14} color={Colors.textTertiary} />
-                    </View>
-                    {showUniversityDropdown && (
-                      <View style={styles.universityDropdown}>
-                        <ScrollView style={styles.universityDropdownScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                          {universitySearch && !universities.some(u => u.toLowerCase() === universitySearch.toLowerCase()) && (
-                            <Pressable style={styles.universityDropdownItem} onPress={() => { setEduInstitution(universitySearch); setShowUniversityDropdown(false); }}>
-                              <Plus size={16} color={Colors.primary} />
-                              <Text style={styles.universityDropdownItemTextAdd}>Add "{universitySearch}"</Text>
-                            </Pressable>
-                          )}
-                          {universities.filter(u => !universitySearch || u.toLowerCase().includes(universitySearch.toLowerCase())).slice(0, 50).map(uni => (
-                            <Pressable key={uni} style={styles.universityDropdownItem} onPress={() => { setEduInstitution(uni); setUniversitySearch(uni); setShowUniversityDropdown(false); }}>
-                              <Text style={styles.universityDropdownItemText}>{uni}</Text>
-                            </Pressable>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
-                    <Text style={styles.fieldLabel}>Degree *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. Bachelor's" placeholderTextColor={Colors.textTertiary} value={eduDegree} onChangeText={setEduDegree} />
-                    <Text style={styles.fieldLabel}>Field of Study</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. Computer Science" placeholderTextColor={Colors.textTertiary} value={eduField} onChangeText={setEduField} />
-                    <View style={styles.dateRow}>
-                      <View style={styles.dateField}><Text style={styles.fieldLabel}>Start Year</Text><TextInput style={styles.modalInput} placeholder="e.g. 2016" placeholderTextColor={Colors.textTertiary} value={eduStartDate} onChangeText={setEduStartDate} /></View>
-                      <View style={styles.dateField}><Text style={styles.fieldLabel}>End Year</Text><TextInput style={styles.modalInput} placeholder="e.g. 2020" placeholderTextColor={Colors.textTertiary} value={eduEndDate} onChangeText={setEduEndDate} /></View>
-                    </View>
-                  </View>
-                )}
-                {/* Experience Step */}
-                {incompleteSteps[wizardStepIndex] === 'experience' && (
-                  <View>
-                    <Text style={styles.fieldLabel}>Job Title *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. Software Engineer" placeholderTextColor={Colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />
-                    <Text style={styles.fieldLabel}>Company *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. Google" placeholderTextColor={Colors.textTertiary} value={expCompany} onChangeText={setExpCompany} />
-                    <Text style={styles.fieldLabel}>Employment Type</Text>
-                    <View style={styles.chipGrid}>
-                      {EXP_TYPE_OPTIONS.map((t) => (
-                        <Pressable key={t} style={[styles.prefChip, expType === t && styles.prefChipActive]} onPress={() => setExpType(t)}>
-                          {expType === t && <Check size={12} color={Colors.surface} />}
-                          <Text style={[styles.prefChipText, expType === t && styles.prefChipTextActive]}>{t}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <View style={styles.dateRow}>
-                      <View style={styles.dateField}><Text style={styles.fieldLabel}>Start Date</Text><TextInput style={styles.modalInput} placeholder="e.g. Jan 2023" placeholderTextColor={Colors.textTertiary} value={expStartDate} onChangeText={setExpStartDate} /></View>
-                      <View style={styles.dateField}><Text style={styles.fieldLabel}>End Date</Text><TextInput style={[styles.modalInput, expIsCurrent && styles.inputDisabled]} placeholder="e.g. Dec 2024" placeholderTextColor={Colors.textTertiary} value={expIsCurrent ? 'Present' : expEndDate} onChangeText={setExpEndDate} editable={!expIsCurrent} /></View>
-                    </View>
-                    <Pressable style={styles.checkboxRow} onPress={() => setExpIsCurrent(!expIsCurrent)}>
-                      <View style={[styles.checkbox, expIsCurrent && styles.checkboxActive]}>{expIsCurrent && <Check size={12} color={Colors.surface} />}</View>
-                      <Text style={styles.checkboxLabel}>I currently work here</Text>
-                    </Pressable>
-                  </View>
-                )}
-                {/* Achievements Step */}
-                {incompleteSteps[wizardStepIndex] === 'achievements' && (
-                  <View>
-                    <Text style={styles.fieldLabel}>Title *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. Best Innovation Award" placeholderTextColor={Colors.textTertiary} value={achTitle} onChangeText={setAchTitle} />
-                    <Text style={styles.fieldLabel}>Issuer/Organization *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. TechCorp Hackathon" placeholderTextColor={Colors.textTertiary} value={achIssuer} onChangeText={setAchIssuer} />
-                    <Text style={styles.fieldLabel}>Date</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. 2024" placeholderTextColor={Colors.textTertiary} value={achDate} onChangeText={setAchDate} />
-                    <Text style={styles.fieldLabel}>Description</Text>
-                    <TextInput style={[styles.modalInput, styles.modalTextArea]} placeholder="Describe this achievement..." placeholderTextColor={Colors.textTertiary} value={achDescription} onChangeText={setAchDescription} multiline numberOfLines={3} />
-                  </View>
-                )}
-                {/* Certifications Step */}
-                {incompleteSteps[wizardStepIndex] === 'certifications' && (
-                  <View>
-                    <Text style={styles.fieldLabel}>Certification Name *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. AWS Solutions Architect" placeholderTextColor={Colors.textTertiary} value={certName} onChangeText={setCertName} />
-                    <Text style={styles.fieldLabel}>Issuing Organization *</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. Amazon Web Services" placeholderTextColor={Colors.textTertiary} value={certOrg} onChangeText={setCertOrg} />
-                    <Text style={styles.fieldLabel}>Credential URL</Text>
-                    <TextInput style={styles.modalInput} placeholder="https://..." placeholderTextColor={Colors.textTertiary} value={certUrl} onChangeText={setCertUrl} autoCapitalize="none" />
-                    <Text style={styles.fieldLabel}>Skills (comma-separated)</Text>
-                    <TextInput style={styles.modalInput} placeholder="e.g. AWS, Cloud Architecture" placeholderTextColor={Colors.textTertiary} value={certSkills} onChangeText={setCertSkills} />
-                  </View>
-                )}
-              </ScrollView>
-              <View style={wizStyles.footer}>
-                <Pressable style={[wizStyles.skipBtn, { borderColor: colors.borderLight }]} onPress={handleWizardSkip}>
-                  <Text style={[wizStyles.skipBtnText, { color: colors.textSecondary }]}>Skip</Text>
-                </Pressable>
-                <Pressable style={wizStyles.nextBtn} onPress={handleWizardNext}>
-                  <Text style={wizStyles.nextBtnText}>
-                    {wizardStepIndex === incompleteSteps.length - 1 ? 'Done' : 'Next'}
-                  </Text>
-                  {wizardStepIndex < incompleteSteps.length - 1 && <ChevronRight size={16} color="#FFFFFF" />}
-                </Pressable>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </BlurView>
-      </Modal>
 
       <Modal visible={activeModal === 'skill'} animationType="slide" transparent>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
@@ -2190,6 +2176,58 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
+      <Modal visible={!!pendingDocFile} animationType="slide" transparent>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.secondary }]}>Name Your Document</Text>
+              <Pressable onPress={() => setPendingDocFile(null)} style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}><X size={22} color={colors.textPrimary} /></Pressable>
+            </View>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>File name</Text>
+            <TextInput
+              style={[styles.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.borderLight }]}
+              value={docRenameText}
+              onChangeText={setDocRenameText}
+              autoFocus
+              selectTextOnFocus
+            />
+            <Pressable
+              style={[styles.modalSaveBtn, { backgroundColor: colors.secondary }]}
+              disabled={isUploadingDoc}
+              onPress={async () => {
+                if (!pendingDocFile || !supabaseUserId || !docRenameText.trim()) return;
+                setIsUploadingDoc(true);
+                try {
+                  const fileName = docRenameText.trim();
+                  const filePath = `${supabaseUserId}/docs/${Date.now()}_${fileName}`;
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (!session) throw new Error('No session');
+                  const formData = new FormData();
+                  formData.append('', { uri: pendingDocFile.uri, type: pendingDocFile.mimeType, name: fileName } as any);
+                  const uploadUrl = getStorageUploadUrl('documents', filePath);
+                  const uploadRes = await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${session.access_token}` }, body: formData });
+                  if (!uploadRes.ok) throw new Error('Upload failed');
+                  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/documents/${filePath}`;
+                  const newDoc: UserDocument = { id: `doc${Date.now()}`, name: fileName, type: 'other', fileUrl: publicUrl, fileName, uploadedAt: new Date().toISOString() };
+                  const updatedDocs = [...(user.documents || []), newDoc];
+                  setUser(prev => ({ ...prev, documents: updatedDocs }));
+                  saveProfile({ ...user, documents: updatedDocs });
+                  setPendingDocFile(null);
+                  Alert.alert('Success', 'Document uploaded!');
+                } catch (err: any) {
+                  Alert.alert('Upload Failed', err?.message || 'Unknown error');
+                } finally {
+                  setIsUploadingDoc(false);
+                }
+              }}
+            >
+              {isUploadingDoc ? <ActivityIndicator size="small" color={colors.surface} /> : <Check size={18} color={colors.surface} />}
+              <Text style={styles.modalSaveBtnText}>{isUploadingDoc ? 'Uploading...' : 'Upload'}</Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
     </View>
     </TabTransitionWrapper>
   );
@@ -2234,6 +2272,19 @@ const styles = StyleSheet.create({
   verifyContent: { flex: 1, marginLeft: 12 },
   verifyTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
   verifySubtext: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  squareRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  quickActionsRow: { gap: 8, marginTop: 4, paddingRight: 32 },
+  quickActionBox: { width: 110, height: 110, borderRadius: 18, overflow: 'hidden' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
+  quickActionGradient: { flex: 1, borderRadius: 18, padding: 12, alignItems: 'center', justifyContent: 'center' },
+  quickActionImpact: { fontSize: 30, fontWeight: '900' as const, fontFamily: Platform.OS === 'ios' ? 'Impact' : 'sans-serif-black', textAlign: 'center' as const, color: '#FFFFFF' },
+  quickActionLabel: { fontSize: 10, fontWeight: '600' as const, textAlign: 'center' as const, marginTop: 2 },
+  quickActionSub: { fontSize: 8, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 3 },
+  resumeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginTop: 8, backgroundColor: '#F4511E' },
+  resumeBannerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  resumeBannerTitle: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
+  resumeBannerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  eeoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1 },
+  eeoIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statsGrid: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1565C0', borderRadius: 16, padding: 16, marginTop: 4, gap: 12 },
   statsIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center' },
@@ -2367,6 +2418,17 @@ const styles = StyleSheet.create({
   favoriteCompanyLogo: { width: 20, height: 20, borderRadius: 4 },
   favoriteCompanyText: { fontSize: 13, color: Colors.textPrimary, fontWeight: '600' as const },
   emptyFavoriteText: { fontSize: 13, color: Colors.textTertiary, fontStyle: 'italic' as const },
+  tabBar: { flexDirection: 'row', borderRadius: 14, padding: 4, marginTop: 4, borderWidth: 1 },
+  tabItem: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  tabItemText: { fontSize: 13, fontWeight: '700' as const },
+  tabScrollHint: { position: 'absolute' as const, right: 0, top: 0, bottom: 0, width: 32, justifyContent: 'center', alignItems: 'center', borderTopRightRadius: 14, borderBottomRightRadius: 14 },
+  docSubTabs: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  docSubTab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'transparent' },
+  docSubTabActive: { borderColor: '#10B981' },
+  docSubTabText: { fontSize: 13, fontWeight: '600' as const },
+  docPreview: { marginTop: 8, borderRadius: 12, borderWidth: 1, overflow: 'hidden' as const, height: 360 },
+  docPreviewImage: { width: '100%', height: '100%' },
+  docPreviewWebview: { flex: 1 },
   companySelectChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.borderLight },
   companySelectChipActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
   companySelectLogo: { width: 18, height: 18, borderRadius: 4 },
@@ -2400,27 +2462,3 @@ const styles = StyleSheet.create({
   universityDropdownItemTextAdd: { fontSize: 15, color: Colors.primary, fontWeight: '600' as const },
 });
 
-const wizStyles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
-  card: { borderRadius: 24, padding: 20, maxHeight: '80%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 24, elevation: 10 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
-  stepCounter: { fontSize: 12, fontWeight: '600' as const, marginBottom: 2 },
-  title: { fontSize: 22, fontWeight: '800' as const },
-  helperText: { fontSize: 14, fontStyle: 'italic' as const, lineHeight: 20, marginBottom: 12 },
-  progressTrack: { height: 4, borderRadius: 2, marginBottom: 16, overflow: 'hidden' as const },
-  progressFill: { height: '100%', backgroundColor: '#10B981', borderRadius: 2 },
-  body: { maxHeight: 360, marginBottom: 12 },
-  selectionCount: { fontSize: 12, fontWeight: '600' as const, marginTop: 12, textAlign: 'right' as const },
-  footer: { flexDirection: 'row', gap: 12 },
-  skipBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  skipBtnText: { fontSize: 15, fontWeight: '700' as const },
-  nextBtn: { flex: 1, flexDirection: 'row', paddingVertical: 14, borderRadius: 14, backgroundColor: '#111111', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  nextBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
-  securityNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E8F5E9', padding: 12, borderRadius: 10, marginBottom: 16 },
-  securityNoteText: { fontSize: 12, color: '#2E7D32', fontWeight: '600' as const, flex: 1 },
-  credentialsInfo: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 16, paddingHorizontal: 4 },
-  portalSectionTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary, marginTop: 16, marginBottom: 8 },
-  passwordInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, marginBottom: 12 },
-  passwordInput: { flex: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: Colors.textPrimary },
-  eyeIcon: { paddingHorizontal: 12 },
-});

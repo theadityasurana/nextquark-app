@@ -5,6 +5,21 @@ import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
 import { ROLE_CATEGORIES as CATEGORIES, CATEGORY_ROLES } from '@/constants/roles';
 
+function AnimatedOption({ index, children }: { index: number; children: React.ReactNode }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(20)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(100 + index * 120),
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(slide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
+  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
+}
+
 export default function StepDesiredRoles({ data, onUpdate, onNext }: StepProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -92,8 +107,10 @@ export default function StepDesiredRoles({ data, onUpdate, onNext }: StepProps) 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.header}>
-        <Text style={styles.headerEmoji}>🎯</Text>
-        <Text style={styles.title}>What roles are you looking for?</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.headerEmoji}>🎯</Text>
+          <Text style={styles.title}>What roles are you looking for?</Text>
+        </View>
         <Text style={styles.subtitle}>Select categories, then pick specific roles</Text>
       </View>
 
@@ -114,32 +131,33 @@ export default function StepDesiredRoles({ data, onUpdate, onNext }: StepProps) 
       )}
 
       <ScrollView style={styles.catList} showsVerticalScrollIndicator={false} contentContainerStyle={styles.catListContent}>
-        {CATEGORIES.map(({ key, label, emoji, color }) => {
+        {CATEGORIES.map(({ key, label, emoji, color }, idx) => {
           const isCatSelected = selectedCats.includes(key);
           const rolesInCat = data.desiredRoles.filter(r => (CATEGORY_ROLES[key] || []).includes(r));
           return (
-            <Pressable
-              key={key}
-              style={[styles.catOption, isCatSelected && { borderColor: color }]}
-              onPress={() => toggleCategory(key)}
-            >
-              <View style={[styles.catEmojiWrap, { backgroundColor: `${color}15` }]}>
-                <Text style={styles.catEmoji}>{emoji}</Text>
-              </View>
-              <View style={styles.catInfo}>
-                <Text style={[styles.catLabel, isCatSelected && { color: '#FFFFFF' }]}>{label}</Text>
-                {rolesInCat.length > 0 && (
-                  <Text style={styles.catCount}>{rolesInCat.length} role{rolesInCat.length > 1 ? 's' : ''}</Text>
+            <AnimatedOption key={key} index={idx}>
+              <Pressable
+                style={[styles.catOption, isCatSelected && { borderColor: color }]}
+                onPress={() => toggleCategory(key)}
+              >
+                <View style={[styles.catEmojiWrap, { backgroundColor: `${color}15` }]}>
+                  <Text style={styles.catEmoji}>{emoji}</Text>
+                </View>
+                <View style={styles.catInfo}>
+                  <Text style={[styles.catLabel, isCatSelected && { color: '#FFFFFF' }]}>{label}</Text>
+                  {rolesInCat.length > 0 && (
+                    <Text style={styles.catCount}>{rolesInCat.length} role{rolesInCat.length > 1 ? 's' : ''}</Text>
+                  )}
+                </View>
+                {isCatSelected ? (
+                  <Pressable onPress={() => setActiveCategory(key)} hitSlop={8}>
+                    <ChevronRight size={16} color={color} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.catRadio} />
                 )}
-              </View>
-              {isCatSelected ? (
-                <Pressable onPress={() => setActiveCategory(key)} hitSlop={8}>
-                  <ChevronRight size={16} color={color} />
-                </Pressable>
-              ) : (
-                <View style={styles.catRadio} />
-              )}
-            </Pressable>
+              </Pressable>
+            </AnimatedOption>
           );
         })}
       </ScrollView>
@@ -157,8 +175,9 @@ export default function StepDesiredRoles({ data, onUpdate, onNext }: StepProps) 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111111', paddingHorizontal: 24 },
   header: { paddingTop: 12, marginBottom: 10 },
-  headerEmoji: { fontSize: 36, marginBottom: 8 },
-  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', marginBottom: 6 },
+  headerEmoji: { fontSize: 36 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
+  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', flex: 1 },
   subtitle: { fontSize: 15, color: '#9E9E9E', lineHeight: 22 },
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   backText: { fontSize: 15, color: '#9E9E9E', fontWeight: '600' },

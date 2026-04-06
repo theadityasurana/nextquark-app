@@ -23,6 +23,19 @@ function TabBarBadge({ count, type = 'count' }: { count: number; type?: 'count' 
   );
 }
 
+function TabIcon({ icon: Icon, color, size, focused, colors, badgeCount, badgeType }: {
+  icon: any; color: string; size: number; focused: boolean; colors: any;
+  badgeCount?: number; badgeType?: 'count' | 'alert';
+}) {
+  return (
+    <View style={styles.tabIconWrap}>
+      {focused && <View style={[styles.tabPillIndicator, { backgroundColor: colors.secondary + '22' }]} />}
+      <Icon size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
+      {badgeCount != null && badgeCount > 0 && <TabBarBadge count={badgeCount} type={badgeType} />}
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const { supabaseUserId, userProfile, swipedJobIds } = useAuth();
   const { theme } = useTheme();
@@ -107,10 +120,8 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size, focused }) => (
-            <View>
-              <User size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
-              {isProfileIncomplete && <TabBarBadge count={1} type="alert" />}
-            </View>
+            <TabIcon icon={User} color={color} size={size} focused={focused} colors={colors}
+              badgeCount={isProfileIncomplete ? 1 : 0} badgeType="alert" />
           ),
         }}
       />
@@ -119,10 +130,8 @@ export default function TabLayout() {
         options={{
           title: 'Discover',
           tabBarIcon: ({ color, size, focused }) => (
-            <View>
-              <Compass size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
-              {favoriteCompaniesCount > 0 && <TabBarBadge count={favoriteCompaniesCount} />}
-            </View>
+            <TabIcon icon={Compass} color={color} size={size} focused={focused} colors={colors}
+              badgeCount={favoriteCompaniesCount} />
           ),
         }}
       />
@@ -131,10 +140,8 @@ export default function TabLayout() {
         options={{
           title: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
-            <View>
-              <Home size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
-              {forYouCount > 0 && <TabBarBadge count={forYouCount} />}
-            </View>
+            <TabIcon icon={Home} color={color} size={size} focused={focused} colors={colors}
+              badgeCount={forYouCount} />
           ),
         }}
       />
@@ -143,10 +150,8 @@ export default function TabLayout() {
         options={{
           title: 'Applications',
           tabBarIcon: ({ color, size, focused }) => (
-            <View>
-              <Briefcase size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
-              {applicationsCount > 0 && <TabBarBadge count={applicationsCount} />}
-            </View>
+            <TabIcon icon={Briefcase} color={color} size={size} focused={focused} colors={colors}
+              badgeCount={applicationsCount} />
           ),
         }}
       />
@@ -155,10 +160,8 @@ export default function TabLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size, focused }) => (
-            <View>
-              <MessageCircle size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
-              {unreadMessages > 0 && <TabBarBadge count={unreadMessages} />}
-            </View>
+            <TabIcon icon={MessageCircle} color={color} size={size} focused={focused} colors={colors}
+              badgeCount={unreadMessages} />
           ),
         }}
       />
@@ -167,21 +170,36 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 64,
+    height: 32,
+    overflow: 'visible',
+  },
+  tabPillIndicator: {
+    position: 'absolute',
+    width: 56,
+    height: 28,
+    borderRadius: 14,
+  },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -8,
+    top: -2,
+    right: 10,
     backgroundColor: '#DC2626',
-    borderRadius: 8,
-    minWidth: 14,
-    height: 14,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
+    zIndex: 10,
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700' as const,
+    lineHeight: 14,
   },
 });

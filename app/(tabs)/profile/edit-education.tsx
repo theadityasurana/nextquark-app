@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Check, X, GraduationCap, ChevronDown } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft, Plus, Check, X, GraduationCap, ChevronDown } from '@/components/ProfileIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import Colors from '@/constants/colors';
 import { Education } from '@/types';
 import { universities } from '@/constants/universities';
+import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
 export default function EditEducationScreen() {
   const insets = useSafeAreaInsets();
@@ -16,6 +17,11 @@ export default function EditEducationScreen() {
   const { userProfile: supabaseProfile, saveProfile } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
+  const params = useLocalSearchParams<{ wizardMode?: string; wizardIndex?: string; wizardTotal?: string }>();
+  const isWizard = params.wizardMode === '1';
+  const wizardIndex = parseInt(params.wizardIndex || '0', 10);
+  const wizardTotal = parseInt(params.wizardTotal || '0', 10);
+  const incompleteSteps = isWizard ? getIncompleteSteps(supabaseProfile) : [];
 
   const [items, setItems] = useState<Education[]>(supabaseProfile?.education || []);
   const [editing, setEditing] = useState<Education | null>(null);
@@ -71,6 +77,10 @@ export default function EditEducationScreen() {
   const handleSaveAll = async () => {
     if (supabaseProfile) { await saveProfile({ ...supabaseProfile, education: items }); }
     router.back();
+  };
+
+  const handleSaveOnly = async () => {
+    if (supabaseProfile) { await saveProfile({ ...supabaseProfile, education: items }); }
   };
 
   if (showForm) {
@@ -156,6 +166,14 @@ export default function EditEducationScreen() {
           </Pressable>
         ))}
       </ScrollView>
+      {isWizard && (
+        <WizardFooter
+          wizardIndex={wizardIndex}
+          wizardTotal={wizardTotal}
+          incompleteSteps={incompleteSteps}
+          onSaveCurrent={handleSaveOnly}
+        />
+      )}
     </View>
   );
 }

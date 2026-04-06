@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform, ScrollView } from 'react-native';
 import { Search, Megaphone, Users, UserCheck, Sparkles } from 'lucide-react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -48,8 +48,24 @@ const OPTIONS: { key: string; label: string; sub: string; icon: React.ReactNode;
   },
 ];
 
+function AnimatedOption({ index, children }: { index: number; children: React.ReactNode }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(20)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(100 + index * 120),
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(slide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
+  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
+}
+
 export default function StepHeardAboutUs({ data, onUpdate, onNext }: StepProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -58,9 +74,14 @@ export default function StepHeardAboutUs({ data, onUpdate, onNext }: StepProps) 
   const handleSelect = (key: string) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onUpdate({ heardAboutUs: key });
+    setError('');
   };
 
   const handleContinue = () => {
+    if (!data.heardAboutUs) {
+      setError('Please select an option to continue');
+      return;
+    }
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onNext();
   };
@@ -68,40 +89,43 @@ export default function StepHeardAboutUs({ data, onUpdate, onNext }: StepProps) 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.header}>
-        <Text style={styles.emoji}>👋</Text>
-        <Text style={styles.title}>How did you hear about us?</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.emoji}>👋</Text>
+          <Text style={styles.title}>How did you hear about us? <Text style={styles.asterisk}>*</Text></Text>
+        </View>
         <Text style={styles.subtitle}>We'd love to know what brought you here!</Text>
       </View>
 
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {OPTIONS.map(({ key, label, sub, icon, iconSelected }) => {
+        {OPTIONS.map(({ key, label, sub, icon, iconSelected }, idx) => {
           const selected = data.heardAboutUs === key;
           return (
-            <Pressable
-              key={key}
-              style={[styles.option, selected && styles.optionSelected]}
-              onPress={() => handleSelect(key)}
-            >
-              <View style={[styles.iconWrap, selected && styles.iconWrapSelected]}>
-                {selected ? iconSelected : icon}
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionLabel}>{label}</Text>
-                <Text style={styles.optionSub}>{sub}</Text>
-              </View>
-              <View style={[styles.radio, selected && styles.radioSelected]}>
-                {selected && <View style={styles.radioDot} />}
-              </View>
-            </Pressable>
+            <AnimatedOption key={key} index={idx}>
+              <Pressable
+                style={[styles.option, selected && styles.optionSelected]}
+                onPress={() => handleSelect(key)}
+              >
+                <View style={[styles.iconWrap, selected && styles.iconWrapSelected]}>
+                  {selected ? iconSelected : icon}
+                </View>
+                <View style={styles.optionText}>
+                  <Text style={styles.optionLabel}>{label}</Text>
+                  <Text style={styles.optionSub}>{sub}</Text>
+                </View>
+                <View style={[styles.radio, selected && styles.radioSelected]}>
+                  {selected && <View style={styles.radioDot} />}
+                </View>
+              </Pressable>
+            </AnimatedOption>
           );
         })}
       </ScrollView>
 
       <View style={styles.footer}>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <Pressable
           style={[styles.continueButton, !data.heardAboutUs && styles.continueButtonDisabled]}
           onPress={handleContinue}
-          disabled={!data.heardAboutUs}
         >
           <Text style={styles.continueButtonText}>Continue →</Text>
         </Pressable>
@@ -118,9 +142,12 @@ const styles = StyleSheet.create({
   header: { paddingTop: 20 },
   scrollArea: { flex: 1, marginTop: 24 },
   scrollContent: { gap: 8, paddingBottom: 16 },
-  emoji: { fontSize: 48, marginBottom: 16 },
-  title: { fontSize: 26, fontWeight: '900', color: '#FFFFFF', marginBottom: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  emoji: { fontSize: 36 },
+  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', flex: 1 },
   subtitle: { fontSize: 15, color: '#9E9E9E', marginBottom: 24 },
+  asterisk: { color: '#EF4444', fontSize: 26 },
+  errorText: { color: '#EF4444', fontSize: 13, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
   options: { gap: 8 },
   option: {
     flexDirection: 'row', alignItems: 'center', gap: 14,

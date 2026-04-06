@@ -187,6 +187,25 @@ export interface Job {
     uploadDate: string;
     isActive: boolean;
   }
+
+  export interface Project {
+    id: string;
+    title: string;
+    organization: string;
+    date: string;
+    exposure: string[];
+    bullets: string[];
+    link?: string;
+  }
+
+  export interface UserDocument {
+    id: string;
+    name: string;
+    type: 'transcript' | 'certificate' | 'degree' | 'other';
+    fileUrl: string;
+    fileName: string;
+    uploadedAt: string;
+  }
   
   export interface UserProfile {
     id: string;
@@ -242,5 +261,7 @@ export interface Job {
     greenhousePassword?: string;
     taleoEmail?: string;
     taleoPassword?: string;
+    projects?: Project[];
+    documents?: UserDocument[];
   }
   

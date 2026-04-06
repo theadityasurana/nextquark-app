@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, SlidersHorizontal, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, BarChart3, ShieldCheck, Building2, UserRound } from 'lucide-react-native';
+import { X, Heart, SlidersHorizontal, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, BarChart3, ShieldCheck, Building2, UserRound, FileText, Plus, Crown } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors, { darkColors } from '@/constants/colors';
@@ -30,10 +30,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { getSubscriptionStatus, decrementApplicationCount, getSubscriptionDisplayName } from '@/lib/subscription';
+import { Resume } from '@/types';
+import { WebView } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sendWelcomeNotification, scheduleAllNotifications } from '@/lib/notifications';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
+const WELCOME_NOTIF_SENT_KEY = 'nextquark_welcome_notif_sent';
 
 // CARD_COLORS moved inside component to support dark mode
 
@@ -116,7 +120,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile } = useAuth();
+  const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile, isOnboardingComplete } = useAuth();
   const colors = useColors();
   const isDark = colors.background === darkColors.background;
   const CARD_COLORS = [colors.surfaceElevated];
@@ -141,6 +145,11 @@ export default function HomeScreen() {
   const [isSwipeEnabled, setIsSwipeEnabled] = useState(true);
   const [activeSearchTags, setActiveSearchTags] = useState<string[]>([]);
   const [loadingWordIndex, setLoadingWordIndex] = useState(0);
+  const [showResumeSheet, setShowResumeSheet] = useState(false);
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [resumeSignedUrls, setResumeSignedUrls] = useState<Record<string, string>>({});
+  const [loadingResumes, setLoadingResumes] = useState(false);
+  const resumeSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [showOutOfSwipes, setShowOutOfSwipes] = useState(false);
   const outOfSwipesAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
@@ -193,6 +202,19 @@ export default function HomeScreen() {
     'Doing Heavy Lifting 🏋️',
     'Bet, We\'re Ready 🚀',
   ];
+
+  // Send welcome notification once when user first reaches the jobs page after onboarding
+  useEffect(() => {
+    if (!isOnboardingComplete || !userName) return;
+    AsyncStorage.getItem(WELCOME_NOTIF_SENT_KEY).then(sent => {
+      if (!sent) {
+        const firstName = userName.split(' ')[0] || '';
+        sendWelcomeNotification(firstName).catch(() => {});
+        scheduleAllNotifications(firstName).catch(() => {});
+        AsyncStorage.setItem(WELCOME_NOTIF_SENT_KEY, 'true').catch(() => {});
+      }
+    });
+  }, [isOnboardingComplete, userName]);
 
   const { data: supabaseJobs, isLoading: isLoadingJobs, refetch: refetchJobs } = useQuery({
     queryKey: ['supabase-jobs'],
@@ -297,6 +319,66 @@ export default function HomeScreen() {
     enabled: !!supabaseUserId,
     refetchInterval: 60000,
   });
+
+  const loadResumes = useCallback(async () => {
+    if (!supabaseUserId) return;
+    setLoadingResumes(true);
+    try {
+      const { data: files, error } = await supabase.storage.from('resumes').list(supabaseUserId);
+      if (error) throw error;
+      if (files && files.length > 0) {
+        // Read custom name mapping from AsyncStorage
+        let namesMap: Record<string, string> = {};
+        try {
+          const raw = await AsyncStorage.getItem('resume_custom_names');
+          if (raw) namesMap = JSON.parse(raw);
+        } catch {}
+        const loaded: Resume[] = files.map((file, idx) => ({
+          id: `r${idx}`,
+          name: namesMap[file.name] || file.name.replace(/\.[^/.]+$/, '').replace(/^\d+\./, ''),
+          fileName: file.name,
+          uploadDate: file.created_at || new Date().toISOString(),
+          isActive: idx === 0,
+        }));
+        // Restore active resume from AsyncStorage
+        const savedActiveId = await AsyncStorage.getItem('active_resume_id');
+        if (savedActiveId) {
+          const hasIt = loaded.some(r => r.id === savedActiveId);
+          if (hasIt) loaded.forEach(r => r.isActive = r.id === savedActiveId);
+        }
+        setResumes(loaded);
+        // Load signed URLs
+        const urls: Record<string, string> = {};
+        for (const resume of loaded) {
+          try {
+            const { data } = await supabase.storage.from('resumes').createSignedUrl(`${supabaseUserId}/${resume.fileName}`, 3600);
+            if (data?.signedUrl) urls[resume.id] = data.signedUrl;
+          } catch (e) {}
+        }
+        setResumeSignedUrls(urls);
+      }
+    } catch (e) {
+      console.log('Error loading resumes:', e);
+    } finally {
+      setLoadingResumes(false);
+    }
+  }, [supabaseUserId]);
+
+  const openResumeSheet = useCallback(() => {
+    loadResumes();
+    resumeSheetAnim.setValue(SCREEN_HEIGHT);
+    setShowResumeSheet(true);
+    Animated.spring(resumeSheetAnim, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 120 }).start();
+  }, [resumeSheetAnim, loadResumes]);
+
+  const closeResumeSheet = useCallback(() => {
+    Animated.timing(resumeSheetAnim, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }).start(() => setShowResumeSheet(false));
+  }, [resumeSheetAnim]);
+
+  const setActiveResume = useCallback(async (id: string) => {
+    setResumes(prev => prev.map(r => ({ ...r, isActive: r.id === id })));
+    await AsyncStorage.setItem('active_resume_id', id);
+  }, []);
 
   const allJobs: Job[] = useMemo(() => {
     let jobsList: Job[] = [];
@@ -718,7 +800,7 @@ export default function HomeScreen() {
     extrapolate: 'clamp',
   });
 
-  const handleSwipeComplete = useCallback(async (direction: string) => {
+  const handleSwipeComplete = useCallback(async (direction: string, skipPositionReset?: boolean) => {
     const idx = currentIndexRef.current;
     const currentJob = jobs[idx];
     if (!currentJob) return;
@@ -842,7 +924,9 @@ export default function HomeScreen() {
     const nextIndex = currentIndexRef.current + 1;
     currentIndexRef.current = nextIndex;
     
-    positionRef.setValue({ x: 0, y: 0 });
+    if (!skipPositionReset) {
+      positionRef.setValue({ x: 0, y: 0 });
+    }
     cardMountAnim.setValue(0);
     
     setCardKey(prev => prev + 1);
@@ -851,9 +935,10 @@ export default function HomeScreen() {
     // Scale-up fade-in: 0.92 scale + 0 opacity -> 1.0 scale + 1 opacity
     Animated.timing(cardMountAnim, {
       toValue: 1,
-      duration: 250,
+      duration: 300,
       useNativeDriver: true,
     }).start(() => {
+      positionRef.setValue({ x: 0, y: 0 });
       setIsSwipeEnabled(true);
     });
   }, [positionRef, triggerHaptic, jobs, addSwipedJobId, supabaseUserId, userProfile, userName, queryClient]);
@@ -897,25 +982,12 @@ export default function HomeScreen() {
     const x = direction === 'right' ? SCREEN_WIDTH * 1.5 : direction === 'left' ? -SCREEN_WIDTH * 1.5 : 0;
     const y = direction === 'up' ? -SCREEN_HEIGHT : 0;
     
-    // Start swipe-away. After 150ms (card is mostly off-screen), trigger the
-    // card swap early so the new card begins fading in while the old one
-    // is still leaving. This eliminates any visible gap.
-    let swapTriggered = false;
-    const triggerSwap = () => {
-      if (swapTriggered) return;
-      swapTriggered = true;
-      handleSwipeComplete(direction);
-    };
-    
-    setTimeout(triggerSwap, 150);
-    
     Animated.timing(positionRef, {
       toValue: { x, y },
-      duration: 100,
+      duration: 250,
       useNativeDriver: true,
     }).start(() => {
-      // Safety: if setTimeout hasn't fired yet (shouldn't happen), trigger now
-      triggerSwap();
+      handleSwipeComplete(direction, true);
     });
   }, [positionRef, handleSwipeComplete, isSwipeEnabled, subscriptionData, openOutOfSwipesSheet]);
 
@@ -1171,7 +1243,7 @@ export default function HomeScreen() {
           <Animated.View style={[styles.overlayLabel, styles.saveLabel, { opacity: saveOpacity }]}>
             <Text style={styles.saveLabelText}>SAVE</Text>
           </Animated.View>
-          <JobCard job={currentJob} onViewDetails={() => router.push({ pathname: '/job-details' as any, params: { id: currentJob.id } })} backgroundColor={currentColor} showMatchBadge={feedMode === 'foryou'} />
+          <JobCard job={currentJob} backgroundColor={currentColor} showMatchBadge={feedMode === 'foryou'} />
         </Animated.View>
       </>
     );
@@ -1211,16 +1283,19 @@ export default function HomeScreen() {
         </View>
         <View style={styles.headerActions}>
           <View style={styles.headerButtonsRow}>
-            <Pressable style={styles.headerButton} onPress={() => router.push('/(tabs)/(home)/search' as any)}>
-              <Search size={20} color={Colors.textSecondary} />
+            <Pressable style={[styles.headerButton, { borderColor: colors.textPrimary }]} onPress={() => router.push('/(tabs)/(home)/search' as any)}>
+              <Search size={20} color={colors.textPrimary} />
             </Pressable>
-            <Pressable style={styles.headerButton} onPress={handleOpenFilters}>
-              <SlidersHorizontal size={20} color={Colors.textSecondary} />
+            <Pressable style={[styles.headerButton, { borderColor: colors.textPrimary }]} onPress={handleOpenFilters}>
+              <SlidersHorizontal size={20} color={colors.textPrimary} />
               {activeFilterCount > 0 && (
                 <View style={styles.filterBadge}>
                   <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
                 </View>
               )}
+            </Pressable>
+            <Pressable style={[styles.headerButton, { borderColor: colors.textPrimary }]} onPress={openResumeSheet}>
+              <FileText size={20} color={colors.textPrimary} />
             </Pressable>
           </View>
           {subscriptionData && (
@@ -1408,6 +1483,84 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {showResumeSheet && (
+        <View style={styles.resumeSheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeResumeSheet} />
+          <Animated.View style={[styles.resumeSheetContainer, { transform: [{ translateY: resumeSheetAnim }] }]}>
+            <View style={styles.resumeSheetHandle} />
+            <View style={styles.resumeSheetHeader}>
+              <Text style={styles.resumeSheetTitle}>My Resumes</Text>
+              <Pressable onPress={closeResumeSheet}>
+                <X size={22} color="#000" />
+              </Pressable>
+            </View>
+
+            {loadingResumes ? (
+              <View style={styles.resumeSheetLoading}>
+                <Text style={styles.resumeSheetLoadingText}>Loading resumes...</Text>
+              </View>
+            ) : resumes.length === 0 ? (
+              <View style={styles.resumeSheetEmpty}>
+                <FileText size={40} color="#CCC" />
+                <Text style={styles.resumeSheetEmptyText}>No resumes uploaded yet</Text>
+                <Pressable style={styles.resumeSheetUploadBtn} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
+                  <Plus size={16} color="#FFF" />
+                  <Text style={styles.resumeSheetUploadBtnText}>Upload Resume</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.resumeSheetScroll}>
+                {resumes.map((resume) => {
+                  const url = resumeSignedUrls[resume.id];
+                  const previewUrl = url ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}` : null;
+                  return (
+                    <Pressable
+                      key={resume.id}
+                      style={[styles.resumeSheetItem, resume.isActive && styles.resumeSheetItemActive]}
+                      onPress={() => setActiveResume(resume.id)}
+                    >
+                      {resume.isActive && previewUrl && Platform.OS !== 'web' ? (
+                        <View style={styles.resumeSheetPreview}>
+                          <WebView source={{ uri: previewUrl }} style={{ flex: 1 }} scalesPageToFit scrollEnabled={false} />
+                        </View>
+                      ) : resume.isActive && url ? (
+                        <View style={styles.resumeSheetPreviewFallback}>
+                          <FileText size={32} color="#999" />
+                          <Text style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Active Resume</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.resumeSheetItemRow}>
+                        <View style={[styles.resumeSheetRadio, resume.isActive && styles.resumeSheetRadioActive]}>
+                          {resume.isActive && <View style={styles.resumeSheetRadioDot} />}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.resumeSheetItemName, resume.isActive && { fontWeight: '800' }]} numberOfLines={1}>{resume.name}</Text>
+                          <Text style={styles.resumeSheetItemDate}>{new Date(resume.uploadDate).toLocaleDateString()}</Text>
+                        </View>
+                        {resume.isActive && <Text style={styles.resumeSheetActiveBadge}>Active</Text>}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+
+                {(subscriptionData?.subscription_type === 'pro' || subscriptionData?.subscription_type === 'premium') ? (
+                  <Pressable style={styles.resumeSheetAddBtn} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
+                    <Plus size={18} color="#FFF" />
+                    <Text style={styles.resumeSheetAddBtnText}>Add New Resume</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable style={styles.resumeSheetUpgradeBtn} onPress={() => { closeResumeSheet(); router.push('/premium' as any); }}>
+                    <Crown size={16} color="#FFD700" />
+                    <Text style={styles.resumeSheetUpgradeBtnText}>Upgrade to add more resumes</Text>
+                  </Pressable>
+                )}
+                <View style={{ height: 20 }} />
+              </ScrollView>
+            )}
+          </Animated.View>
+        </View>
+      )}
+
       <Modal visible={showFilters} animationType="slide" transparent>
         <View style={styles.filterOverlay}>
           <Animated.View style={[styles.filterContent, { transform: [{ translateY: filterSlideAnim }] }]}>
@@ -1421,14 +1574,13 @@ export default function HomeScreen() {
             <ScrollView showsVerticalScrollIndicator={false} style={styles.filterScroll}>
 
 
-              <View style={styles.filterSectionRow}><Clock size={15} color="#000" /><Text style={styles.filterSectionTitle}>Posted Within</Text></View>
+              <View style={styles.filterSectionRow}><Clock size={15} color="#7C4DFF" /><Text style={styles.filterSectionTitle}>Posted Within</Text></View>
               <View style={styles.chipGrid}>
                 {POSTED_OPTIONS.map((opt) => {
                   const selected = tempFilters.postedWithin.includes(opt.value);
                   return (
-                    <Pressable key={opt.value} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => togglePostedWithin(opt.value)}>
-                      {selected && <Check size={14} color="#FFFFFF" />}
-                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{opt.label}</Text>
+                    <Pressable key={opt.value} style={[styles.filterChip, selected ? { backgroundColor: '#7C4DFF28', borderColor: '#7C4DFF50' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => togglePostedWithin(opt.value)}>
+                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -1436,14 +1588,13 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><Wifi size={15} color="#000" /><Text style={styles.filterSectionTitle}>Work Mode</Text></View>
+              <View style={styles.filterSectionRow}><Wifi size={15} color="#F4511E" /><Text style={styles.filterSectionTitle}>Work Mode</Text></View>
               <View style={styles.chipGrid}>
                 {WORK_MODES.map((mode) => {
                   const selected = tempFilters.workModes.includes(mode);
                   return (
-                    <Pressable key={mode} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleWorkMode(mode)}>
-                      {selected && <Check size={14} color="#FFFFFF" />}
-                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{mode}</Text>
+                    <Pressable key={mode} style={[styles.filterChip, selected ? { backgroundColor: '#F4511E28', borderColor: '#F4511E50' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleWorkMode(mode)}>
+                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{mode}</Text>
                     </Pressable>
                   );
                 })}
@@ -1451,14 +1602,13 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><Briefcase size={15} color="#000" /><Text style={styles.filterSectionTitle}>Job Type</Text></View>
+              <View style={styles.filterSectionRow}><Briefcase size={15} color="#1E88E5" /><Text style={styles.filterSectionTitle}>Job Type</Text></View>
               <View style={styles.chipGrid}>
                 {JOB_TYPES.map((type) => {
                   const selected = tempFilters.jobTypes.includes(type);
                   return (
-                    <Pressable key={type} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobType(type)}>
-                      {selected && <Check size={14} color="#FFFFFF" />}
-                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{type}</Text>
+                    <Pressable key={type} style={[styles.filterChip, selected ? { backgroundColor: '#1E88E528', borderColor: '#1E88E550' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleJobType(type)}>
+                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{type}</Text>
                     </Pressable>
                   );
                 })}
@@ -1466,14 +1616,13 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><BarChart3 size={15} color="#000" /><Text style={styles.filterSectionTitle}>Job Level</Text></View>
+              <View style={styles.filterSectionRow}><BarChart3 size={15} color="#00897B" /><Text style={styles.filterSectionTitle}>Job Level</Text></View>
               <View style={styles.chipGrid}>
                 {JOB_LEVELS.map((level) => {
                   const selected = tempFilters.jobLevels.includes(level);
                   return (
-                    <Pressable key={level} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobLevel(level)}>
-                      {selected && <Check size={14} color="#FFFFFF" />}
-                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{level}</Text>
+                    <Pressable key={level} style={[styles.filterChip, selected ? { backgroundColor: '#00897B28', borderColor: '#00897B50' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleJobLevel(level)}>
+                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{level}</Text>
                     </Pressable>
                   );
                 })}
@@ -1481,14 +1630,13 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><ShieldCheck size={15} color="#000" /><Text style={styles.filterSectionTitle}>Job Requirements</Text></View>
+              <View style={styles.filterSectionRow}><ShieldCheck size={15} color="#D4A017" /><Text style={styles.filterSectionTitle}>Job Requirements</Text></View>
               <View style={styles.chipGrid}>
                 {JOB_REQUIREMENTS.map((req) => {
                   const selected = tempFilters.jobRequirements.includes(req);
                   return (
-                    <Pressable key={req} style={[styles.filterChip, { backgroundColor: '#2D2D2D', borderColor: '#FFFFFF' }, selected && { backgroundColor: '#22c55e', borderColor: '#22c55e' }]} onPress={() => toggleJobRequirement(req)}>
-                      {selected && <Check size={14} color="#FFFFFF" />}
-                      <Text style={[styles.filterChipText, { color: '#FFFFFF' }]}>{req}</Text>
+                    <Pressable key={req} style={[styles.filterChip, selected ? { backgroundColor: '#D4A01728', borderColor: '#D4A01750' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleJobRequirement(req)}>
+                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{req}</Text>
                     </Pressable>
                   );
                 })}
@@ -1496,7 +1644,7 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><Building2 size={15} color="#000" /><Text style={styles.filterSectionTitle}>Company</Text></View>
+              <View style={styles.filterSectionRow}><Building2 size={15} color="#E91E63" /><Text style={styles.filterSectionTitle}>Company</Text></View>
               <Pressable style={styles.cityPickerBtn} onPress={() => setShowCompanyPicker(true)}>
                 <Search size={18} color={Colors.textTertiary} />
                 <Text style={styles.cityPickerBtnText}>
@@ -1507,9 +1655,9 @@ export default function HomeScreen() {
               {tempFilters.companies.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.companies.map((company) => (
-                    <Pressable key={company} style={styles.selectedItemChip} onPress={() => toggleCompany(company)}>
-                      <Text style={styles.selectedItemText}>{company}</Text>
-                      <X size={12} color="#FFFFFF" />
+                    <Pressable key={company} style={[styles.filterChip, { backgroundColor: '#E91E6328', borderColor: '#E91E6350' }]} onPress={() => toggleCompany(company)}>
+                      <Text style={[styles.filterChipText, { color: '#E91E63' }]}>{company}</Text>
+                      <X size={10} color="#E91E63" />
                     </Pressable>
                   ))}
                 </View>
@@ -1517,7 +1665,7 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><UserRound size={15} color="#000" /><Text style={styles.filterSectionTitle}>Role</Text></View>
+              <View style={styles.filterSectionRow}><UserRound size={15} color="#9C27B0" /><Text style={styles.filterSectionTitle}>Role</Text></View>
               <Pressable style={styles.cityPickerBtn} onPress={() => setShowRolePicker(true)}>
                 <Search size={18} color={Colors.textTertiary} />
                 <Text style={styles.cityPickerBtnText}>
@@ -1528,9 +1676,9 @@ export default function HomeScreen() {
               {tempFilters.roles.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.roles.map((role) => (
-                    <Pressable key={role} style={styles.selectedItemChip} onPress={() => toggleRole(role)}>
-                      <Text style={styles.selectedItemText}>{role}</Text>
-                      <X size={12} color="#FFFFFF" />
+                    <Pressable key={role} style={[styles.filterChip, { backgroundColor: '#9C27B028', borderColor: '#9C27B050' }]} onPress={() => toggleRole(role)}>
+                      <Text style={[styles.filterChipText, { color: '#9C27B0' }]}>{role}</Text>
+                      <X size={10} color="#9C27B0" />
                     </Pressable>
                   ))}
                 </View>
@@ -1538,7 +1686,7 @@ export default function HomeScreen() {
 
               <View style={styles.filterDivider} />
 
-              <View style={styles.filterSectionRow}><MapPin size={15} color="#000" /><Text style={styles.filterSectionTitle}>Location</Text></View>
+              <View style={styles.filterSectionRow}><MapPin size={15} color="#FF5722" /><Text style={styles.filterSectionTitle}>Location</Text></View>
               <Pressable style={styles.cityPickerBtn} onPress={() => setShowLocationPicker(true)}>
                 <MapPin size={18} color={Colors.textTertiary} />
                 <Text style={styles.cityPickerBtnText}>
@@ -1549,9 +1697,9 @@ export default function HomeScreen() {
               {tempFilters.locations.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.locations.map((location) => (
-                    <Pressable key={location} style={styles.selectedItemChip} onPress={() => toggleLocation(location)}>
-                      <Text style={styles.selectedItemText}>{location}</Text>
-                      <X size={12} color="#FFFFFF" />
+                    <Pressable key={location} style={[styles.filterChip, { backgroundColor: '#FF572228', borderColor: '#FF572250' }]} onPress={() => toggleLocation(location)}>
+                      <Text style={[styles.filterChipText, { color: '#FF5722' }]}>{location}</Text>
+                      <X size={10} color="#FF5722" />
                     </Pressable>
                   ))}
                 </View>
@@ -1639,6 +1787,18 @@ export default function HomeScreen() {
                 })
               )}
             </ScrollView>
+            {tempFilters.companies.length > 0 && (
+              <View style={styles.pickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerSelectedScroll}>
+                  {tempFilters.companies.map((company) => (
+                    <Pressable key={company} style={styles.selectedItemChip} onPress={() => toggleCompany(company)}>
+                      <Text style={styles.selectedItemText}>{company}</Text>
+                      <X size={12} color="#FFFFFF" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             <Pressable style={styles.companyDoneBtn} onPress={() => setShowCompanyPicker(false)}>
               <Text style={styles.companyDoneBtnText}>Done ({tempFilters.companies.length} selected)</Text>
             </Pressable>
@@ -1678,6 +1838,18 @@ export default function HomeScreen() {
                 );
               })}
             </ScrollView>
+            {tempFilters.locations.length > 0 && (
+              <View style={styles.pickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerSelectedScroll}>
+                  {tempFilters.locations.map((location) => (
+                    <Pressable key={location} style={styles.selectedItemChip} onPress={() => toggleLocation(location)}>
+                      <Text style={styles.selectedItemText}>{location}</Text>
+                      <X size={12} color="#FFFFFF" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             <Pressable style={styles.locationDoneBtn} onPress={() => setShowLocationPicker(false)}>
               <Text style={styles.locationDoneBtnText}>Done ({tempFilters.locations.length} selected)</Text>
             </Pressable>
@@ -1717,6 +1889,18 @@ export default function HomeScreen() {
                 );
               })}
             </ScrollView>
+            {tempFilters.roles.length > 0 && (
+              <View style={styles.pickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerSelectedScroll}>
+                  {tempFilters.roles.map((role) => (
+                    <Pressable key={role} style={styles.selectedItemChip} onPress={() => toggleRole(role)}>
+                      <Text style={styles.selectedItemText}>{role}</Text>
+                      <X size={12} color="#FFFFFF" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             <Pressable style={styles.roleDoneBtn} onPress={() => setShowRolePicker(false)}>
               <Text style={styles.roleDoneBtnText}>Done ({tempFilters.roles.length} selected)</Text>
             </Pressable>
@@ -1744,7 +1928,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: "#000", marginTop: 2 },
   headerActions: { flexDirection: 'column', gap: 8, alignItems: 'flex-end' },
   headerButtonsRow: { flexDirection: 'row', gap: 10 },
-  headerButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center', shadowColor: "rgba(0,0,0,0.1)", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2, position: 'relative' as const },
+  headerButton: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' as const },
   filterBadge: { position: 'absolute' as const, top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   filterBadgeText: { fontSize: 10, fontWeight: '700' as const, color: "#000" },
   aiButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
@@ -1828,6 +2012,8 @@ const styles = StyleSheet.create({
   locationDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#FFFFFF" },
   roleDoneBtn: { marginHorizontal: 20, marginVertical: 16, paddingVertical: 14, borderRadius: 14, backgroundColor: "#000000", alignItems: 'center' },
   roleDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#FFFFFF" },
+  pickerSelectedWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4, borderTopWidth: 1, borderTopColor: '#E0E0E0' },
+  pickerSelectedScroll: { flexDirection: 'row', gap: 8 },
   selectedItemChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: "#000000", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   selectedItemText: { fontSize: 12, color: "#FFFFFF", fontWeight: '600' as const },
   companyOptionContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1862,4 +2048,31 @@ const styles = StyleSheet.create({
   floatChip: { width: 60, height: 22, borderRadius: 6 },
   floatShadow: { width: 200, height: 16, borderRadius: 100, backgroundColor: '#000' },
   liveCounterText: { fontSize: 13, fontWeight: '400' as const, marginTop: 12, opacity: 0.7 },
+  resumeSheetOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999, justifyContent: 'flex-end' },
+  resumeSheetContainer: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', paddingBottom: 20 },
+  resumeSheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginTop: 10, marginBottom: 8 },
+  resumeSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 },
+  resumeSheetTitle: { fontSize: 20, fontWeight: '800' as const, color: '#000' },
+  resumeSheetScroll: { paddingHorizontal: 20 },
+  resumeSheetLoading: { padding: 40, alignItems: 'center' },
+  resumeSheetLoadingText: { fontSize: 14, color: '#999' },
+  resumeSheetEmpty: { padding: 40, alignItems: 'center', gap: 12 },
+  resumeSheetEmptyText: { fontSize: 14, color: '#999' },
+  resumeSheetUploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#111', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
+  resumeSheetUploadBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
+  resumeSheetItem: { borderRadius: 14, borderWidth: 1, borderColor: '#E0E0E0', marginBottom: 12, overflow: 'hidden' as const },
+  resumeSheetItemActive: { borderColor: '#22c55e', borderWidth: 2 },
+  resumeSheetPreview: { height: 200, backgroundColor: '#F5F5F5' },
+  resumeSheetPreviewFallback: { height: 100, backgroundColor: '#F9F9F9', justifyContent: 'center', alignItems: 'center' },
+  resumeSheetItemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  resumeSheetRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
+  resumeSheetRadioActive: { borderColor: '#22c55e' },
+  resumeSheetRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e' },
+  resumeSheetItemName: { fontSize: 14, fontWeight: '600' as const, color: '#000' },
+  resumeSheetItemDate: { fontSize: 11, color: '#999', marginTop: 2 },
+  resumeSheetActiveBadge: { fontSize: 11, fontWeight: '700' as const, color: '#22c55e', backgroundColor: '#22c55e15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  resumeSheetAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#111', borderRadius: 14, paddingVertical: 14, marginTop: 4 },
+  resumeSheetAddBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+  resumeSheetUpgradeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1A1A2E', borderRadius: 14, paddingVertical: 14, marginTop: 4 },
+  resumeSheetUpgradeBtnText: { fontSize: 14, fontWeight: '600' as const, color: '#FFD700' },
 });

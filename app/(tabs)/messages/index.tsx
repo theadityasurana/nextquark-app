@@ -2,15 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -23,10 +27,13 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { Swipeable } from 'react-native-gesture-handler';
 import {
   Archive,
   ArrowLeft,
+  Check,
+  ChevronDown,
   Copy,
   Forward,
   Inbox,
@@ -34,23 +41,22 @@ import {
   MailOpen,
   Menu,
   Paperclip,
-  Plus,
+  Pencil,
   RefreshCw,
   Reply,
   Send,
   Star,
-  Strikethrough,
+  Sun,
   Trash2,
-  Underline,
   X,
-} from 'lucide-react-native';
+} from '@/components/ProfileIcons';
 
 import { WebView } from 'react-native-webview';
 import Colors, { darkColors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { useColors } from '@/contexts/useColors';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
-import DraggableBottomSheet from '@/components/DraggableBottomSheet';
 import { isValidEmail, sanitizeSearchInput } from '@/lib/validation';
 import {
   archiveInbound,
@@ -67,12 +73,68 @@ import {
   sendEmailViaResend,
   toggleStarInbound,
   toggleStarSent,
+  fetchInboxSettings,
+  saveInboxSettings,
+  type EmailAttachment,
   type InboundEmail,
+  type InboxSettings,
   type SentEmail,
   subscribeToMailChanges,
 } from '@/lib/resend';
 
 type SidebarView = 'inbox' | 'starred' | 'sent' | 'archived';
+type CategoryTab = 'Primary' | 'Promotions' | 'Social' | 'Updates';
+const CATEGORY_TABS: CategoryTab[] = ['Primary', 'Updates', 'Promotions', 'Social'];
+
+const CATEGORY_COLORS: Record<CategoryTab, { light: string; dark: string }> = {
+  Primary: { light: '#EEF2FF', dark: '#4F46E5' },
+  Updates: { light: '#FEF3C7', dark: '#D97706' },
+  Promotions: { light: '#DCFCE7', dark: '#16A34A' },
+  Social: { light: '#DBEAFE', dark: '#2563EB' },
+};
+
+const PROMO_KEYWORDS = [
+  'unsubscribe', 'offer', 'discount', 'sale', 'deal', 'promo', 'coupon',
+  'free trial', 'limited time', 'buy now', 'shop now', 'order now',
+  'exclusive', 'save', 'off', '% off', 'clearance', 'black friday',
+  'cyber monday', 'flash sale', 'subscribe', 'newsletter', 'marketing',
+  'advertisement', 'sponsored', 'cashback', 'reward',
+];
+const SOCIAL_KEYWORDS = [
+  'followed you', 'liked your', 'commented on', 'mentioned you',
+  'tagged you', 'friend request', 'connection request', 'new follower',
+  'shared a post', 'reacted to', 'invitation to connect', 'endorsed',
+  'new message from', 'sent you a message', 'wants to connect',
+  'accepted your', 'joined', 'posted in',
+];
+const SOCIAL_SENDERS = [
+  'facebook', 'twitter', 'linkedin', 'instagram', 'tiktok', 'snapchat',
+  'reddit', 'discord', 'slack', 'whatsapp', 'telegram', 'pinterest',
+  'youtube', 'twitch', 'x.com', 'threads', 'mastodon', 'noreply@github',
+];
+const UPDATE_KEYWORDS = [
+  'your order', 'shipping', 'delivered', 'tracking', 'receipt',
+  'invoice', 'payment', 'transaction', 'confirmation', 'verified',
+  'security alert', 'password', 'two-factor', '2fa', 'otp',
+  'verification code', 'account update', 'billing', 'subscription',
+  'renewal', 'expiring', 'statement', 'alert', 'notification',
+  'your account', 'sign-in', 'login', 'welcome to',
+];
+
+function classifyEmail(item: MailItem): CategoryTab {
+  if (item.kind === 'sent') return 'Primary';
+  const d = item.data as InboundEmail;
+  const blob = [
+    d.from_email, d.from_name, d.subject, d.body_text,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  const senderLower = (d.from_email || '').toLowerCase();
+  if (SOCIAL_SENDERS.some((s) => senderLower.includes(s)) ||
+      SOCIAL_KEYWORDS.some((k) => blob.includes(k))) return 'Social';
+  if (PROMO_KEYWORDS.some((k) => blob.includes(k))) return 'Promotions';
+  if (UPDATE_KEYWORDS.some((k) => blob.includes(k))) return 'Updates';
+  return 'Primary';
+}
 type MailItem =
   | { kind: 'inbound'; data: InboundEmail }
   | { kind: 'sent'; data: SentEmail };
@@ -93,10 +155,21 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function formatTime24(dateStr: string): string {
+function formatRelativeDate(dateStr: string): string {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return '';
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const now = new Date();
+  const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  if (isToday) {
+    const h = d.getHours();
+    const m = pad2(d.getMinutes());
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${m} ${ampm}`;
+  }
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
 }
 
 function getItemId(item: MailItem): string {
@@ -202,11 +275,20 @@ function MessagesScreen() {
   const queryClient = useQueryClient();
   const colors = useColors();
   const isDark = colors.background === darkColors.background;
-  const { supabaseUserId, userName } = useAuth();
+  const { supabaseUserId, userName, userEmail } = useAuth();
+
+  // Get the actual auth email from Supabase session (most reliable source)
+  const [authEmail, setAuthEmail] = useState(userEmail || '');
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) setAuthEmail(data.user.email);
+    });
+  }, [supabaseUserId]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarView, setSidebarView] = useState<SidebarView>('inbox');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<CategoryTab>('Primary');
   const mailListRef = useRef<FlatList>(null);
   useScrollToTop(mailListRef);
 
@@ -227,19 +309,75 @@ function MessagesScreen() {
   const [composeReplyMessageId, setComposeReplyMessageId] = useState<string | null>(null);
   const [forwardedHeader, setForwardedHeader] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [composeBold, setComposeBold] = useState(false);
-  const [composeItalic, setComposeItalic] = useState(false);
-  const [composeUnderline, setComposeUnderline] = useState(false);
-  const [composeStrike, setComposeStrike] = useState(false);
-  const [composeTextSize, setComposeTextSize] = useState<'sm' | 'md' | 'lg'>('md');
-  const [composeHeading, setComposeHeading] = useState<'body' | 'h2' | 'h1'>('body');
   const [attachments, setAttachments] = useState<ImagePicker.ImagePickerAsset[]>([]);
-  const [fileAttachments, setFileAttachments] = useState<{ name: string; uri: string; size?: number | null }[]>([]);
+  const [fileAttachments, setFileAttachments] = useState<{ name: string; uri: string; size?: number | null; mimeType?: string | null }[]>([]);
+
+  const buildAttachments = useCallback(async (): Promise<EmailAttachment[]> => {
+    const result: EmailAttachment[] = [];
+    for (const asset of attachments) {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const ext = asset.uri.split('.').pop() || 'jpg';
+        result.push({ filename: `image_${result.length + 1}.${ext}`, content: base64 });
+      } catch (e) {
+        if (__DEV__) console.log('Failed to read image:', e);
+      }
+    }
+    for (const f of fileAttachments) {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(f.uri, { encoding: FileSystem.EncodingType.Base64 });
+        result.push({ filename: f.name, content: base64 });
+      } catch (e) {
+        if (__DEV__) console.log('Failed to read file:', e);
+      }
+    }
+    return result;
+  }, [attachments, fileAttachments]);
 
   const [activeItem, setActiveItem] = useState<MailItem | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threadMessages, setThreadMessages] = useState<Array<(InboundEmail | SentEmail) & { _kind: 'inbound' | 'sent' }>>([]);
   const [threadLoading, setThreadLoading] = useState(false);
+
+  // Detail header expand state (per message id)
+  const [expandedHeaders, setExpandedHeaders] = useState<Set<string>>(new Set());
+  const toggleHeaderExpand = useCallback((msgId: string) => {
+    setExpandedHeaders((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) next.delete(msgId); else next.add(msgId);
+      return next;
+    });
+  }, []);
+
+  // Inbox settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [inboxSettings, setInboxSettings] = useState<InboxSettings>({ forward_to_email: null, reply_mode: 'in_app' });
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const isMultiSelect = selectedIds.size > 0;
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // FAB scroll animation
+  const fabExpanded = useRef(new Animated.Value(1)).current;
+  const lastScrollY = useRef(0);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    if (y > lastScrollY.current + 5 && y > 20) {
+      Animated.timing(fabExpanded, { toValue: 0, duration: 200, useNativeDriver: false }).start();
+    } else if (y < lastScrollY.current - 5) {
+      Animated.timing(fabExpanded, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+    }
+    lastScrollY.current = y;
+  }, [fabExpanded]);
 
 
 
@@ -247,7 +385,21 @@ function MessagesScreen() {
   useEffect(() => {
     if (!supabaseUserId) return;
     getOrCreateProxyEmail(supabaseUserId, userName || undefined).then(setProxyEmail);
+    fetchInboxSettings(supabaseUserId).then(setInboxSettings);
   }, [supabaseUserId]);
+
+  const handleSaveSettings = useCallback(async () => {
+    if (!supabaseUserId) return;
+    setSettingsLoading(true);
+    const ok = await saveInboxSettings(supabaseUserId, inboxSettings);
+    setSettingsLoading(false);
+    if (ok) {
+      Alert.alert('Saved', 'Inbox settings updated.');
+      setShowSettings(false);
+    } else {
+      Alert.alert('Error', 'Failed to save settings.');
+    }
+  }, [supabaseUserId, inboxSettings]);
 
   // Realtime: auto-refresh when emails arrive or change
   useEffect(() => {
@@ -272,12 +424,6 @@ function MessagesScreen() {
     setComposeMode(mode);
     setComposeReplyMessageId(replyMessageId);
     setForwardedHeader(fwdHeader);
-    setComposeBold(false);
-    setComposeItalic(false);
-    setComposeUnderline(false);
-    setComposeStrike(false);
-    setComposeTextSize('md');
-    setComposeHeading('body');
     setAttachments([]);
     setFileAttachments([]);
     setShowCompose(true);
@@ -291,12 +437,6 @@ function MessagesScreen() {
     setComposeMode('new');
     setComposeReplyMessageId(null);
     setForwardedHeader('');
-    setComposeBold(false);
-    setComposeItalic(false);
-    setComposeUnderline(false);
-    setComposeStrike(false);
-    setComposeTextSize('md');
-    setComposeHeading('body');
     setAttachments([]);
     setFileAttachments([]);
   }, []);
@@ -413,6 +553,10 @@ function MessagesScreen() {
 
     if (sidebarView === 'inbox') {
       let groups = threadGroups;
+
+      // Filter by category
+      groups = groups.filter((g) => classifyEmail(g.latestItem) === activeCategory);
+
       if (q) {
         const allItems = listQuery.data || [];
         groups = groups.filter((g) => {
@@ -431,7 +575,7 @@ function MessagesScreen() {
       items = items.filter((item) => matchesQuery(item, q));
     }
     return items;
-  }, [listQuery.data, searchQuery, sidebarView, threadGroups, matchesQuery]);
+  }, [listQuery.data, searchQuery, sidebarView, threadGroups, matchesQuery, activeCategory]);
 
   const refetchAll = useCallback(() => {
     listQuery.refetch();
@@ -474,6 +618,41 @@ function MessagesScreen() {
     },
   });
 
+  // Resolve selected MailItems from IDs
+  const selectedItems = useMemo((): MailItem[] => {
+    if (!selectedIds.size) return [];
+    const all = listQuery.data || [];
+    return all.filter((m) => selectedIds.has(getItemId(m)));
+  }, [selectedIds, listQuery.data]);
+
+  const bulkArchive = useCallback(() => {
+    selectedItems.forEach((item) => archiveMutation.mutate({ item, archived: true }));
+    clearSelection();
+  }, [selectedItems, archiveMutation, clearSelection]);
+
+  const bulkDelete = useCallback(() => {
+    Alert.alert('Delete', `Delete ${selectedItems.length} email(s)? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => { selectedItems.forEach((item) => deleteMutation.mutate(item)); clearSelection(); } },
+    ]);
+  }, [selectedItems, deleteMutation, clearSelection]);
+
+  const bulkMarkRead = useCallback(() => {
+    const hasUnread = selectedItems.some((m) => m.kind === 'inbound' && !m.data.is_read);
+    selectedItems.forEach((m) => {
+      if (m.kind === 'inbound') markReadMutation.mutate({ emailId: m.data.id, read: hasUnread });
+    });
+    clearSelection();
+  }, [selectedItems, markReadMutation, clearSelection]);
+
+  const bulkStar = useCallback(() => {
+    const hasUnstarred = selectedItems.some((m) => !m.data.is_starred);
+    selectedItems.forEach((item) => toggleStarMutation.mutate({ item, starred: hasUnstarred }));
+    clearSelection();
+  }, [selectedItems, toggleStarMutation, clearSelection]);
+
+  const bulkHasUnread = useMemo(() => selectedItems.some((m) => m.kind === 'inbound' && !m.data.is_read), [selectedItems]);
+
   const handleSendEmail = useCallback(async () => {
     if (!supabaseUserId) {
       Alert.alert('Not signed in', 'Please sign in to use NextQuark Mail.');
@@ -499,6 +678,8 @@ function MessagesScreen() {
         ? `${fullBody}\n\n---------- Forwarded message ----------\n${forwardedHeader}`
         : `---------- Forwarded message ----------\n${forwardedHeader}`;
     }
+    const emailAttachments = await buildAttachments();
+    if (__DEV__) console.log('Built attachments:', emailAttachments.length, emailAttachments.map(a => `${a.filename}:${Math.round(a.content.length/1024)}KB`));
     const ok = await sendEmailViaResend(
       proxyEmail,
       composeTo.trim(),
@@ -506,7 +687,9 @@ function MessagesScreen() {
       fullBody,
       supabaseUserId,
       false,
-      composeReplyMessageId || undefined
+      composeReplyMessageId || undefined,
+      userName || undefined,
+      emailAttachments.length > 0 ? emailAttachments : undefined
     );
     setIsSending(false);
 
@@ -517,34 +700,39 @@ function MessagesScreen() {
     } else {
       Alert.alert('Error', 'Failed to send email. Please try again.');
     }
-  }, [composeBody, composeSubject, composeTo, proxyEmail, supabaseUserId, composeReplyMessageId, closeCompose, queryClient]);
-
-  const handlePickImage = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setAttachments((prev) => [...prev, ...result.assets]);
-    }
-  }, []);
+  }, [composeBody, composeSubject, composeTo, proxyEmail, supabaseUserId, composeReplyMessageId, closeCompose, queryClient, userName, buildAttachments]);
 
   const handlePickAttachment = useCallback(async () => {
-    const res = await DocumentPicker.getDocumentAsync({ multiple: true });
-    if (res.canceled) return;
-    setFileAttachments((prev) => [
-      ...prev,
-      ...res.assets.map((a) => ({ name: a.name, uri: a.uri, size: a.size })),
+    Alert.alert('Add attachment', '', [
+      {
+        text: 'Photo Library',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsMultipleSelection: true,
+            quality: 0.8,
+          });
+          if (!result.canceled) {
+            setAttachments((prev) => [...prev, ...result.assets]);
+          }
+        },
+      },
+      {
+        text: 'Files',
+        onPress: async () => {
+          const res = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+          if (!res.canceled) {
+            setFileAttachments((prev) => [
+              ...prev,
+              ...res.assets.map((a) => ({ name: a.name, uri: a.uri, size: a.size, mimeType: a.mimeType })),
+            ]);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   }, []);
 
-  const composeDecoration = useMemo<'none' | 'underline' | 'line-through' | 'underline line-through'>(() => {
-    if (composeUnderline && composeStrike) return 'underline line-through';
-    if (composeUnderline) return 'underline';
-    if (composeStrike) return 'line-through';
-    return 'none';
-  }, [composeStrike, composeUnderline]);
 
   const headerTitle =
     sidebarView === 'sent' ? 'Sent' : sidebarView === 'starred' ? 'Starred' : sidebarView === 'archived' ? 'Archived' : 'Inbox';
@@ -628,62 +816,60 @@ function MessagesScreen() {
           : getDisplayName(item.data.to_email || '(unknown)');
       const subject = item.data.subject || '(no subject)';
       const preview = getPreviewText(item.data.body_text || '');
-      const time = item.kind === 'inbound' ? formatTime24(item.data.received_at) : formatTime24(item.data.sent_at);
+      const time = item.kind === 'inbound' ? formatRelativeDate(item.data.received_at) : formatRelativeDate(item.data.sent_at);
+      const itemId = getItemId(item);
+      const isSelected = selectedIds.has(itemId);
 
-      const rightActions = () => (
+      const archiveAction = () => (
         <View style={styles.swipeActionsWrap}>
           <Pressable
             style={[styles.swipeActionBtn, styles.swipeArchiveBtn]}
             onPress={() => archiveMutation.mutate({ item, archived: true })}
           >
-            <Archive size={18} color="#FFFFFF" />
-            <Text style={styles.swipeActionText}>Archive</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.swipeActionBtn, styles.swipeDeleteBtn]}
-            onPress={() => confirmDelete(item)}
-          >
-            <Trash2 size={18} color="#FFFFFF" />
-            <Text style={styles.swipeActionText}>Delete</Text>
+            <Archive size={22} color="#FFFFFF" />
           </Pressable>
         </View>
       );
 
       return (
         <Swipeable
-          renderRightActions={rightActions}
-          rightThreshold={80}
+          renderRightActions={archiveAction}
+          renderLeftActions={archiveAction}
+          rightThreshold={60}
+          leftThreshold={60}
           friction={1.6}
           overshootRight={false}
+          overshootLeft={false}
         >
           <Pressable
             style={({ pressed }) => [
               styles.emailItem,
               { backgroundColor: colors.surface },
               pressed && { opacity: 0.8 },
-              isUnread && { backgroundColor: colors.surfaceElevated },
             ]}
-            onPress={() => openItem(item, isThread ? (item.data.thread_id || computeThreadIdLocal(item.data.subject)) : undefined)}
+            onPress={() => {
+              if (isMultiSelect) {
+                toggleSelect(itemId);
+              } else {
+                openItem(item, isThread ? (item.data.thread_id || computeThreadIdLocal(item.data.subject)) : undefined);
+              }
+            }}
             onLongPress={() => {
-              const archiveLabel = item.data.is_archived ? 'Unarchive' : 'Archive';
-              Alert.alert(fromName, subject, [
-                ...(item.kind === 'inbound'
-                  ? [{
-                      text: isUnread ? 'Mark as read' : 'Mark as unread',
-                      onPress: () => markReadMutation.mutate({ emailId: item.data.id, read: isUnread }),
-                    }]
-                  : []),
-                { text: isStarred ? 'Unstar' : 'Star', onPress: () => toggleStarMutation.mutate({ item, starred: !isStarred }) },
-                { text: archiveLabel, onPress: () => archiveMutation.mutate({ item, archived: !item.data.is_archived }) },
-                { text: 'Delete', style: 'destructive', onPress: () => confirmDelete(item) },
-                { text: 'Cancel', style: 'cancel' },
-              ]);
+              if (!isMultiSelect) toggleSelect(itemId);
             }}
             testID={`mail-item-${getItemId(item)}`}
           >
-            <View style={[styles.logoAvatar, { backgroundColor: getAvatarColor(fromName) }]}>
-              <Text style={styles.avatarInitials}>{getInitials(fromName)}</Text>
-            </View>
+            <Pressable onPress={() => toggleSelect(itemId)} hitSlop={4}>
+              {isSelected ? (
+                <View style={[styles.logoAvatar, { backgroundColor: '#4F46E5' }]}>
+                  <Check size={20} color="#FFFFFF" />
+                </View>
+              ) : (
+                <View style={[styles.logoAvatar, { backgroundColor: getAvatarColor(fromName) }]}>
+                  <Text style={styles.avatarInitials}>{getInitials(fromName)}</Text>
+                </View>
+              )}
+            </Pressable>
 
             <View style={styles.emailContent}>
               <View style={styles.emailTopRow}>
@@ -694,7 +880,9 @@ function MessagesScreen() {
                   {item.kind === 'sent' ? `To: ${fromName}` : fromName}
                 </Text>
                 {threadCount > 1 && (
-                  <Text style={[styles.threadCountBadge, { color: colors.textTertiary }]}>{threadCount}</Text>
+                  <Text style={[styles.threadCountBadge, { color: colors.textTertiary }]}>
+                    {threadCount}
+                  </Text>
                 )}
                 <Text style={[styles.emailTime, { color: colors.textTertiary }]}>{time}</Text>
               </View>
@@ -713,24 +901,12 @@ function MessagesScreen() {
               </Text>
             </View>
 
-            <Pressable
-              style={styles.starBtnRight}
-              onPress={() => toggleStarMutation.mutate({ item, starred: !isStarred })}
-              hitSlop={10}
-            >
-              <Star
-                size={18}
-                color={isStarred ? '#F59E0B' : colors.textTertiary}
-                fill={isStarred ? '#F59E0B' : 'transparent'}
-              />
-            </Pressable>
-
             {isUnread && <View style={styles.unreadDot} />}
           </Pressable>
         </Swipeable>
       );
     },
-    [archiveMutation, colors, confirmDelete, markReadMutation, openItem, toggleStarMutation]
+    [archiveMutation, colors, confirmDelete, markReadMutation, openItem, toggleStarMutation, selectedIds, isMultiSelect, toggleSelect]
   );
 
   const renderItem = useCallback(
@@ -776,7 +952,8 @@ function MessagesScreen() {
       inlineReplyText.trim(),
       supabaseUserId,
       false,
-      messageId || undefined
+      messageId || undefined,
+      userName || undefined
     );
     setInlineSending(false);
 
@@ -792,7 +969,7 @@ function MessagesScreen() {
     } else {
       Alert.alert('Error', 'Failed to send. Please try again.');
     }
-  }, [supabaseUserId, proxyEmail, inlineReplyText, threadMessages, activeThreadId, closeInlineReply, queryClient]);
+  }, [supabaseUserId, proxyEmail, inlineReplyText, threadMessages, activeThreadId, closeInlineReply, queryClient, userName]);
 
   const closeItemAndReply = useCallback(() => {
     closeInlineReply();
@@ -890,10 +1067,14 @@ function MessagesScreen() {
             ) : (detailHasThread ? threadMessages : detailItem ? [{ ...detailItem.data, _kind: detailItem.kind }] : []).length > 0 ? (
               (detailHasThread ? threadMessages : [{ ...detailItem!.data, _kind: detailItem!.kind }]).map((msg: any, idx: number) => {
                 const isSent = msg._kind === 'sent';
-                const msgName = isSent ? 'You' : parseDisplayName((msg as InboundEmail).from_name, isSent ? (msg as SentEmail).to_email : (msg as InboundEmail).from_email);
+                const msgFromEmail = isSent ? (msg as SentEmail).from_email : (msg as InboundEmail).from_email;
+                const msgName = isSent ? 'You' : parseDisplayName((msg as InboundEmail).from_name, msgFromEmail);
                 const msgDate = new Date(isSent ? (msg as SentEmail).sent_at : (msg as InboundEmail).received_at);
-                const msgDateStr = !isNaN(msgDate.getTime())
-                  ? `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${pad2(msgDate.getHours())}:${pad2(msgDate.getMinutes())}`
+                const msgDateShort = !isNaN(msgDate.getTime())
+                  ? `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                  : '';
+                const msgDateFull = !isNaN(msgDate.getTime())
+                  ? `${msgDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}, ${msgDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
                   : '';
                 const msgToEmail = isSent ? (msg as SentEmail).to_email : (msg as InboundEmail).to_email;
                 const msgHtml = msg._kind === 'inbound' ? ((msg as InboundEmail).body_html || '') : '';
@@ -907,13 +1088,32 @@ function MessagesScreen() {
                         <Text style={styles.gmailSenderInitials}>{isSent ? 'You' : getInitials(msgName)}</Text>
                       </View>
                       <View style={styles.gmailSenderInfo}>
-                        <View style={styles.gmailSenderNameRow}>
+                        <Pressable onPress={() => toggleHeaderExpand(msg.id)} style={styles.gmailSenderNameRow}>
                           <Text style={[styles.gmailSenderName, { color: colors.textPrimary }]} numberOfLines={1}>{msgName}</Text>
-                          <Text style={[styles.gmailDate, { color: colors.textTertiary }]}>{msgDateStr}</Text>
-                        </View>
-                        <Text style={[styles.gmailToMe, { color: colors.textSecondary }]} numberOfLines={1}>
-                          to {msgToEmail?.split('@')[0] || 'me'}
-                        </Text>
+                          <ChevronDown size={16} color={colors.textTertiary} style={expandedHeaders.has(msg.id) ? { transform: [{ rotate: '180deg' }] } : undefined} />
+                          <Text style={[styles.gmailDate, { color: colors.textTertiary }]}>{msgDateShort}</Text>
+                        </Pressable>
+                        {!expandedHeaders.has(msg.id) && (
+                          <Text style={[styles.gmailToCompact, { color: colors.textSecondary }]} numberOfLines={1}>
+                            to {msgToEmail?.split('@')[0] || 'me'}
+                          </Text>
+                        )}
+                        {expandedHeaders.has(msg.id) && (
+                          <View style={styles.gmailExpandedHeader}>
+                            <View style={styles.gmailHeaderRow}>
+                              <Text style={[styles.gmailHeaderLabel, { color: colors.textTertiary }]}>From</Text>
+                              <Text style={[styles.gmailHeaderValue, { color: colors.textSecondary }]} numberOfLines={1}>{msgFromEmail || '(unknown)'}</Text>
+                            </View>
+                            <View style={styles.gmailHeaderRow}>
+                              <Text style={[styles.gmailHeaderLabel, { color: colors.textTertiary }]}>To</Text>
+                              <Text style={[styles.gmailHeaderValue, { color: colors.textSecondary }]} numberOfLines={1}>{msgToEmail || 'me'}</Text>
+                            </View>
+                            <View style={styles.gmailHeaderRow}>
+                              <Text style={[styles.gmailHeaderLabel, { color: colors.textTertiary }]}>Date</Text>
+                              <Text style={[styles.gmailHeaderValue, { color: colors.textSecondary }]}>{msgDateFull || '(no date)'}</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
                     </View>
                     <AutoHeightWebView
@@ -926,14 +1126,14 @@ function MessagesScreen() {
               })
             ) : null}
 
-            {/* Inline reply card */}
+            {/* Inline reply card — Gmail style */}
             {detailShowingInlineReply && detailItem && (
               <View style={[styles.inlineReplyCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                <View style={styles.inlineReplyHeader}>
+                <View style={[styles.inlineReplyHeader, { borderBottomColor: colors.border }]}>
                   <View style={styles.inlineReplyHeaderLeft}>
                     <Reply size={14} color={colors.textTertiary} />
                     <Text style={[styles.inlineReplyTo, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {detailReplyToName} &lt;{detailReplyToEmail}&gt;
+                      {detailReplyToName}
                     </Text>
                   </View>
                   <Pressable onPress={closeInlineReply} hitSlop={8}>
@@ -943,7 +1143,7 @@ function MessagesScreen() {
                 <TextInput
                   ref={inlineReplyRef}
                   style={[styles.inlineReplyInput, { color: colors.textPrimary }]}
-                  placeholder="Write your reply\u2026"
+                  placeholder=""
                   placeholderTextColor={colors.textTertiary}
                   value={inlineReplyText}
                   onChangeText={setInlineReplyText}
@@ -954,6 +1154,25 @@ function MessagesScreen() {
                     setTimeout(() => detailScrollRef.current?.scrollToEnd({ animated: true }), 200);
                   }}
                 />
+                {/* Quoted original message */}
+                <View style={[styles.inlineQuotedBlock, { borderLeftColor: colors.textTertiary }]}>
+                  <Text style={[styles.inlineQuotedMeta, { color: colors.textTertiary }]}>
+                    On {(() => {
+                      const lastMsg = detailHasThread ? threadMessages[threadMessages.length - 1] : null;
+                      const dateStr = lastMsg
+                        ? (lastMsg._kind === 'inbound' ? (lastMsg as any).received_at : (lastMsg as any).sent_at)
+                        : (detailIsInbound ? (detailItem.data as any).received_at : (detailItem.data as any).sent_at);
+                      const d = new Date(dateStr);
+                      return !isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+                    })()}, {detailReplyToName} &lt;{detailReplyToEmail}&gt; wrote:
+                  </Text>
+                  <Text style={[styles.inlineQuotedText, { color: colors.textTertiary }]} numberOfLines={6}>
+                    {(() => {
+                      const lastMsg = detailHasThread ? threadMessages[threadMessages.length - 1] : null;
+                      return (lastMsg?.body_text || detailItem.data.body_text || '').trim();
+                    })()}
+                  </Text>
+                </View>
                 <View style={styles.inlineReplySendRow}>
                   <Pressable
                     style={[styles.inlineReplySendBtn, inlineReplyText.trim() ? styles.inlineReplySendBtnActive : null]}
@@ -980,11 +1199,17 @@ function MessagesScreen() {
               <Pressable
                 style={[styles.gmailBottomBtn, { borderColor: colors.border }]}
                 onPress={() => {
-                  setInlineReplyMode('reply');
-                  setTimeout(() => {
-                    inlineReplyRef.current?.focus();
-                    detailScrollRef.current?.scrollToEnd({ animated: true });
-                  }, 200);
+                  if (inboxSettings.reply_mode === 'forward_to_email') {
+                    const replySubject = `Re: ${detailSubject.replace(/^Re:\s*/i, '')}`;
+                    const mailtoUrl = `mailto:${detailReplyToEmail}?subject=${encodeURIComponent(replySubject)}`;
+                    Linking.openURL(mailtoUrl);
+                  } else {
+                    setInlineReplyMode('reply');
+                    setTimeout(() => {
+                      inlineReplyRef.current?.focus();
+                      detailScrollRef.current?.scrollToEnd({ animated: true });
+                    }, 200);
+                  }
                 }}
               >
                 <Reply size={18} color={colors.textSecondary} />
@@ -993,12 +1218,19 @@ function MessagesScreen() {
               <Pressable
                 style={[styles.gmailBottomBtn, { borderColor: colors.border }]}
                 onPress={() => {
-                  const lastBody = detailHasThread
-                    ? (threadMessages[threadMessages.length - 1]?.body_text || '').trim()
-                    : (detailItem!.data.body_text?.trim() || '');
-                  const fwdMeta = `From: ${detailReplyToName} <${detailReplyToEmail}>\nSubject: ${detailSubject}`;
+                  const lastMsg = detailHasThread ? threadMessages[threadMessages.length - 1] : null;
+                  const lastBody = (lastMsg?.body_text || detailItem!.data.body_text || '').trim();
+                  const dateStr = lastMsg
+                    ? (lastMsg._kind === 'inbound' ? (lastMsg as any).received_at : (lastMsg as any).sent_at)
+                    : (detailIsInbound ? (detailItem!.data as any).received_at : (detailItem!.data as any).sent_at);
+                  const d = new Date(dateStr);
+                  const dateFormatted = !isNaN(d.getTime())
+                    ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                    : '';
+                  const toEmail = detailIsInbound ? (detailItem!.data as InboundEmail).to_email : (detailItem!.data as SentEmail).to_email;
+                  const fwdHeader = `From: ${detailReplyToName} <${detailReplyToEmail}>\nDate: ${dateFormatted}\nSubject: ${detailSubject}\nTo: ${toEmail || ''}\n\n${lastBody}`;
                   closeItemAndReply();
-                  openCompose('', `Fwd: ${detailSubject}`, '', 'forward', `${fwdMeta}\n\n${lastBody}`);
+                  openCompose('', `Fwd: ${detailSubject}`, '', 'forward', fwdHeader);
                 }}
               >
                 <Forward size={18} color={colors.textSecondary} />
@@ -1013,41 +1245,84 @@ function MessagesScreen() {
   return (
     <TabTransitionWrapper routeName="messages">
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-        <View style={styles.brandHeader}>
-          <Image source={require('@/assets/images/header.png')} style={styles.brandLogo} contentFit="contain" />
-        </View>
-
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Pressable style={[styles.menuBtn, { backgroundColor: colors.background, borderColor: colors.border }]} onPress={() => setShowSidebar(true)}>
-              <Menu size={22} color={colors.textPrimary} />
+        {isMultiSelect ? (
+          <View style={[styles.selectBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable onPress={clearSelection} hitSlop={8} style={styles.searchPillIcon}>
+              <ArrowLeft size={22} color={colors.textPrimary} />
             </Pressable>
-            <View>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{headerTitle}</Text>
-              {sidebarView === 'inbox' && unreadCount > 0 && (
-                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{unreadCount} unread</Text>
-              )}
+            <Text style={[styles.selectBarCount, { color: colors.textPrimary }]}>{selectedIds.size}</Text>
+            <View style={styles.selectBarActions}>
+              <Pressable onPress={bulkArchive} hitSlop={8} style={styles.selectBarBtn}>
+                <Archive size={20} color={colors.textPrimary} />
+              </Pressable>
+              <Pressable onPress={bulkDelete} hitSlop={8} style={styles.selectBarBtn}>
+                <Trash2 size={20} color={colors.textPrimary} />
+              </Pressable>
+              <Pressable onPress={bulkMarkRead} hitSlop={8} style={styles.selectBarBtn}>
+                {bulkHasUnread ? <Mail size={20} color={colors.textPrimary} /> : <MailOpen size={20} color={colors.textPrimary} />}
+              </Pressable>
+              <Pressable onPress={bulkStar} hitSlop={8} style={styles.selectBarBtn}>
+                <Star size={20} color={colors.textPrimary} />
+              </Pressable>
             </View>
           </View>
-          <Pressable
-            style={[styles.refreshBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-            onPress={refetchAll}
-            disabled={listQuery.isFetching}
-          >
-            <RefreshCw size={18} color={listQuery.isFetching ? colors.textTertiary : colors.textSecondary} />
-          </Pressable>
-        </View>
+        ) : (
+          <View style={[styles.searchPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable onPress={() => setShowSidebar(true)} hitSlop={8} style={styles.searchPillIcon}>
+              <Menu size={20} color={colors.textSecondary} />
+            </Pressable>
+            <TextInput
+              style={[styles.searchPillInput, { color: colors.textPrimary }]}
+              placeholder={`Search in ${headerTitle.toLowerCase()}`}
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={(text) => setSearchQuery(sanitizeSearchInput(text))}
+            />
+            <Pressable onPress={() => setShowSettings(true)} hitSlop={8} style={styles.searchPillIcon}>
+              {userName ? (
+                <View style={[styles.searchPillAvatar, { backgroundColor: getAvatarColor(userName) }]}>
+                  <Text style={styles.searchPillAvatarText}>{getInitials(userName)}</Text>
+                </View>
+              ) : (
+                <RefreshCw size={18} color={listQuery.isFetching ? colors.textTertiary : colors.textSecondary} />
+              )}
+            </Pressable>
+          </View>
+        )}
 
-        <View style={[styles.searchContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-          <Inbox size={18} color={colors.textSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Search mail..."
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={(text) => setSearchQuery(sanitizeSearchInput(text))}
-          />
-        </View>
+        {sidebarView === 'inbox' && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryTabsContainer}
+            style={styles.categoryTabsScroll}
+          >
+            {CATEGORY_TABS.map((tab) => {
+              const isActive = activeCategory === tab;
+              const { light, dark } = CATEGORY_COLORS[tab];
+              const tabCount = threadGroups.filter((g) => classifyEmail(g.latestItem) === tab).length;
+              return (
+                <Pressable
+                  key={tab}
+                  style={[
+                    styles.categoryTab,
+                    { backgroundColor: isActive ? dark : isDark ? dark + '20' : light, borderColor: isActive ? dark : 'transparent' },
+                  ]}
+                  onPress={() => setActiveCategory(tab)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryTabText,
+                      { color: isActive ? '#FFFFFF' : isDark ? light : dark },
+                    ]}
+                  >
+                    {tab}{tabCount > 0 ? ` ${tabCount}` : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
 
 
 
@@ -1060,14 +1335,16 @@ function MessagesScreen() {
             return getItemId(item);
           }}
           showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.border }]} />}
           contentContainerStyle={showEmptyState ? styles.emptyContainer : undefined}
           ListEmptyComponent={() => {
             if (!supabaseUserId) {
               return (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>Sign in to use NextQuark Mail</Text>
-                  <Text style={styles.emptyText}>
+                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Sign in to use NextQuark Mail</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
                     Your proxy inbox is linked to your account.
                   </Text>
                 </View>
@@ -1077,16 +1354,16 @@ function MessagesScreen() {
               return (
                 <View style={styles.emptyState}>
                   <ActivityIndicator size="large" color="#4F46E5" />
-                  <Text style={styles.emptyTitle}>Loading…</Text>
-                  <Text style={styles.emptyText}>Fetching your NextQuark mail</Text>
+                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Loading…</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Fetching your NextQuark mail</Text>
                 </View>
               );
             }
             if (listQuery.isError) {
               return (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>Unable to load mail</Text>
-                  <Text style={styles.emptyText}>Pull to refresh or try again in a moment.</Text>
+                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Unable to load mail</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Pull to refresh or try again in a moment.</Text>
                   <Pressable style={styles.retryBtn} onPress={refetchAll}>
                     <RefreshCw size={16} color="#FFFFFF" />
                     <Text style={styles.retryBtnText}>Retry</Text>
@@ -1096,11 +1373,23 @@ function MessagesScreen() {
             }
             return (
               <View style={styles.emptyState}>
-                <Inbox size={40} color="#4B5563" />
-                <Text style={styles.emptyTitle}>No mail</Text>
-                <Text style={styles.emptyText}>
-                  {searchQuery ? 'No results found.' : 'Share your proxy address to start receiving mail here.'}
-                </Text>
+                {searchQuery ? (
+                  <>
+                    <Inbox size={40} color="#4B5563" />
+                    <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No results found</Text>
+                    <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Try a different search term.</Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.emptyIllustration}>
+                      <Sun size={56} color="#F59E0B" />
+                    </View>
+                    <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nothing in {sidebarView === 'inbox' ? activeCategory : headerTitle}</Text>
+                    <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+                      {sidebarView === 'inbox' ? 'Enjoy your day! Share your proxy address to start receiving mail here.' : `No ${headerTitle.toLowerCase()} emails yet.`}
+                    </Text>
+                  </>
+                )}
               </View>
             );
           }}
@@ -1110,185 +1399,150 @@ function MessagesScreen() {
         />
 
         {proxyEmail && (
-          <Pressable
+          <Animated.View
             style={[
               styles.composeFab,
-              { backgroundColor: isDark ? '#FFFFFF' : '#111111' },
+              {
+                backgroundColor: isDark ? '#FFFFFF' : '#111111',
+                width: fabExpanded.interpolate({ inputRange: [0, 1], outputRange: [56, 140] }),
+              },
             ]}
-            onPress={() => openCompose()}
           >
-            <Plus size={24} color={isDark ? '#111111' : '#FFFFFF'} />
-          </Pressable>
+            <Pressable style={styles.composeFabInner} onPress={() => openCompose()}>
+              <Pencil size={20} color={isDark ? '#111111' : '#FFFFFF'} />
+              <Animated.Text
+                style={[
+                  styles.composeFabText,
+                  {
+                    color: isDark ? '#111111' : '#FFFFFF',
+                    opacity: fabExpanded,
+                    maxWidth: fabExpanded.interpolate({ inputRange: [0, 1], outputRange: [0, 80] }),
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                Compose
+              </Animated.Text>
+            </Pressable>
+          </Animated.View>
         )}
 
-        <DraggableBottomSheet
+        <Modal
           visible={showCompose}
-          onClose={closeCompose}
-          enableDragToClose={false}
-          initialHeight={Math.round(780)}
-          minHeight={Math.round(Dimensions.get('window').height * 0.3)}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={closeCompose}
         >
-          <View style={[styles.composeSheetInner, { backgroundColor: colors.background }]}>
+          <KeyboardAvoidingView
+            style={[styles.composeFullScreen, { backgroundColor: colors.background, paddingTop: insets.top }]}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
             <View style={[styles.composeHeader, { borderBottomColor: colors.border }]}>
-              <Pressable onPress={closeCompose} style={styles.composeIconBtn} hitSlop={8}>
-                <X size={20} color={colors.textPrimary} />
+              <Pressable onPress={closeCompose} hitSlop={8} style={styles.composeBackBtn}>
+                <ArrowLeft size={22} color={colors.textPrimary} />
               </Pressable>
-              <Text style={[styles.composeTitle, { color: colors.textPrimary }]}>
-                {composeMode === 'forward' ? 'Forward' : composeMode === 'reply' ? 'Reply' : 'Compose'}
-              </Text>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={handlePickAttachment} hitSlop={8} style={styles.composeHeaderIcon}>
+                <Paperclip size={20} color={colors.textPrimary} />
+              </Pressable>
               <Pressable
-                style={[styles.sendBtn, (!composeTo.trim() || !composeSubject.trim() || isSending) && styles.sendBtnDisabled]}
+                style={[styles.composeSendBtn, (!composeTo.trim() || !composeSubject.trim() || isSending) && { opacity: 0.35 }]}
                 onPress={handleSendEmail}
                 disabled={!composeTo.trim() || !composeSubject.trim() || isSending}
               >
-                {isSending ? <ActivityIndicator size="small" color="#FFF" /> : <Send size={16} color="#FFF" />}
+                {isSending ? <ActivityIndicator size="small" color={colors.textPrimary} /> : <Send size={20} color={colors.textPrimary} />}
               </Pressable>
             </View>
 
-            <View style={[styles.composeToolbar, { borderBottomColor: colors.border }]}>
-              <Pressable style={[styles.toolbarIcon, composeBold && styles.toolbarIconActive]} onPress={() => setComposeBold((v) => !v)}>
-                <Text style={[styles.toolbarIconText, { color: colors.textPrimary }]}>B</Text>
-              </Pressable>
-              <Pressable style={[styles.toolbarIcon, composeItalic && styles.toolbarIconActive]} onPress={() => setComposeItalic((v) => !v)}>
-                <Text style={[styles.toolbarIconText, { color: colors.textPrimary }]}>I</Text>
-              </Pressable>
-              <Pressable style={[styles.toolbarIcon, composeUnderline && styles.toolbarIconActive]} onPress={() => setComposeUnderline((v) => !v)}>
-                <Underline size={16} color={colors.textPrimary} />
-              </Pressable>
-              <Pressable style={[styles.toolbarIcon, composeStrike && styles.toolbarIconActive]} onPress={() => setComposeStrike((v) => !v)}>
-                <Strikethrough size={16} color={colors.textPrimary} />
-              </Pressable>
-
-              <Pressable
-                style={[styles.toolbarPill, composeTextSize === 'sm' && styles.toolbarPillActive]}
-                onPress={() => setComposeTextSize('sm')}
-              >
-                <Text style={[styles.toolbarPillText, { color: colors.textPrimary }]}>Small</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.toolbarPill, composeTextSize === 'md' && styles.toolbarPillActive]}
-                onPress={() => setComposeTextSize('md')}
-              >
-                <Text style={[styles.toolbarPillText, { color: colors.textPrimary }]}>Normal</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.toolbarPill, composeTextSize === 'lg' && styles.toolbarPillActive]}
-                onPress={() => setComposeTextSize('lg')}
-              >
-                <Text style={[styles.toolbarPillText, { color: colors.textPrimary }]}>Large</Text>
-              </Pressable>
-
-              <Pressable
-                style={[styles.toolbarPill, composeHeading === 'body' && styles.toolbarPillActive]}
-                onPress={() => setComposeHeading('body')}
-              >
-                <Text style={[styles.toolbarPillText, { color: colors.textPrimary }]}>Body</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.toolbarPill, composeHeading === 'h2' && styles.toolbarPillActive]}
-                onPress={() => setComposeHeading('h2')}
-              >
-                <Text style={[styles.toolbarPillText, { color: colors.textPrimary }]}>H2</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.toolbarPill, composeHeading === 'h1' && styles.toolbarPillActive]}
-                onPress={() => setComposeHeading('h1')}
-              >
-                <Text style={[styles.toolbarPillText, { color: colors.textPrimary }]}>H1</Text>
-              </Pressable>
-
-              <View style={{ flex: 1 }} />
-              <Pressable style={styles.toolbarIcon} onPress={handlePickAttachment} hitSlop={8}>
-                <Paperclip size={18} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.composeFrom}>
-              <Text style={[styles.composeLabel, { color: colors.textSecondary }]}>From</Text>
-              <Text style={[styles.composeFromValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                {proxyEmail || '...'}
-              </Text>
-            </View>
-            <View style={styles.composeField}>
-              <Text style={[styles.composeLabel, { color: colors.textSecondary }]}>To</Text>
-              <TextInput
-                style={[styles.composeInput, { color: colors.textPrimary }]}
-                value={composeTo}
-                onChangeText={setComposeTo}
-                placeholder="recipient@example.com"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-            <View style={styles.composeField}>
-              <Text style={[styles.composeLabel, { color: colors.textSecondary }]}>Subject</Text>
-              <TextInput
-                style={[styles.composeInput, { color: colors.textPrimary }]}
-                value={composeSubject}
-                onChangeText={setComposeSubject}
-                placeholder="Subject"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            {(fileAttachments.length > 0 || attachments.length > 0) && (
-              <View style={[styles.attachmentsRow, { borderBottomColor: colors.border }]}>
-                {fileAttachments.map((f) => (
-                  <View key={f.uri} style={[styles.attachmentChip, { borderColor: colors.border }]}>
-                    <Text style={[styles.attachmentChipText, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {f.name}
-                    </Text>
-                  </View>
-                ))}
-                {attachments.map((asset) => (
-                  <Image
-                    key={asset.assetId ?? asset.uri}
-                    source={{ uri: asset.uri }}
-                    style={styles.attachmentThumb}
-                  />
-                ))}
+            <ScrollView
+              style={{ flex: 1 }}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
+              <View style={[styles.composeField, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.composeLabel, { color: colors.textTertiary }]}>From</Text>
+                <Text style={[styles.composeFromValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {proxyEmail || '...'}
+                </Text>
               </View>
-            )}
-
-            <TextInput
-              style={[
-                styles.composeBodyInput,
-                {
-                  fontSize:
-                    composeHeading === 'h1'
-                      ? 24
-                      : composeHeading === 'h2'
-                        ? 18
-                        : composeTextSize === 'sm'
-                          ? 13
-                          : composeTextSize === 'lg'
-                            ? 17
-                            : 15,
-                  fontWeight: composeHeading !== 'body' || composeBold ? '800' : '400',
-                  fontStyle: composeItalic ? 'italic' : 'normal',
-                  textDecorationLine: composeDecoration,
-                  color: colors.textPrimary,
-                  ...(forwardedHeader ? { minHeight: 60, maxHeight: 120 } : {}),
-                },
-              ]}
-              value={composeBody}
-              onChangeText={setComposeBody}
-              placeholder={composeMode === 'forward' ? 'Add a message (optional)' : 'Write your message…'}
-              placeholderTextColor={colors.textSecondary}
-              multiline
-              textAlignVertical="top"
-              autoFocus={composeMode === 'forward'}
-            />
-
-            {forwardedHeader !== '' && (
-              <View style={[styles.forwardedBlock, { borderTopColor: colors.border }]}>
-                <Text style={[styles.forwardedLabel, { color: colors.textTertiary }]}>---------- Forwarded message ----------</Text>
-                <Text style={[styles.forwardedMeta, { color: colors.textSecondary }]}>{forwardedHeader}</Text>
+              <View style={[styles.composeField, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.composeLabel, { color: colors.textTertiary }]}>To</Text>
+                <TextInput
+                  style={[styles.composeInput, { color: colors.textPrimary }]}
+                  value={composeTo}
+                  onChangeText={setComposeTo}
+                  placeholder=""
+                  placeholderTextColor={colors.textTertiary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
               </View>
-            )}
-          </View>
-        </DraggableBottomSheet>
+              <View style={[styles.composeField, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.composeLabel, { color: colors.textTertiary }]}>Subject</Text>
+                <TextInput
+                  style={[styles.composeInput, { color: colors.textPrimary }]}
+                  value={composeSubject}
+                  onChangeText={setComposeSubject}
+                  placeholder=""
+                  placeholderTextColor={colors.textTertiary}
+                />
+              </View>
+
+              {(fileAttachments.length > 0 || attachments.length > 0) && (
+                <View style={[styles.attachmentsRow, { borderBottomColor: colors.border }]}>
+                  {fileAttachments.map((f, i) => (
+                    <Pressable
+                      key={f.uri}
+                      style={[styles.attachmentChip, { borderColor: colors.border }]}
+                      onPress={() => setFileAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <Text style={[styles.attachmentChipText, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {f.name}
+                      </Text>
+                      <X size={12} color={colors.textTertiary} />
+                    </Pressable>
+                  ))}
+                  {attachments.map((asset, i) => (
+                    <Pressable
+                      key={asset.assetId ?? asset.uri}
+                      style={styles.attachmentThumbWrap}
+                      onPress={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <Image
+                        source={{ uri: asset.uri }}
+                        style={styles.attachmentThumb}
+                      />
+                      <View style={styles.attachmentRemoveBadge}>
+                        <X size={10} color="#FFF" />
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <TextInput
+                style={[
+                  styles.composeBodyInput,
+                  { color: colors.textPrimary },
+                  forwardedHeader ? { minHeight: 60, maxHeight: 120 } : { minHeight: 200 },
+                ]}
+                value={composeBody}
+                onChangeText={setComposeBody}
+                placeholder={composeMode === 'forward' ? 'Add a message (optional)' : 'Compose email'}
+                placeholderTextColor={colors.textTertiary}
+                multiline
+                textAlignVertical="top"
+              />
+
+              {forwardedHeader !== '' && (
+                <View style={[styles.forwardedBlock, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.forwardedLabel, { color: colors.textTertiary }]}>---------- Forwarded message ----------</Text>
+                  <Text style={[styles.forwardedMeta, { color: colors.textSecondary }]}>{forwardedHeader}</Text>
+                </View>
+              )}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </Modal>
 
         <Modal visible={showSidebar} animationType="fade" transparent>
           <Pressable style={styles.sidebarOverlay} onPress={() => setShowSidebar(false)}>
@@ -1325,6 +1579,7 @@ function MessagesScreen() {
                 </Text>
               </View>
 
+              <Text style={[styles.sidebarSectionLabel, { color: colors.textTertiary }]}>All inboxes</Text>
               {[
                 { key: 'inbox' as const, label: 'Inbox', icon: Inbox, count: unreadCount },
                 { key: 'starred' as const, label: 'Starred', icon: Star, count: 0 },
@@ -1366,6 +1621,94 @@ function MessagesScreen() {
           </Pressable>
         </Modal>
 
+        {/* Inbox Settings Modal */}
+        <Modal visible={showSettings} animationType="slide" transparent={false} onRequestClose={() => setShowSettings(false)}>
+          <View style={[styles.settingsContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+            <View style={[styles.settingsHeader, { borderBottomColor: colors.border }]}>
+              <Pressable onPress={() => setShowSettings(false)} hitSlop={10}>
+                <ArrowLeft size={22} color={colors.textPrimary} />
+              </Pressable>
+              <Text style={[styles.settingsTitle, { color: colors.textPrimary }]}>Inbox Settings</Text>
+              <Pressable onPress={handleSaveSettings} disabled={settingsLoading}>
+                {settingsLoading
+                  ? <ActivityIndicator size="small" color={colors.textPrimary} />
+                  : <Text style={[styles.settingsSaveBtn, { color: '#4F46E5' }]}>Save</Text>
+                }
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+              {/* User info */}
+              <View style={styles.settingsUserCard}>
+                <View style={[styles.settingsUserAvatar, { backgroundColor: getAvatarColor(userName || '') }]}>
+                  <Text style={styles.settingsUserInitials}>{getInitials(userName || '?')}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.settingsUserName, { color: colors.textPrimary }]}>{userName || 'User'}</Text>
+                  <Text style={[styles.settingsUserEmail, { color: colors.textSecondary }]}>{authEmail}</Text>
+                  <Text style={[styles.settingsProxyEmail, { color: colors.textTertiary }]}>{proxyEmail || '...'}</Text>
+                </View>
+              </View>
+
+              {/* Email Forwarding */}
+              <Text style={[styles.settingsSectionLabel, { color: colors.textTertiary }]}>EMAIL FORWARDING</Text>
+              <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.settingsRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Forward all emails</Text>
+                    <Text style={[styles.settingsRowDesc, { color: colors.textSecondary }]}>
+                      {inboxSettings.forward_to_email
+                        ? `Forwarding to ${inboxSettings.forward_to_email}`
+                        : `Will forward to ${authEmail || 'your sign-up email'}`
+                      }
+                    </Text>
+                  </View>
+                  <Switch
+                    value={!!inboxSettings.forward_to_email}
+                    onValueChange={(val) => {
+                      const target = authEmail || null;
+                      if (val && !target) {
+                        Alert.alert('No email found', 'Could not find your sign-up email. Please sign in again.');
+                        return;
+                      }
+                      setInboxSettings((prev) => ({
+                        ...prev,
+                        forward_to_email: val ? target : null,
+                      }));
+                    }}
+                    trackColor={{ false: colors.border, true: '#4F46E5' }}
+                  />
+                </View>
+              </View>
+
+              {/* Reply Behavior */}
+              <Text style={[styles.settingsSectionLabel, { color: colors.textTertiary }]}>REPLY BEHAVIOR</Text>
+              <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Pressable
+                  style={[styles.settingsRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+                  onPress={() => setInboxSettings((prev) => ({ ...prev, reply_mode: 'in_app' }))}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Reply in app</Text>
+                    <Text style={[styles.settingsRowDesc, { color: colors.textSecondary }]}>Compose replies directly in the inbox</Text>
+                  </View>
+                  {inboxSettings.reply_mode === 'in_app' && <Check size={20} color="#4F46E5" />}
+                </Pressable>
+                <Pressable
+                  style={styles.settingsRow}
+                  onPress={() => setInboxSettings((prev) => ({ ...prev, reply_mode: 'forward_to_email' }))}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Forward to email</Text>
+                    <Text style={[styles.settingsRowDesc, { color: colors.textSecondary }]}>Opens your default email app to reply</Text>
+                  </View>
+                  {inboxSettings.reply_mode === 'forward_to_email' && <Check size={20} color="#4F46E5" />}
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
+
         {detailModal}
       </View>
     </TabTransitionWrapper>
@@ -1375,53 +1718,63 @@ function MessagesScreen() {
 export default MessagesScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
-  brandHeader: { alignItems: 'center', paddingTop: 4, paddingBottom: 2 },
-  brandLogo: { height: 32, width: 240, opacity: 0.85 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  menuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: '#020617',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#111827',
-  },
-  headerTitle: { fontSize: 28, fontWeight: '800' as const, color: '#F9FAFB' },
-  headerSubtitle: { fontSize: 13, color: '#9CA3AF', fontWeight: '600' as const, marginTop: 1 },
-  refreshBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: '#020617',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#111827',
-  },
-  searchContainer: {
+  container: { flex: 1 },
+  searchPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#020617',
-    marginHorizontal: 20,
-    marginBottom: 8,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 28,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    gap: 4,
     borderWidth: 1,
-    borderColor: '#111827',
   },
-  searchInput: { flex: 1, fontSize: 15, color: '#F9FAFB', padding: 0 },
+  searchPillIcon: { padding: 8 },
+  searchPillInput: { flex: 1, fontSize: 16, padding: 0 },
+  searchPillAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchPillAvatarText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  selectBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 28,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  selectBarCount: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    marginLeft: 8,
+    flex: 1,
+  },
+  selectBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  selectBarBtn: {
+    padding: 10,
+  },
+  categoryTabsScroll: { flexGrow: 0, marginBottom: 4 },
+  categoryTabsContainer: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  categoryTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 0,
+  },
+  categoryTabText: { fontSize: 13, fontWeight: '600' },
 
   emailItem: {
     flexDirection: 'row',
@@ -1436,16 +1789,16 @@ const styles = StyleSheet.create({
   avatarInitials: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   emailContent: { flex: 1, marginLeft: 12, marginRight: 8 },
   emailTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  emailSender: { fontSize: 14, color: '#F9FAFB', flex: 1 },
-  emailSenderUnread: { fontWeight: '700' as const, color: '#FFFFFF' },
-  threadCountBadge: { fontSize: 12, fontWeight: '600' as const, marginLeft: 4, marginRight: 2 },
-  emailTime: { fontSize: 11, color: '#6B7280', marginLeft: 8 },
-  emailSubject: { fontSize: 14, color: '#E5E7EB', marginTop: 2 },
-  emailSubjectUnread: { fontWeight: '700' as const, color: '#FFFFFF' },
-  emailPreview: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  starBtnRight: { padding: 6, marginLeft: 4 },
+  emailSender: { fontSize: 14, flex: 1 },
+  emailSenderUnread: { fontWeight: '700' as const },
+  threadCountBadge: { fontSize: 11, fontWeight: '500' as const, marginLeft: 2, marginRight: 0 },
+  emailTime: { fontSize: 11, marginLeft: 8 },
+  emailSubject: { fontSize: 14, marginTop: 2 },
+  emailSubjectUnread: { fontWeight: '700' as const },
+  emailPreview: { fontSize: 13, marginTop: 2 },
+
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4F46E5' },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#111827', marginLeft: 68 },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 68 },
   swipeActionsWrap: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -1460,9 +1813,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  swipeArchiveBtn: { backgroundColor: '#2563EB' },
-  swipeDeleteBtn: { backgroundColor: '#DC2626' },
-  swipeActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' as const },
+  swipeArchiveBtn: { backgroundColor: '#22C55E' },
+
   emptyContainer: { flexGrow: 1 },
   emptyState: {
     flex: 1,
@@ -1472,8 +1824,17 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 40,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700' as const, color: '#F9FAFB', marginTop: 8, textAlign: 'center' },
-  emptyText: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 20 },
+  emptyIllustration: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(245,158,11,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '700' as const, marginTop: 8, textAlign: 'center' },
+  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1487,7 +1848,7 @@ const styles = StyleSheet.create({
   retryBtnText: { fontSize: 14, fontWeight: '600' as const, color: '#FFFFFF' },
 
   sidebarOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', flexDirection: 'row' },
-  sidebarContent: { width: 280, backgroundColor: '#020617', paddingTop: 60, paddingHorizontal: 16 },
+  sidebarContent: { width: 280, paddingTop: 60, paddingHorizontal: 16 },
   sidebarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1495,19 +1856,32 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 8,
   },
-  sidebarTitle: { fontSize: 20, fontWeight: '800' as const, color: '#F9FAFB' },
+  sidebarTitle: { fontSize: 20, fontWeight: '800' as const },
+  sidebarSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
   sidebarItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingHorizontal: 12,
+    paddingLeft: 28,
+    paddingRight: 12,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderTopRightRadius: 28,
+    borderBottomRightRadius: 28,
     marginBottom: 4,
+    marginLeft: -16,
   },
   sidebarItemActive: { backgroundColor: '#111827' },
-  sidebarItemText: { flex: 1, fontSize: 15, fontWeight: '600' as const, color: '#E5E7EB' },
-  sidebarItemTextActive: { color: '#FFFFFF' },
+  sidebarItemText: { flex: 1, fontSize: 15, fontWeight: '600' as const },
+  sidebarItemTextActive: {},
   sidebarBadge: { backgroundColor: '#4F46E5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
   sidebarBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#FFF' },
 
@@ -1515,11 +1889,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#111827',
   },
-  proxySectionTitle: { fontSize: 14, fontWeight: '700', color: '#E5E7EB', marginBottom: 8 },
+  proxySectionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   proxyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  proxyAddress: { flex: 1, fontSize: 14, color: '#F9FAFB', fontFamily: 'monospace' },
+  proxyAddress: { flex: 1, fontSize: 14, fontFamily: 'monospace' },
   copyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1528,157 +1901,65 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#111827',
-    backgroundColor: '#020617',
   },
   copyBtnCopied: { backgroundColor: '#4ADE80', borderColor: '#4ADE80' },
-  copyBtnText: { fontSize: 12, fontWeight: '600', color: '#E5E7EB' },
-  proxyHint: { fontSize: 12, color: '#6B7280', marginTop: 6 },
+  copyBtnText: { fontSize: 12, fontWeight: '600' },
+  proxyHint: { fontSize: 12, marginTop: 6 },
 
   composeFab: {
     position: 'absolute',
     bottom: 24,
     right: 20,
-    width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#4F46E5',
-    justifyContent: 'center',
-    alignItems: 'center',
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
-  },
-  composeOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  composeSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '80%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderBottomWidth: 0,
     overflow: 'hidden',
   },
-  composeSheetInner: { flex: 1 },
-  composeHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#6B7280',
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 4,
+  composeFabInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    gap: 10,
   },
+  composeFabText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+  },
+  composeFullScreen: { flex: 1 },
   composeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#111827',
   },
-  composeTitle: { fontSize: 18, fontWeight: '700', color: '#F9FAFB' },
-  composeIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+  composeBackBtn: {
+    padding: 8,
   },
-  sendBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#4F46E5',
-    width: 44,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: 'center',
+  composeHeaderIcon: {
+    padding: 8,
   },
-  sendBtnDisabled: { opacity: 0.4 },
-  sendBtnText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
-  composeFrom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#111827',
+  composeSendBtn: {
+    padding: 8,
+    marginLeft: 4,
   },
   composeField: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#111827',
   },
-  composeLabel: { fontSize: 14, color: '#6B7280', width: 70 },
-  composeFromValue: { flex: 1, fontSize: 14, color: '#E5E7EB' },
-  composeInput: { flex: 1, fontSize: 14, color: '#F9FAFB', padding: 0 },
-  composeToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#111827',
-    flexWrap: 'wrap',
-  },
-  toolbarIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  toolbarIconActive: {
-    backgroundColor: 'rgba(99,102,241,0.25)',
-    borderColor: 'rgba(99,102,241,0.45)',
-  },
-  toolbarIconText: { fontSize: 13, fontWeight: '800', color: '#E5E7EB' },
-  toolbarPill: {
-    paddingHorizontal: 10,
-    height: 34,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  toolbarPillActive: {
-    backgroundColor: 'rgba(99,102,241,0.25)',
-    borderColor: 'rgba(99,102,241,0.45)',
-  },
-  toolbarPillText: { fontSize: 12, fontWeight: '700', color: '#E5E7EB' },
-  toolbarButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: '#111827',
-  },
-  toolbarButtonActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
-  toolbarButtonText: { fontSize: 13, fontWeight: '600', color: '#E5E7EB' },
-  toolbarSpacer: { flex: 1 },
+  composeLabel: { fontSize: 15, width: 56 },
+  composeFromValue: { flex: 1, fontSize: 15 },
+  composeInput: { flex: 1, fontSize: 15, padding: 0 },
+
   attachmentsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -1688,27 +1969,42 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   attachmentChip: {
-    maxWidth: 140,
+    maxWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(128,128,128,0.08)',
   },
-  attachmentChipText: { fontSize: 12, fontWeight: '600' as const },
+  attachmentChipText: { fontSize: 12, fontWeight: '600' as const, flex: 1 },
+  attachmentThumbWrap: {
+    position: 'relative' as const,
+  },
   attachmentThumb: {
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#0B1120',
+  },
+  attachmentRemoveBadge: {
+    position: 'absolute' as const,
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   composeBodyInput: {
     flex: 1,
-    fontSize: 15,
-    color: '#F9FAFB',
+    fontSize: 16,
     paddingHorizontal: 16,
     paddingTop: 14,
-    lineHeight: 22,
+    lineHeight: 24,
   },
 
   gmailDetailContainer: { flex: 1 },
@@ -1728,13 +2024,17 @@ const styles = StyleSheet.create({
   gmailSenderAvatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   gmailSenderInitials: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   gmailSenderInfo: { flex: 1 },
-  gmailSenderNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gmailSenderNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   gmailSenderName: { fontSize: 15, fontWeight: '700' as const, flex: 1 },
-  gmailDate: { fontSize: 12, marginLeft: 8 },
-  gmailToMe: { fontSize: 13, marginTop: 1 },
+  gmailDate: { fontSize: 12, marginLeft: 4 },
+  gmailToCompact: { fontSize: 13, marginTop: 1 },
+  gmailExpandedHeader: { marginTop: 6 },
+  gmailHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 3 },
+  gmailHeaderLabel: { fontSize: 12, width: 42 },
+  gmailHeaderValue: { fontSize: 12, flex: 1 },
   gmailBodyWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
   gmailBody: { fontSize: 15, lineHeight: 22, paddingBottom: 16 },
-  gmailSenderRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14, gap: 12 },
+  gmailSenderRow: { flexDirection: 'row', alignItems: 'flex-start', paddingBottom: 14, gap: 12 },
   threadMsgSeparator: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 16 },
   gmailBottomBar: {
     flexDirection: 'row',
@@ -1771,7 +2071,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   inlineReplyHeaderLeft: {
     flexDirection: 'row',
@@ -1780,6 +2079,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inlineReplyTo: { fontSize: 13, flex: 1 },
+  inlineQuotedBlock: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+  },
+  inlineQuotedMeta: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  inlineQuotedText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
   inlineReplyInput: {
     fontSize: 15,
     lineHeight: 22,
@@ -1802,7 +2116,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(128,128,128,0.15)',
   },
   inlineReplySendBtnActive: {
     backgroundColor: '#4F46E5',
@@ -1828,4 +2142,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
+
+  // Settings
+  settingsContainer: { flex: 1 },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  settingsTitle: { fontSize: 18, fontWeight: '700' as const },
+  settingsSaveBtn: { fontSize: 15, fontWeight: '700' as const },
+  settingsUserCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 24,
+  },
+  settingsUserAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsUserInitials: { color: '#FFF', fontSize: 20, fontWeight: '700' as const },
+  settingsUserName: { fontSize: 16, fontWeight: '700' as const },
+  settingsUserEmail: { fontSize: 13, marginTop: 2 },
+  settingsProxyEmail: { fontSize: 12, marginTop: 1, fontFamily: 'monospace' },
+  settingsSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  settingsCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  settingsRowTitle: { fontSize: 15, fontWeight: '600' as const },
+  settingsRowDesc: { fontSize: 13, marginTop: 2, lineHeight: 18 },
 });

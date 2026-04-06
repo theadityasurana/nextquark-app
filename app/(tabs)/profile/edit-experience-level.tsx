@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Check, Briefcase, GraduationCap, Rocket, TrendingUp, Award, Crown } from 'lucide-react-native';
+import { ArrowLeft, Check, Briefcase, GraduationCap, Rocket, TrendingUp, Award, Crown } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -42,6 +42,7 @@ export default function EditExperienceLevelScreen() {
       </View>
 
       <View style={styles.content}>
+        <Text style={[styles.helperText, { color: colors.textTertiary }]}>Select the level that best describes your current professional experience. This helps us match you with roles at the right seniority.</Text>
         {LEVELS.map(({ key, label, icon: Icon, color }) => {
           const sel = selected === key;
           return (
@@ -79,6 +80,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700' },
   content: { flex: 1, padding: 16, gap: 10 },
+  helperText: { fontSize: 13, lineHeight: 19, marginBottom: 6 },
   option: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 16, borderRadius: 14, borderWidth: 1,

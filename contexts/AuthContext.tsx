@@ -2,15 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
-import { UserProfile } from '@/types';
+import { UserProfile, Project, UserDocument } from '@/types';
 import { supabase, getProfilePictureUrl, handleStaleSession } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
-import { registerForPushNotifications, savePushToken, scheduleAllNotifications, sendWelcomeNotification } from '@/lib/notifications';
+import { registerForPushNotifications, savePushToken, scheduleAllNotifications } from '@/lib/notifications';
 import { getOrCreateProxyEmail } from '@/lib/resend';
 
 const AUTH_KEY = 'nextquark_auth';
 const ONBOARDING_KEY = 'nextquark_onboarding';
 const SWIPED_JOBS_KEY = 'nextquark_swiped_jobs';
+const WELCOME_NOTIF_SENT_KEY = 'nextquark_welcome_notif_sent';
 
 // Only cache the most recent swiped IDs locally to avoid CursorWindow overflow.
 // The full list is persisted in Supabase.
@@ -40,6 +41,8 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
   const certifications = Array.isArray(profile.certifications) ? profile.certifications : [];
   const achievements = Array.isArray(profile.achievements) ? profile.achievements : [];
   const favoriteCompanies = Array.isArray(profile.favorite_companies) ? profile.favorite_companies : [];
+  const projects = Array.isArray(profile.projects) ? profile.projects : [];
+  const documents = Array.isArray(profile.documents) ? profile.documents : [];
 
   let completionScore = 0;
   const total = 10;
@@ -105,6 +108,8 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     greenhousePassword: profile.greenhouse_password || undefined,
     taleoEmail: profile.taleo_email || undefined,
     taleoPassword: profile.taleo_password || undefined,
+    projects,
+    documents,
   };
 }
 
@@ -129,11 +134,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         }
       }).catch(err => console.log('Push notification registration error:', err));
 
-      // Schedule all local notifications (morning, evening, motivational, festivals)
-      supabase.from('profiles').select('first_name').eq('id', userId).single().then(({ data: p }) => {
-        const name = p?.first_name || '';
-        scheduleAllNotifications(name);
-      }).catch(() => {});
+      // Schedule recurring notifications only for users who completed onboarding
+      Promise.resolve(
+        supabase.from('profiles').select('first_name, is_onboarding_complete').eq('id', userId).single().then(({ data: p }) => {
+          if (p?.is_onboarding_complete) {
+            const name = p?.first_name || '';
+            scheduleAllNotifications(name);
+          }
+        })
+      ).catch(() => {});
 
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -279,7 +288,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setOnboardingData(defaultOnboardingData);
       setUserProfile(null);
       setSwipedJobIds([]);
-      await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]).catch(() => {});
+      await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]).catch(() => {});
       setIsLoading(false);
     };
 
@@ -403,10 +412,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setOnboardingData(freshOnboardingData);
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(freshOnboardingData));
 
-      // Send welcome notification for first-time signup
-      const parts2 = name.split(' ');
-      sendWelcomeNotification(parts2[0] || '').catch(() => {});
-      scheduleAllNotifications(parts2[0] || '').catch(() => {});
+      // Welcome notification and scheduled notifications are now triggered
+      // when the user reaches the home screen after completing onboarding.
 
       return { success: true, userId: data.user.id };
     } catch (e: any) {
@@ -549,6 +556,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           education: data.education,
           work_authorization_status: data.workAuthorizationStatus || null,
           heard_about_us: data.heardAboutUs || null,
+          user_type: data.userType || null,
           onboarding_data: data,
           is_onboarding_complete: true,
           updated_at: new Date().toISOString(),
@@ -665,6 +673,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (profileData.greenhousePassword !== undefined) dbData.greenhouse_password = profileData.greenhousePassword || null;
       if (profileData.taleoEmail !== undefined) dbData.taleo_email = profileData.taleoEmail || null;
       if (profileData.taleoPassword !== undefined) dbData.taleo_password = profileData.taleoPassword || null;
+      if (profileData.projects !== undefined) dbData.projects = profileData.projects;
+      if (profileData.documents !== undefined) dbData.documents = profileData.documents;
 
       const { error } = await supabase.from('profiles').upsert({
         id: supabaseUserId,
@@ -802,7 +812,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     } catch (e) {
       if (__DEV__) console.log('Supabase signOut error (non-critical):', e);
     }
-    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]);
     setAuthState(defaultAuthState);
     setOnboardingData(defaultOnboardingData);
     setUserProfile(null);
@@ -832,7 +842,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     } catch (e) {
       if (__DEV__) console.log('Delete account error:', e);
     }
-    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]);
     setAuthState(defaultAuthState);
     setOnboardingData(defaultOnboardingData);
     setUserProfile(null);

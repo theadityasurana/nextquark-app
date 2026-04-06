@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Check, X, Trophy } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft, Plus, Check, X, Trophy } from '@/components/ProfileIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import { Achievement } from '@/types';
+import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
 export default function EditAchievementsScreen() {
   const insets = useSafeAreaInsets();
@@ -14,6 +15,11 @@ export default function EditAchievementsScreen() {
   const { userProfile: supabaseProfile, saveProfile } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
+  const params = useLocalSearchParams<{ wizardMode?: string; wizardIndex?: string; wizardTotal?: string }>();
+  const isWizard = params.wizardMode === '1';
+  const wizardIndex = parseInt(params.wizardIndex || '0', 10);
+  const wizardTotal = parseInt(params.wizardTotal || '0', 10);
+  const incompleteSteps = isWizard ? getIncompleteSteps(supabaseProfile) : [];
 
   const [items, setItems] = useState<Achievement[]>(supabaseProfile?.achievements || []);
   const [editing, setEditing] = useState<Achievement | null>(null);
@@ -39,6 +45,7 @@ export default function EditAchievementsScreen() {
   };
 
   const handleSaveAll = async () => { if (supabaseProfile) await saveProfile({ ...supabaseProfile, achievements: items }); router.back(); };
+  const handleSaveOnly = async () => { if (supabaseProfile) await saveProfile({ ...supabaseProfile, achievements: items }); };
 
   if (showForm) {
     return (
@@ -86,6 +93,14 @@ export default function EditAchievementsScreen() {
           </Pressable>
         ))}
       </ScrollView>
+      {isWizard && (
+        <WizardFooter
+          wizardIndex={wizardIndex}
+          wizardTotal={wizardTotal}
+          incompleteSteps={incompleteSteps}
+          onSaveCurrent={handleSaveOnly}
+        />
+      )}
     </View>
   );
 }

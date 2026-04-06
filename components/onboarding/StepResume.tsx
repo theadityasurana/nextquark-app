@@ -1,20 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Platform, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Platform, Alert, ScrollView, Dimensions } from 'react-native';
 import { Upload, FileText } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
+import { WebView } from 'react-native-webview';
 import { StepProps } from '@/types/onboarding';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, getStorageUploadUrl } from '@/lib/supabase';
-
-type UserType = 'fresher' | 'job_switch' | null;
+import { supabase, getStorageUploadUrl, getStorageUrl } from '@/lib/supabase';
 
 export default function StepResume({ data, onUpdate, onNext }: StepProps) {
   const { supabaseUserId } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileName, setFileName] = useState('Resume.pdf');
-  const [userType, setUserType] = useState<UserType>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -170,24 +168,32 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
 
   const progressWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
+  const handleUserTypeSelect = (type: 'fresher' | 'job_switch') => {
+    onUpdate({ userType: data.userType === type ? '' : type });
+  };
+
+  const handleReupload = () => {
+    onUpdate({ resumeUri: null });
+  };
+
   const renderUserTypeSelector = () => (
     <View style={styles.userTypeSection}>
       <Text style={styles.userTypeTitle}>What describes you best?</Text>
       <View style={styles.userTypeRow}>
         <Pressable
-          style={[styles.userTypeOption, userType === 'fresher' && styles.userTypeSelected]}
-          onPress={() => setUserType('fresher')}
+          style={[styles.userTypeOption, data.userType === 'fresher' && styles.userTypeSelected]}
+          onPress={() => handleUserTypeSelect('fresher')}
         >
           <Text style={styles.userTypeEmoji}>🎓</Text>
-          <Text style={[styles.userTypeLabel, userType === 'fresher' && styles.userTypeLabelSelected]}>Fresher</Text>
+          <Text style={[styles.userTypeLabel, data.userType === 'fresher' && styles.userTypeLabelSelected]}>Fresher</Text>
           <Text style={styles.userTypeDesc}>New to the workforce</Text>
         </Pressable>
         <Pressable
-          style={[styles.userTypeOption, userType === 'job_switch' && styles.userTypeSelected]}
-          onPress={() => setUserType('job_switch')}
+          style={[styles.userTypeOption, data.userType === 'job_switch' && styles.userTypeSelected]}
+          onPress={() => handleUserTypeSelect('job_switch')}
         >
           <Text style={styles.userTypeEmoji}>🔄</Text>
-          <Text style={[styles.userTypeLabel, userType === 'job_switch' && styles.userTypeLabelSelected]}>Job Switch</Text>
+          <Text style={[styles.userTypeLabel, data.userType === 'job_switch' && styles.userTypeLabelSelected]}>Job Switch</Text>
           <Text style={styles.userTypeDesc}>Looking for a change</Text>
         </Pressable>
       </View>
@@ -224,25 +230,28 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
   }
 
   if (data.resumeUri) {
+    const pdfUrl = supabaseUserId
+      ? getStorageUrl('resumes', `${supabaseUserId}/${data.resumeUri}`)
+      : '';
+    const viewerUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pdfUrl)}`;
+
     return (
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>
-            <Text style={styles.emoji}>✨</Text>
-            <Text style={styles.mainTitle}>Resume uploaded!</Text>
-            <Text style={styles.subtitle}>Your profile has been enhanced</Text>
-            <View style={styles.fileCard}>
-              <FileText size={20} color="#10B981" />
-              <View style={styles.fileInfo}>
-                <Text style={styles.fileName}>{data.resumeUri}</Text>
-                <Text style={[styles.fileSize, { color: '#10B981' }]}>Processed ✓</Text>
-              </View>
-            </View>
-            {renderUserTypeSelector()}
-          </View>
-        </ScrollView>
+        <Text style={styles.resumePreviewTitle}>Your Resume</Text>
+        <View style={styles.resumeWebViewContainer}>
+          <WebView
+            source={{ uri: viewerUrl }}
+            style={styles.resumeWebView}
+            startInLoadingState
+            scalesPageToFit
+          />
+        </View>
+        {renderUserTypeSelector()}
         <Pressable style={styles.nextButton} onPress={onNext} testID="next-button">
           <Text style={styles.nextButtonText}>Looks Good! →</Text>
+        </Pressable>
+        <Pressable style={styles.reuploadButton} onPress={handleReupload}>
+          <Text style={styles.reuploadText}>Upload a different resume</Text>
         </Pressable>
       </Animated.View>
     );
@@ -258,24 +267,6 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
           </View>
           <Text style={styles.subtitle}>Upload your resume and we'll auto-fill your profile details</Text>
 
-          <View style={styles.autofillInfoCard}>
-            <View style={styles.autofillRow}>
-              <Text style={styles.autofillIcon}>✨</Text>
-              <Text style={styles.autofillText}>Auto-fills work experience</Text>
-            </View>
-            <View style={styles.autofillRow}>
-              <Text style={styles.autofillIcon}>🎓</Text>
-              <Text style={styles.autofillText}>Auto-fills education details</Text>
-            </View>
-            <View style={styles.autofillRow}>
-              <Text style={styles.autofillIcon}>⚡</Text>
-              <Text style={styles.autofillText}>Extracts skills automatically</Text>
-            </View>
-            <View style={styles.autofillRow}>
-              <Text style={styles.autofillIcon}>🚀</Text>
-              <Text style={styles.autofillText}>Saves you 10+ minutes of typing</Text>
-            </View>
-          </View>
           <Pressable style={styles.uploadArea} onPress={handlePickDocument}>
             <View style={styles.uploadInner}>
               <Upload size={32} color="#9E9E9E" />
@@ -283,11 +274,6 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
               <Text style={styles.uploadFormats}>PDF, DOC, DOCX • Max 10MB</Text>
             </View>
           </Pressable>
-
-          <View style={styles.tipRow}>
-            <Text style={styles.tipIcon}>💡</Text>
-            <Text style={styles.tipText}>Uploading a resume boosts your profile strength by 15%</Text>
-          </View>
 
           {renderUserTypeSelector()}
         </View>
@@ -314,16 +300,8 @@ const styles = StyleSheet.create({
   uploadText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' as const },
   uploadFormats: { color: '#9E9E9E', fontSize: 12 },
 
-  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20 },
-  tipIcon: { fontSize: 14 },
-  tipText: { color: '#9E9E9E', fontSize: 13, flex: 1 },
-  autofillInfoCard: {
-    backgroundColor: '#1A1A1A', borderRadius: 14, padding: 16, marginBottom: 20,
-    borderWidth: 1, borderColor: '#333333',
-  },
-  autofillRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  autofillIcon: { fontSize: 16 },
-  autofillText: { fontSize: 14, color: '#E0E0E0', fontWeight: '500' as const },
+
+
   skipButton: { alignItems: 'center', paddingVertical: 12 },
   skipText: { color: '#9E9E9E', fontSize: 14 },
   processingEmoji: { fontSize: 48, marginBottom: 20 },
@@ -348,23 +326,28 @@ const styles = StyleSheet.create({
   stepText: { color: '#9E9E9E', fontSize: 14 },
   nextButton: {
     height: 56, borderRadius: 16, backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center', marginTop: 16,
   },
   nextButtonText: { fontSize: 17, fontWeight: '700' as const, color: '#111111' },
+  reuploadButton: { alignItems: 'center', paddingVertical: 14 },
+  reuploadText: { color: '#9E9E9E', fontSize: 14, textDecorationLine: 'underline' as const },
+  resumePreviewTitle: { fontSize: 20, fontWeight: '800' as const, color: '#FFFFFF', marginTop: 12, marginBottom: 12 },
+  resumeWebViewContainer: { flex: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 16 },
+  resumeWebView: { flex: 1, backgroundColor: '#1A1A1A' },
 
   // User type selector
   userTypeSection: { marginTop: 12 },
-  userTypeTitle: { fontSize: 18, fontWeight: '800' as const, color: '#FFFFFF', marginBottom: 14 },
-  userTypeRow: { flexDirection: 'row', gap: 12 },
+  userTypeTitle: { fontSize: 16, fontWeight: '800' as const, color: '#FFFFFF', marginBottom: 10 },
+  userTypeRow: { flexDirection: 'row', gap: 10 },
   userTypeOption: {
-    flex: 1, backgroundColor: '#1A1A1A', borderRadius: 16, padding: 16,
-    alignItems: 'center', borderWidth: 2, borderColor: '#333333',
+    flex: 1, backgroundColor: '#1A1A1A', borderRadius: 12, padding: 10,
+    alignItems: 'center', borderWidth: 1.5, borderColor: '#333333',
   },
   userTypeSelected: { borderColor: '#FFFFFF', backgroundColor: '#222222' },
-  userTypeEmoji: { fontSize: 28, marginBottom: 8 },
-  userTypeLabel: { fontSize: 15, fontWeight: '700' as const, color: '#CCCCCC', marginBottom: 4 },
+  userTypeEmoji: { fontSize: 20, marginBottom: 4 },
+  userTypeLabel: { fontSize: 13, fontWeight: '700' as const, color: '#CCCCCC', marginBottom: 2 },
   userTypeLabelSelected: { color: '#FFFFFF' },
-  userTypeDesc: { fontSize: 12, color: '#777777', textAlign: 'center' },
+  userTypeDesc: { fontSize: 10, color: '#777777', textAlign: 'center' },
 
 
 });

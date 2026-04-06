@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Check, Star, X, Search, MapPin, Plus, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, Check, Star, X, Search, MapPin, Plus, ChevronRight, Briefcase, Wifi, Building2, Globe, Shield, Heart, Users, AlertCircle } from '@/components/ProfileIcons';
 import { Image } from 'expo-image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -12,9 +12,20 @@ import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboar
 import { ROLE_CATEGORIES, CATEGORY_ROLES } from '@/constants/roles';
 import { supabase, getCompanyLogoStorageUrl } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
+import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
-const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
-const WORK_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
+const JOB_TYPE_OPTIONS = [
+  { key: 'Full-time', label: 'Full-time', icon: Briefcase, color: '#1E88E5' },
+  { key: 'Part-time', label: 'Part-time', icon: Globe, color: '#7C4DFF' },
+  { key: 'Internship', label: 'Internship', icon: Star, color: '#F59E0B' },
+  { key: 'Contract', label: 'Contract', icon: Shield, color: '#EF4444' },
+  { key: 'Freelance', label: 'Freelance', icon: Globe, color: '#10B981' },
+];
+const WORK_MODE_OPTIONS = [
+  { key: 'Remote', label: 'Remote', icon: Wifi, color: '#10B981' },
+  { key: 'Onsite', label: 'Onsite', icon: Building2, color: '#1E88E5' },
+  { key: 'Hybrid', label: 'Hybrid', icon: Globe, color: '#F59E0B' },
+];
 const VETERAN_OPTIONS = ['I am not a protected veteran', 'I am a veteran', 'I am a disabled veteran', 'I am a recently separated veteran', 'I am an active duty wartime or campaign badge veteran', 'I am an Armed Forces service medal veteran', 'Prefer not to disclose'];
 const DISABILITY_OPTIONS = ['Yes, I have a disability (or previously had a disability)', 'No, I do not have a disability', 'Prefer not to disclose'];
 const ETHNICITY_OPTIONS = ['White', 'Hispanic or Latino', 'Black or African American', 'Asian', 'Southeast Asian', 'Native Hawaiian or Other Pacific Islander', 'American Indian or Alaska Native', 'Prefer not to disclose'];
@@ -25,11 +36,15 @@ type SectionType = 'coverletter' | 'jobrequirements' | 'equalopportunity' | 'top
 export default function EditSectionScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ section: string }>();
+  const params = useLocalSearchParams<{ section: string; wizardMode?: string; wizardIndex?: string; wizardTotal?: string }>();
   const section = (params.section || 'coverletter') as SectionType;
+  const isWizard = params.wizardMode === '1';
+  const wizardIndex = parseInt(params.wizardIndex || '0', 10);
+  const wizardTotal = parseInt(params.wizardTotal || '0', 10);
   const { userProfile: supabaseProfile, saveProfile } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
+  const incompleteSteps = isWizard ? getIncompleteSteps(supabaseProfile) : [];
 
   // Cover letter
   const [coverLetter, setCoverLetter] = useState(supabaseProfile?.coverLetter || '');
@@ -111,6 +126,16 @@ export default function EditSectionScreen() {
     router.back();
   };
 
+  const handleSaveOnly = async () => {
+    if (!supabaseProfile) return;
+    const updates: any = { ...supabaseProfile };
+    switch (section) {
+      case 'topskills': updates.skills = skills; updates.topSkills = topSkills; break;
+      default: break;
+    }
+    await saveProfile(updates);
+  };
+
   const toggleTopSkill = (skill: string) => {
     if (topSkills.includes(skill)) { setTopSkills(prev => prev.filter(s => s !== skill)); }
     else if (topSkills.length < 5) { setTopSkills(prev => [...prev, skill]); }
@@ -135,6 +160,7 @@ export default function EditSectionScreen() {
       case 'jobrequirements':
         return (
           <>
+            <Text style={[s.helperText, { color: colors.textTertiary }]}>This information helps match you with jobs that fit your work authorization and specific requirements. Employers use this to filter candidates early — filling it out accurately saves you time.</Text>
             <Text style={[s.label, { color: colors.textSecondary }]}>Work Authorization Status</Text>
             <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. US Citizen, H1B..." placeholderTextColor={colors.textTertiary} value={workAuth} onChangeText={setWorkAuth} />
             <Text style={[s.label, { color: colors.textSecondary }]}>Job Requirements (comma-separated)</Text>
@@ -144,34 +170,59 @@ export default function EditSectionScreen() {
       case 'equalopportunity':
         return (
           <>
+            <Text style={[s.helperText, { color: colors.textTertiary }]}>This information is collected for equal employment opportunity compliance. It is kept confidential and will not be used in hiring decisions. You can choose "Prefer not to disclose" for any field.</Text>
             <Text style={[s.sectionLabel, { color: colors.textSecondary }]}>Veteran Status</Text>
-            {VETERAN_OPTIONS.map(o => (
-              <Pressable key={o} style={[s.optionRow, { backgroundColor: veteran === o ? colors.secondary : colors.surface }]} onPress={() => setVeteran(o)}>
-                <Text style={[s.optionText, { color: veteran === o ? colors.surface : colors.textPrimary }]}>{o}</Text>
-                {veteran === o && <Check size={16} color={colors.surface} />}
-              </Pressable>
-            ))}
+            {VETERAN_OPTIONS.map(o => {
+              const sel = veteran === o;
+              return (
+                <Pressable key={o} style={[s.levelOption, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setVeteran(o)}>
+                  <View style={[s.levelIconWrap, { backgroundColor: '#8B5CF620' }]}>
+                    <Shield size={18} color="#8B5CF6" />
+                  </View>
+                  <Text style={[s.levelOptionText, { color: sel ? colors.surface : colors.textPrimary }]}>{o}</Text>
+                  {sel && <Check size={16} color={colors.surface} />}
+                </Pressable>
+              );
+            })}
             <Text style={[s.sectionLabel, { color: colors.textSecondary, marginTop: 16 }]}>Disability Status</Text>
-            {DISABILITY_OPTIONS.map(o => (
-              <Pressable key={o} style={[s.optionRow, { backgroundColor: disability === o ? colors.secondary : colors.surface }]} onPress={() => setDisability(o)}>
-                <Text style={[s.optionText, { color: disability === o ? colors.surface : colors.textPrimary }]}>{o}</Text>
-                {disability === o && <Check size={16} color={colors.surface} />}
-              </Pressable>
-            ))}
+            {DISABILITY_OPTIONS.map(o => {
+              const sel = disability === o;
+              return (
+                <Pressable key={o} style={[s.levelOption, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setDisability(o)}>
+                  <View style={[s.levelIconWrap, { backgroundColor: '#EF444420' }]}>
+                    <Heart size={18} color="#EF4444" />
+                  </View>
+                  <Text style={[s.levelOptionText, { color: sel ? colors.surface : colors.textPrimary }]}>{o}</Text>
+                  {sel && <Check size={16} color={colors.surface} />}
+                </Pressable>
+              );
+            })}
             <Text style={[s.sectionLabel, { color: colors.textSecondary, marginTop: 16 }]}>Ethnicity</Text>
-            {ETHNICITY_OPTIONS.map(o => (
-              <Pressable key={o} style={[s.optionRow, { backgroundColor: ethnicity === o ? colors.secondary : colors.surface }]} onPress={() => setEthnicity(o)}>
-                <Text style={[s.optionText, { color: ethnicity === o ? colors.surface : colors.textPrimary }]}>{o}</Text>
-                {ethnicity === o && <Check size={16} color={colors.surface} />}
-              </Pressable>
-            ))}
+            {ETHNICITY_OPTIONS.map(o => {
+              const sel = ethnicity === o;
+              return (
+                <Pressable key={o} style={[s.levelOption, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setEthnicity(o)}>
+                  <View style={[s.levelIconWrap, { backgroundColor: '#3B82F620' }]}>
+                    <Users size={18} color="#3B82F6" />
+                  </View>
+                  <Text style={[s.levelOptionText, { color: sel ? colors.surface : colors.textPrimary }]}>{o}</Text>
+                  {sel && <Check size={16} color={colors.surface} />}
+                </Pressable>
+              );
+            })}
             <Text style={[s.sectionLabel, { color: colors.textSecondary, marginTop: 16 }]}>Race</Text>
-            {RACE_OPTIONS.map(o => (
-              <Pressable key={o} style={[s.optionRow, { backgroundColor: race === o ? colors.secondary : colors.surface }]} onPress={() => setRace(o)}>
-                <Text style={[s.optionText, { color: race === o ? colors.surface : colors.textPrimary }]}>{o}</Text>
-                {race === o && <Check size={16} color={colors.surface} />}
-              </Pressable>
-            ))}
+            {RACE_OPTIONS.map(o => {
+              const sel = race === o;
+              return (
+                <Pressable key={o} style={[s.levelOption, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setRace(o)}>
+                  <View style={[s.levelIconWrap, { backgroundColor: '#10B98120' }]}>
+                    <Globe size={18} color="#10B981" />
+                  </View>
+                  <Text style={[s.levelOptionText, { color: sel ? colors.surface : colors.textPrimary }]}>{o}</Text>
+                  {sel && <Check size={16} color={colors.surface} />}
+                </Pressable>
+              );
+            })}
           </>
         );
       case 'topskills':
@@ -217,35 +268,48 @@ export default function EditSectionScreen() {
         );
       case 'jobtypeprefs':
         return (
-          <View style={s.chipGrid}>
-            {JOB_TYPE_OPTIONS.map(p => {
-              const sel = jobPrefs.includes(p);
-              return (
-                <Pressable key={p} style={[s.chip, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setJobPrefs(prev => sel ? prev.filter(x => x !== p) : [...prev, p])}>
-                  {sel && <Check size={14} color={colors.surface} />}
-                  <Text style={[s.chipText, { color: sel ? colors.surface : colors.textPrimary }]}>{p}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <>
+            <Text style={[s.helperText, { color: colors.textTertiary }]}>Select the types of employment you're open to. Choosing multiple options increases your chances of finding the right match.</Text>
+            <View style={s.levelList}>
+              {JOB_TYPE_OPTIONS.map(({ key, label, icon: Icon, color }) => {
+                const sel = jobPrefs.includes(key);
+                return (
+                  <Pressable key={key} style={[s.levelOption, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setJobPrefs(prev => sel ? prev.filter(x => x !== key) : [...prev, key])}>
+                    <View style={[s.levelIconWrap, { backgroundColor: `${color}20` }]}>
+                      <Icon size={20} color={color} />
+                    </View>
+                    <Text style={[s.levelOptionText, { color: sel ? colors.surface : colors.textPrimary }]}>{label}</Text>
+                    {sel && <Check size={16} color={colors.surface} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
         );
       case 'workmodeprefs':
         return (
-          <View style={s.chipGrid}>
-            {WORK_MODE_OPTIONS.map(m => {
-              const sel = workModePrefs.includes(m);
-              return (
-                <Pressable key={m} style={[s.chip, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setWorkModePrefs(prev => sel ? prev.filter(x => x !== m) : [...prev, m])}>
-                  {sel && <Check size={14} color={colors.surface} />}
-                  <Text style={[s.chipText, { color: sel ? colors.surface : colors.textPrimary }]}>{m}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <>
+            <Text style={[s.helperText, { color: colors.textTertiary }]}>Choose your preferred work arrangement. Remote means fully work-from-home, Onsite means in-office, and Hybrid is a mix of both.</Text>
+            <View style={s.levelList}>
+              {WORK_MODE_OPTIONS.map(({ key, label, icon: Icon, color }) => {
+                const sel = workModePrefs.includes(key);
+                return (
+                  <Pressable key={key} style={[s.levelOption, { backgroundColor: sel ? colors.secondary : colors.surface, borderColor: sel ? colors.secondary : colors.borderLight }]} onPress={() => setWorkModePrefs(prev => sel ? prev.filter(x => x !== key) : [...prev, key])}>
+                    <View style={[s.levelIconWrap, { backgroundColor: `${color}20` }]}>
+                      <Icon size={20} color={color} />
+                    </View>
+                    <Text style={[s.levelOptionText, { color: sel ? colors.surface : colors.textPrimary }]}>{label}</Text>
+                    {sel && <Check size={16} color={colors.surface} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
         );
       case 'desiredroles':
         return (
           <>
+            <Text style={[s.helperText, { color: colors.textTertiary }]}>Pick the roles you're targeting. The more specific you are, the better your job matches will be. Tap a category to explore roles within it.</Text>
             {desiredRoles.length > 0 && (
               <View style={{ marginBottom: 16 }}>
                 <Text style={[s.label, { color: colors.textTertiary }]}>{desiredRoles.length} role{desiredRoles.length !== 1 ? 's' : ''} selected</Text>
@@ -296,6 +360,7 @@ export default function EditSectionScreen() {
       case 'preferredcities':
         return (
           <>
+            <Text style={[s.helperText, { color: colors.textTertiary }]}>Select the cities where you'd like to work. This helps us show you jobs in locations that matter to you.</Text>
             <View style={[s.searchBox, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
               <Search size={16} color={colors.textTertiary} />
               <TextInput style={[s.searchInput, { color: colors.textPrimary }]} placeholder="Search cities..." placeholderTextColor={colors.textTertiary} value={cityQuery} onChangeText={setCityQuery} />
@@ -408,12 +473,21 @@ export default function EditSectionScreen() {
           {renderContent()}
         </ScrollView>
       </KeyboardAvoidingView>
-      <View style={[s.footer, { paddingBottom: insets.bottom + 8 }]}>
-        <Pressable style={[s.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
-          <Check size={18} color={colors.surface} />
-          <Text style={[s.saveBtnText, { color: colors.surface }]}>Save</Text>
-        </Pressable>
-      </View>
+      {isWizard ? (
+        <WizardFooter
+          wizardIndex={wizardIndex}
+          wizardTotal={wizardTotal}
+          incompleteSteps={incompleteSteps}
+          onSaveCurrent={handleSaveOnly}
+        />
+      ) : (
+        <View style={[s.footer, { paddingBottom: insets.bottom + 8 }]}>
+          <Pressable style={[s.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
+            <Check size={18} color={colors.surface} />
+            <Text style={[s.saveBtnText, { color: colors.surface }]}>Save</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -433,6 +507,11 @@ const s = StyleSheet.create({
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   chipText: { fontSize: 12, fontWeight: '500' },
+  levelList: { gap: 10 },
+  levelOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 14, borderWidth: 1 },
+  levelIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  levelOptionText: { flex: 1, fontSize: 15, fontWeight: '600' },
+  helperText: { fontSize: 13, lineHeight: 19, marginBottom: 16 },
   optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, marginBottom: 6 },
   optionText: { fontSize: 14, fontWeight: '500', flex: 1 },
   searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, borderWidth: 1 },

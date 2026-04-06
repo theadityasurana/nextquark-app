@@ -9,6 +9,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import StepBasicInfo from '@/components/onboarding/StepBasicInfo';
 import StepResume from '@/components/onboarding/StepResume';
+import StepGender from '@/components/onboarding/StepGender';
+import StepVeteranStatus from '@/components/onboarding/StepVeteranStatus';
+import StepDisabilityStatus from '@/components/onboarding/StepDisabilityStatus';
 import StepExperienceLevel from '@/components/onboarding/StepExperienceLevel';
 import StepDesiredRoles from '@/components/onboarding/StepDesiredRoles';
 import StepGoal from '@/components/onboarding/StepGoal';
@@ -17,16 +20,16 @@ import StepHeardAboutUs from '@/components/onboarding/StepHeardAboutUs';
 import StepPersonalizedWelcome from '@/components/onboarding/StepPersonalizedWelcome';
 import StepComplete from '@/components/onboarding/StepComplete';
 
-const TOTAL_PROGRESS_STEPS = 8;
+const TOTAL_PROGRESS_STEPS = 11;
 
 const STEP_BACKGROUNDS: Record<number, string> = {
-  1: '#111111', 2: '#111111', 3: '#111111', 4: '#111111',
-  5: '#111111', 6: '#111111', 7: '#111111', 8: '#111111', 9: '#FFFFFF',
+  1: '#111111', 2: '#111111', 3: '#111111', 4: '#111111', 5: '#111111',
+  6: '#111111', 7: '#111111', 8: '#111111', 9: '#111111', 10: '#111111', 11: '#111111', 12: '#FFFFFF',
 };
 
 const STEP_LABELS: Record<number, string> = {
-  1: 'Step 1/8', 2: 'Step 2/8', 3: 'Step 3/8', 4: 'Step 4/8',
-  5: 'Step 5/8', 6: 'Step 6/8', 7: 'Step 7/8', 8: 'Step 8/8', 9: 'Almost there!',
+  1: '', 2: '', 3: '', 4: '', 5: '',
+  6: '', 7: '', 8: '', 9: '', 10: '', 11: '', 12: '',
 };
 
 export default function OnboardingScreen() {
@@ -65,7 +68,7 @@ export default function OnboardingScreen() {
 
   const handleNext = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (currentStep === 9) {
+    if (currentStep === 12) {
       if (isSubmitting) return;
       setIsSubmitting(true);
       completeOnboarding(data).then(() => {
@@ -94,8 +97,8 @@ export default function OnboardingScreen() {
   }, [currentStep, animateTransition, deleteAccount]);
 
   const progressStep = Math.min(currentStep, TOTAL_PROGRESS_STEPS);
-  const showProgress = currentStep <= 9;
-  const showBackButton = currentStep >= 1 && currentStep <= 9;
+  const showProgress = currentStep <= 12;
+  const showBackButton = currentStep >= 1 && currentStep <= 12;
 
   const stepProps = { data, onUpdate: handleUpdate, onNext: handleNext, onBack: handleBack };
 
@@ -103,13 +106,16 @@ export default function OnboardingScreen() {
     switch (currentStep) {
       case 1: return <StepResume {...stepProps} />;
       case 2: return <StepBasicInfo {...stepProps} />;
-      case 3: return <StepExperienceLevel {...stepProps} />;
-      case 4: return <StepDesiredRoles {...stepProps} />;
-      case 5: return <StepGoal {...stepProps} />;
-      case 6: return <StepReferralCode {...stepProps} />;
-      case 7: return <StepHeardAboutUs {...stepProps} />;
-      case 8: return <StepPersonalizedWelcome {...stepProps} />;
-      case 9: return <StepComplete {...stepProps} />;
+      case 3: return <StepGender {...stepProps} />;
+      case 4: return <StepVeteranStatus {...stepProps} />;
+      case 5: return <StepDisabilityStatus {...stepProps} />;
+      case 6: return <StepExperienceLevel {...stepProps} />;
+      case 7: return <StepDesiredRoles {...stepProps} />;
+      case 8: return <StepGoal {...stepProps} />;
+      case 9: return <StepReferralCode {...stepProps} />;
+      case 10: return <StepHeardAboutUs {...stepProps} />;
+      case 11: return <StepPersonalizedWelcome {...stepProps} />;
+      case 12: return <StepComplete {...stepProps} />;
       default: return null;
     }
   };
@@ -124,33 +130,16 @@ export default function OnboardingScreen() {
             <View style={styles.headerRow}>
               {showBackButton ? (
                 <Pressable onPress={handleBack} style={styles.backButton} testID="back-button">
-                  <ArrowLeft size={22} color={currentStep <= 8 ? '#FFFFFF' : '#111111'} />
+                  <ArrowLeft size={22} color={currentStep <= 11 ? '#FFFFFF' : '#111111'} />
                 </Pressable>
               ) : (
                 <View style={styles.backPlaceholder} />
               )}
-              <Text style={[styles.stepLabel, currentStep <= 8 && { color: '#9E9E9E' }]}>{STEP_LABELS[currentStep] || ''}</Text>
+              <Text style={[styles.stepLabel, currentStep <= 11 && { color: '#9E9E9E' }]}>{STEP_LABELS[currentStep] || ''}</Text>
               <View style={styles.backPlaceholder} />
             </View>
 
-            <View style={styles.progressContainer}>
-              {Array.from({ length: TOTAL_PROGRESS_STEPS }, (_, i) => {
-                const stepNum = i + 1;
-                const isCompleted = stepNum < progressStep;
-                const isCurrent = stepNum === progressStep;
-                return (
-                  <View key={i} style={styles.progressDotWrapper}>
-                    <View style={[
-                      styles.progressDot,
-                      isCompleted && styles.progressDotCompleted,
-                      isCurrent && styles.progressDotCurrent,
-                      currentStep <= 8 && !isCompleted && !isCurrent && { backgroundColor: '#333333' },
-                      currentStep <= 8 && (isCompleted || isCurrent) && { backgroundColor: '#FFFFFF' },
-                    ]} />
-                  </View>
-                );
-              })}
-            </View>
+
           </View>
         )}
 

@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { } from 'lucide-react-native';
+import { Search, X, ChevronRight } from 'lucide-react-native';
+import Svg, { Polyline, Line, Text as SvgText, Circle } from 'react-native-svg';
+import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
+import Colors, { darkColors } from '@/constants/colors';
+import { useTheme } from '@/contexts/ThemeContext';
 import ApplicationItem from '@/components/ApplicationItem';
 import { Application, ApplicationStatus, DbApplicationRow } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,10 +21,15 @@ import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
 export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const { theme } = useTheme();
+  const isDark = colors.background === darkColors.background;
   const queryClient = useQueryClient();
   const { supabaseUserId } = useAuth();
-  const [selectedFilter, setSelectedFilter] = useState<'pending' | 'done'>('pending');
+  const [selectedFilter, setSelectedFilter] = useState<'pending' | 'done'>('done');
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const flatListRef = useRef<FlatList>(null);
+  const router = useRouter();
   useScrollToTop(flatListRef);
 
   useFocusEffect(
@@ -94,11 +102,32 @@ export default function ApplicationsScreen() {
     return { pending, done };
   }, [mappedApplications]);
 
+  const attentionCount = useMemo(() => {
+    return mappedApplications.filter((a) => a.verificationOtp).length;
+  }, [mappedApplications]);
+
+  const streakData = useMemo(() => {
+    const days = 30;
+    const now = new Date();
+    const counts: number[] = new Array(days).fill(0);
+    mappedApplications.forEach((a) => {
+      const d = new Date(a.appliedDate);
+      const diff = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      if (diff >= 0 && diff < days) counts[days - 1 - diff]++;
+    });
+    return counts;
+  }, [mappedApplications]);
+
   const filteredApplications = useMemo(() => {
-    if (selectedFilter === 'pending') return mappedApplications.filter((a) => a.status === 'pending' || a.status === 'failed');
-    if (selectedFilter === 'done') return mappedApplications.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted');
-    return mappedApplications;
-  }, [mappedApplications, selectedFilter]);
+    let apps = mappedApplications;
+    if (selectedFilter === 'pending') apps = apps.filter((a) => a.status === 'pending' || a.status === 'failed');
+    else if (selectedFilter === 'done') apps = apps.filter((a) => a.status === 'applied' || a.status === 'completed' || a.status === 'submitted');
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      apps = apps.filter((a) => a.job.jobTitle.toLowerCase().includes(q) || a.job.companyName.toLowerCase().includes(q));
+    }
+    return apps;
+  }, [mappedApplications, selectedFilter, searchQuery]);
 
   const renderItem = ({ item }: { item: Application }) => (
     <ApplicationItem application={item} />
@@ -111,17 +140,59 @@ export default function ApplicationsScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
+        <>
         <AnimatedHeaderScrollView
           largeTitle="Applications"
-          subtitle={`${mappedApplications.length} total`}
           backgroundColor={colors.background}
           largeTitleColor={colors.secondary}
-          subtitleColor={colors.textTertiary}
           largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textPrimary} />
           }
         >
+          {searchVisible && (
+            <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}> 
+              <Search size={16} color={colors.textTertiary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.textPrimary }]}
+                placeholder="Search applications..."
+                placeholderTextColor={colors.textTertiary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              <Pressable onPress={() => { setSearchQuery(''); setSearchVisible(false); }}>
+                <X size={16} color={colors.textTertiary} />
+              </Pressable>
+            </View>
+          )}
+
+          <View style={styles.statBoxRow}>
+            <View style={[styles.statBox, { backgroundColor: colors.surface }]}> 
+              <Text style={[styles.statBoxNumber, { color: colors.secondary }]}>{mappedApplications.length}</Text>
+              <Text style={[styles.statBoxLabel, { color: colors.textTertiary }]}>Total Applied</Text>
+            </View>
+            <Pressable
+              style={[styles.statBox, { backgroundColor: colors.surface }]}
+              onPress={() => router.push('/(tabs)/applications/attention-details' as any)}
+            >
+              <View style={styles.attentionRow}>
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <Text style={[styles.statBoxNumber, { color: attentionCount > 0 ? '#F59E0B' : colors.secondary }]}>{attentionCount}</Text>
+                  <Text style={[styles.statBoxLabel, { color: colors.textTertiary }]}>{attentionCount === 0 ? '0 apps need your attention' : `${attentionCount} app${attentionCount > 1 ? 's' : ''} need your attention`}</Text>
+                </View>
+                <ChevronRight size={16} color={colors.textTertiary} />
+              </View>
+            </Pressable>
+          </View>
+
+          {/* Application Streak Chart */}
+          <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.chartTitle, { color: colors.secondary }]}>Application Streak</Text>
+            <Text style={[styles.chartSubtitle, { color: colors.textTertiary }]}>Last 30 days</Text>
+            <ApplicationStreakChart data={streakData} colors={colors} />
+          </View>
+
           <View style={styles.statsRow}>
             <Pressable 
               style={[styles.statCard, { backgroundColor: selectedFilter === 'pending' ? colors.warning : colors.surface }]} 
@@ -141,7 +212,7 @@ export default function ApplicationsScreen() {
             <View style={styles.emptyState}>
               <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No applications</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {`No ${selectedFilter} applications found`}
+                {searchQuery ? 'No results found' : `No ${selectedFilter} applications found`}
               </Text>
             </View>
           ) : (
@@ -150,8 +221,47 @@ export default function ApplicationsScreen() {
             ))
           )}
         </AnimatedHeaderScrollView>
+        <Pressable
+          style={[styles.searchFab, { backgroundColor: isDark ? '#FFFFFF' : '#111111' }]}
+          onPress={() => { setSearchVisible((v) => !v); if (searchVisible) setSearchQuery(''); }}
+        >
+          {searchVisible ? <X size={22} color={isDark ? '#111111' : '#FFFFFF'} /> : <Search size={22} color={isDark ? '#111111' : '#FFFFFF'} />}
+        </Pressable>
+        </>
       )}
     </TabTransitionWrapper>
+  );
+}
+
+function ApplicationStreakChart({ data, colors }: { data: number[]; colors: any }) {
+  const W = 300, H = 100, PX = 28, PY = 16;
+  const max = Math.max(...data, 1);
+  const points = data.map((v, i) => {
+    const x = PX + (i / (data.length - 1)) * (W - PX * 2);
+    const y = PY + (1 - v / max) * (H - PY * 2);
+    return `${x},${y}`;
+  });
+  const yLabels = [0, Math.ceil(max / 2), max];
+
+  return (
+    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
+      {yLabels.map((label, i) => {
+        const y = PY + (1 - label / max) * (H - PY * 2);
+        return (
+          <React.Fragment key={i}>
+            <Line x1={PX} y1={y} x2={W - PX} y2={y} stroke={colors.borderLight} strokeWidth={0.5} />
+            <SvgText x={4} y={y + 3} fontSize={9} fill={colors.textTertiary}>{label}</SvgText>
+          </React.Fragment>
+        );
+      })}
+      <Polyline points={points.join(' ')} fill="none" stroke={colors.accent} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {data.map((v, i) => {
+        if (v === 0) return null;
+        const x = PX + (i / (data.length - 1)) * (W - PX * 2);
+        const y = PY + (1 - v / max) * (H - PY * 2);
+        return <Circle key={i} cx={x} cy={y} r={2.5} fill={colors.accent} />;
+      })}
+    </Svg>
   );
 }
 
@@ -191,6 +301,38 @@ const styles = StyleSheet.create({
     color: "#000",
     marginTop: 2,
   },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  statBoxRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 8,
+  },
+  statBox: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statBoxNumber: {
+    fontSize: 28,
+    fontWeight: '800' as const,
+  },
+  statBoxLabel: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    textAlign: 'center' as const,
+  },
   statsRow: {
     flexDirection: 'row',
     marginVertical: 8,
@@ -203,10 +345,24 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
   },
-
   statLabel: {
     fontSize: 14,
     fontWeight: '600' as const,
+  },
+  searchFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -227,5 +383,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#000",
     textAlign: 'center',
+  },
+  attentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  chartContainer: {
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+  },
+  chartTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  chartSubtitle: {
+    fontSize: 11,
+    marginBottom: 8,
   },
 });

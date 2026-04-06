@@ -15,7 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 export default function JobDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, hideApply } = useLocalSearchParams<{ id: string; hideApply?: string }>();
   const { supabaseUserId, userProfile, addSwipedJobId } = useAuth();
   const queryClient = useQueryClient();
   const colors = useColors();
@@ -266,16 +266,18 @@ export default function JobDetailsScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
-        <Pressable style={[styles.passBtn, { backgroundColor: '#EF4444' }]}>
-          <X size={22} color="#FFFFFF" />
-          <Text style={[styles.passBtnText, { color: '#FFFFFF' }]}>Pass</Text>
-        </Pressable>
-        <Pressable style={[styles.applyBtn, { backgroundColor: '#10B981' }]} onPress={handleApplyNow} disabled={isApplying}>
-          <Heart size={22} color="#FFFFFF" />
-          <Text style={[styles.applyBtnText, { color: '#FFFFFF' }]}>{isApplying ? 'Applying...' : 'Apply Now'}</Text>
-        </Pressable>
-      </View>
+      {hideApply !== 'true' && (
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[styles.passBtn, { backgroundColor: '#EF4444' }]}>
+            <X size={22} color="#FFFFFF" />
+            <Text style={[styles.passBtnText, { color: '#FFFFFF' }]}>Pass</Text>
+          </Pressable>
+          <Pressable style={[styles.applyBtn, { backgroundColor: '#10B981' }]} onPress={handleApplyNow} disabled={isApplying}>
+            <Heart size={22} color="#FFFFFF" />
+            <Text style={[styles.applyBtnText, { color: '#FFFFFF' }]}>{isApplying ? 'Applying...' : 'Apply Now'}</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }

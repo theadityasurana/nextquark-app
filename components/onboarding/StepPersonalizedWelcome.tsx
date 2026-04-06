@@ -91,8 +91,10 @@ export default function StepPersonalizedWelcome({ data, onNext }: StepProps) {
     <View style={styles.container}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
-          <Text style={styles.welcomeEmoji}>⚡</Text>
-          <Text style={styles.title}>Welcome to NextQuark!</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.welcomeEmoji}>⚡</Text>
+            <Text style={styles.title}>Welcome to NextQuark!</Text>
+          </View>
           <Text style={styles.subtitle}>Based on your profile, here's how we'll help you succeed:</Text>
         </Animated.View>
 
@@ -125,10 +127,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111111', paddingHorizontal: 24, paddingBottom: 24 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 16 },
-  header: { paddingTop: 12, marginBottom: 20, alignItems: 'center' },
-  welcomeEmoji: { fontSize: 48, marginBottom: 12 },
-  title: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#9E9E9E', textAlign: 'center', lineHeight: 22 },
+  header: { paddingTop: 12, marginBottom: 20 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  welcomeEmoji: { fontSize: 36 },
+  title: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', flex: 1 },
+  subtitle: { fontSize: 15, color: '#9E9E9E', lineHeight: 22 },
   card: {
     backgroundColor: '#1E1E1E', borderRadius: 16, padding: 18,
     marginBottom: 12, borderWidth: 1, borderColor: '#2A2A2A',

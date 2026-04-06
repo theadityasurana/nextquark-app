@@ -1,0 +1,5 @@
+[functions.resend-inbound]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false

@@ -1,7 +1,15 @@
-import { supabase, SUPABASE_FUNCTIONS_URL } from './supabase';
+import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
 
-const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
 const PROXY_DOMAIN = 'nextquark.in';
+const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
+const SUPABASE_URL = 'https://widujxpahzlpegzjjpqp.supabase.co';
+const SERVICE_ROLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+
+// Service-role client bypasses RLS for sent_emails operations
+const adminSupabase = SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+  : supabase;
 
 export interface InboundEmail {
   id: string;
@@ -49,20 +57,24 @@ function normalizeMaybeBool(v: any): boolean {
 
 async function tableExists(table: string): Promise<boolean> {
   if (featureCache.table.has(table)) return featureCache.table.get(table)!;
-  const { error } = await supabase.from(table).select('id').limit(1);
+  const client = table === 'sent_emails' ? adminSupabase : supabase;
+  const { error } = await client.from(table).select('*').limit(1);
   const ok = !error;
   featureCache.table.set(table, ok);
+  if (!ok && __DEV__) console.log(`tableExists(${table}): false —`, error?.message);
   return ok;
 }
 
 async function columnExists(table: string, column: string): Promise<boolean> {
   const key = `${table}.${column}`;
   if (featureCache.column.has(key)) return featureCache.column.get(key)!;
-  const { error } = await supabase.from(table).select(column).limit(1);
+  const client = table === 'sent_emails' ? adminSupabase : supabase;
+  const { error } = await client.from(table).select(column).limit(1);
   const ok = !error;
   featureCache.column.set(key, ok);
   return ok;
 }
+
 
 export async function getOrCreateProxyEmail(userId: string, userName?: string): Promise<string | null> {
   try {
@@ -74,14 +86,34 @@ export async function getOrCreateProxyEmail(userId: string, userName?: string): 
 
     if (existing?.proxy_address) return existing.proxy_address;
 
-    const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/resend-inbound`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create-proxy', user_id: userId, user_name: userName }),
-    });
+    // Try edge function, fall back to creating directly
+    try {
+      const { data, error } = await supabase.functions.invoke('resend-inbound', {
+        body: { action: 'create-proxy', user_id: userId, user_name: userName },
+      });
+      if (!error && data?.proxy_address) return data.proxy_address;
+    } catch {}
 
-    const data = await res.json();
-    return data?.proxy_address || null;
+    // Fallback: create proxy email directly
+    const sanitized = (userName || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    const parts = sanitized.split(/\s+/);
+    const baseName = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : (parts[0] || `u-${userId.slice(0, 8)}`);
+
+    // Try clean email first
+    let proxyAddr = `${baseName}@${PROXY_DOMAIN}`;
+    let { error: insertErr } = await supabase.from('proxy_emails').insert({ user_id: userId, proxy_address: proxyAddr });
+
+    if (insertErr) {
+      // Conflict — add suffix
+      proxyAddr = `${baseName}.${userId.slice(0, 6)}@${PROXY_DOMAIN}`;
+      ({ error: insertErr } = await supabase.from('proxy_emails').insert({ user_id: userId, proxy_address: proxyAddr }));
+    }
+
+    if (insertErr) {
+      if (__DEV__) console.log('proxy insert error:', insertErr.message);
+      return null;
+    }
+    return proxyAddr;
   } catch (e) {
     if (__DEV__) console.log('getOrCreateProxyEmail error:', e);
     return null;
@@ -125,8 +157,8 @@ export async function fetchStarredEmails(userId: string): Promise<{ inbound: Inb
         : supabase.from('inbound_emails').select('*').eq('user_id', userId).order('received_at', { ascending: false }),
       hasSentTable
         ? hasSentStar
-          ? supabase.from('sent_emails').select('*').eq('user_id', userId).eq('is_starred', true).order('sent_at', { ascending: false })
-          : supabase.from('sent_emails').select('*').eq('user_id', userId).order('sent_at', { ascending: false })
+          ? adminSupabase.from('sent_emails').select('*').eq('user_id', userId).eq('is_starred', true).order('sent_at', { ascending: false })
+          : adminSupabase.from('sent_emails').select('*').eq('user_id', userId).order('sent_at', { ascending: false })
         : ({ data: [], error: null } as any),
     ]);
 
@@ -158,9 +190,12 @@ export async function fetchStarredEmails(userId: string): Promise<{ inbound: Inb
 export async function fetchSentEmails(userId: string): Promise<SentEmail[]> {
   try {
     const hasSentTable = await tableExists('sent_emails');
-    if (!hasSentTable) return [];
+    if (!hasSentTable) {
+      if (__DEV__) console.log('fetchSentEmails: sent_emails table not found');
+      return [];
+    }
 
-    const { data, error } = await supabase
+    const { data, error } = await adminSupabase
       .from('sent_emails')
       .select('*')
       .eq('user_id', userId)
@@ -171,6 +206,7 @@ export async function fetchSentEmails(userId: string): Promise<SentEmail[]> {
       if (__DEV__) console.log('Error fetching sent emails:', error.message);
       return [];
     }
+    if (__DEV__) console.log('fetchSentEmails: got', (data || []).length, 'rows');
     return ((data || []) as any[]).map((row: any) => ({
       ...row,
       is_starred: normalizeMaybeBool(row.is_starred),
@@ -182,6 +218,11 @@ export async function fetchSentEmails(userId: string): Promise<SentEmail[]> {
   }
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: string; // base64
+}
+
 export async function sendEmailViaResend(
   from: string,
   to: string,
@@ -189,24 +230,27 @@ export async function sendEmailViaResend(
   body: string,
   userId: string,
   isHtml: boolean = false,
-  inReplyToMessageId?: string
+  inReplyToMessageId?: string,
+  senderName?: string,
+  emailAttachments?: EmailAttachment[]
 ): Promise<boolean> {
   try {
-    const fromFormatted = from.includes('<') ? from : `NextQuark Mail <${from}>`;
+    const displayName = senderName || 'NextQuark Mail';
+    const fromFormatted = from.includes('<') ? from : `${displayName} <${from}>`;
 
     const emailPayload: Record<string, any> = {
       from: fromFormatted,
-      to: [to],
+      to: Array.isArray(to) ? to : [to],
       subject,
     };
+
     if (isHtml) {
       emailPayload.html = body;
-      emailPayload.text = body.replace(/<[^>]*>/g, '');
+      emailPayload.text = (body || '').replace(/<[^>]*>/g, '');
     } else {
-      emailPayload.text = body;
+      emailPayload.text = body || '';
     }
 
-    // Set threading headers per Resend docs
     if (inReplyToMessageId) {
       emailPayload.headers = {
         'In-Reply-To': inReplyToMessageId,
@@ -214,10 +258,20 @@ export async function sendEmailViaResend(
       };
     }
 
+    if (emailAttachments && emailAttachments.length > 0) {
+      emailPayload.attachments = emailAttachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+      }));
+      if (__DEV__) console.log('Sending with', emailAttachments.length, 'attachments, sizes:', emailAttachments.map(a => `${a.filename}:${Math.round(a.content.length / 1024)}KB`));
+    }
+
+    if (__DEV__) console.log('Resend payload keys:', Object.keys(emailPayload), 'attachments?', !!emailPayload.attachments);
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(emailPayload),
@@ -230,22 +284,29 @@ export async function sendEmailViaResend(
     }
 
     // Store in sent_emails
-    if (await tableExists('sent_emails')) {
-      const row: Record<string, any> = {
-        user_id: userId,
-        from_email: from,
-        to_email: to,
-        subject,
-        body_text: isHtml ? body.replace(/<[^>]*>/g, '') : body,
-      };
-      if (await columnExists('sent_emails', 'thread_id')) {
-        row.thread_id = computeThreadId(subject);
-      }
-      if (await columnExists('sent_emails', 'in_reply_to')) {
-        row.in_reply_to = inReplyToMessageId || null;
-      }
-      const { error } = await supabase.from('sent_emails').insert(row);
-      if (error) console.log('Error inserting sent email:', error.message);
+    const sentRow: Record<string, any> = {
+      user_id: userId,
+      from_email: from,
+      to_email: Array.isArray(to) ? to[0] : to,
+      subject,
+      body_text: isHtml ? (body || '').replace(/<[^>]*>/g, '') : (body || ''),
+      thread_id: computeThreadId(subject),
+      in_reply_to: inReplyToMessageId || null,
+      sent_at: new Date().toISOString(),
+    };
+    if (__DEV__) console.log('Inserting sent email:', JSON.stringify(sentRow));
+    let { data: insertData, error: insertErr } = await adminSupabase.from('sent_emails').insert(sentRow).select();
+    if (insertErr) {
+      if (__DEV__) console.log('Insert error (retrying without in_reply_to):', insertErr.message);
+      // Retry without in_reply_to in case column doesn't exist
+      delete sentRow.in_reply_to;
+      ({ data: insertData, error: insertErr } = await adminSupabase.from('sent_emails').insert(sentRow).select());
+    }
+    if (insertErr) {
+      if (__DEV__) console.log('Error storing sent email:', insertErr.message, insertErr.details, insertErr.hint);
+    } else {
+      featureCache.table.delete('sent_emails');
+      if (__DEV__) console.log('Sent email stored:', insertData);
     }
 
     return true;
@@ -265,7 +326,7 @@ export async function toggleStarInbound(emailId: string, starred: boolean): Prom
 export async function toggleStarSent(emailId: string, starred: boolean): Promise<boolean> {
   if (!(await tableExists('sent_emails'))) return false;
   if (!(await columnExists('sent_emails', 'is_starred'))) return false;
-  const { error } = await supabase.from('sent_emails').update({ is_starred: starred }).eq('id', emailId);
+  const { error } = await adminSupabase.from('sent_emails').update({ is_starred: starred }).eq('id', emailId);
   if (error) console.log('toggleStarSent error:', error.message);
   return !error;
 }
@@ -280,7 +341,7 @@ export async function archiveInbound(emailId: string, archived: boolean): Promis
 export async function archiveSent(emailId: string, archived: boolean): Promise<boolean> {
   if (!(await tableExists('sent_emails'))) return false;
   if (!(await columnExists('sent_emails', 'is_archived'))) return false;
-  const { error } = await supabase.from('sent_emails').update({ is_archived: archived }).eq('id', emailId);
+  const { error } = await adminSupabase.from('sent_emails').update({ is_archived: archived }).eq('id', emailId);
   if (error) console.log('archiveSent error:', error.message);
   return !error;
 }
@@ -299,7 +360,7 @@ export async function deleteInboundEmail(emailId: string): Promise<boolean> {
 
 export async function deleteSentEmail(emailId: string): Promise<boolean> {
   if (!(await tableExists('sent_emails'))) return false;
-  const { error } = await supabase.from('sent_emails').delete().eq('id', emailId);
+  const { error } = await adminSupabase.from('sent_emails').delete().eq('id', emailId);
   return !error;
 }
 
@@ -315,9 +376,9 @@ export async function fetchThreadMessages(userId: string, threadId: string): Pro
         ? supabase.from('inbound_emails').select('*').eq('user_id', userId).eq('thread_id', threadId).order('received_at', { ascending: true })
         : supabase.from('inbound_emails').select('*').eq('user_id', userId).order('received_at', { ascending: true }),
       hasSentThread
-        ? supabase.from('sent_emails').select('*').eq('user_id', userId).eq('thread_id', threadId).order('sent_at', { ascending: true })
+        ? adminSupabase.from('sent_emails').select('*').eq('user_id', userId).eq('thread_id', threadId).order('sent_at', { ascending: true })
         : hasSentTable
-          ? supabase.from('sent_emails').select('*').eq('user_id', userId).order('sent_at', { ascending: true })
+          ? adminSupabase.from('sent_emails').select('*').eq('user_id', userId).order('sent_at', { ascending: true })
           : { data: [], error: null } as any,
     ]);
 
@@ -369,17 +430,22 @@ export function subscribeToMailChanges(
 export async function forwardEmail(
   emailId: string,
   userId: string,
-  forwardTo: string
+  forwardTo: string,
+  senderName?: string
 ): Promise<boolean> {
   try {
-    const { data: email, error } = await supabase
+    // Fetch the original email
+    const { data: email, error: emailErr } = await supabase
       .from('inbound_emails')
       .select('*')
       .eq('id', emailId)
       .eq('user_id', userId)
       .single();
 
-    if (error || !email) return false;
+    if (emailErr || !email) {
+      if (__DEV__) console.log('forwardEmail: email not found');
+      return false;
+    }
 
     const { data: proxy } = await supabase
       .from('proxy_emails')
@@ -392,11 +458,11 @@ export async function forwardEmail(
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: `NextQuark Mail <${fromAddr}>`,
+        from: `${senderName || 'NextQuark Mail'} <${fromAddr}>`,
         to: [forwardTo],
         subject: `Fwd: ${email.subject || '(no subject)'}`,
         ...(email.body_html ? { html: email.body_html } : {}),
@@ -405,9 +471,53 @@ export async function forwardEmail(
       }),
     });
 
-    return res.ok;
+    if (!res.ok) {
+      const errText = await res.text();
+      if (__DEV__) console.log('Forward Resend error:', res.status, errText);
+      return false;
+    }
+
+    return true;
   } catch (e) {
     if (__DEV__) console.log('forwardEmail error:', e);
+    return false;
+  }
+}
+
+export interface InboxSettings {
+  forward_to_email: string | null;
+  reply_mode: 'in_app' | 'forward_to_email';
+}
+
+export async function fetchInboxSettings(userId: string): Promise<InboxSettings> {
+  try {
+    const { data } = await supabase
+      .from('proxy_emails')
+      .select('forward_to_email, reply_mode')
+      .eq('user_id', userId)
+      .single();
+    return {
+      forward_to_email: data?.forward_to_email || null,
+      reply_mode: data?.reply_mode === 'forward_to_email' ? 'forward_to_email' : 'in_app',
+    };
+  } catch {
+    return { forward_to_email: null, reply_mode: 'in_app' };
+  }
+}
+
+export async function saveInboxSettings(userId: string, settings: Partial<InboxSettings>): Promise<boolean> {
+  try {
+    const { error } = await adminSupabase
+      .from('proxy_emails')
+      .update(settings)
+      .eq('user_id', userId);
+    if (error) {
+      if (__DEV__) console.log('saveInboxSettings error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    if (__DEV__) console.log('saveInboxSettings error:', e);
     return false;
   }
 }

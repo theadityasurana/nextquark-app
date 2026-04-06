@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, ScrollView, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
@@ -12,8 +12,24 @@ const LEVELS = [
   { key: 'expert', label: 'Expert & Leadership\n(10+ years)', emoji: '👑', color: '#EC4899' },
 ];
 
+function AnimatedOption({ index, children }: { index: number; children: React.ReactNode }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(20)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(100 + index * 120),
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(slide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
+  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
+}
+
 export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -22,42 +38,54 @@ export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProp
   const handleSelect = (key: string) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onUpdate({ experienceLevel: key });
+    setError('');
+  };
+
+  const handleNext = () => {
+    if (!data.experienceLevel) {
+      setError('Please select your experience level');
+      return;
+    }
+    onNext();
   };
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.header}>
-        <Text style={styles.emoji}>💼</Text>
-        <Text style={styles.title}>How much experience do you have?</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.emoji}>💼</Text>
+          <Text style={styles.title}>How much experience do you have? <Text style={styles.asterisk}>*</Text></Text>
+        </View>
         <Text style={styles.subtitle}>Select your experience level below.</Text>
       </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-        {LEVELS.map(({ key, label, emoji, color }) => {
+        {LEVELS.map(({ key, label, emoji, color }, idx) => {
           const selected = data.experienceLevel === key;
           return (
-            <Pressable
-              key={key}
-              style={[styles.option, selected && { borderColor: color, backgroundColor: '#1A1A1A' }]}
-              onPress={() => handleSelect(key)}
-            >
-              <View style={[styles.emojiWrap, { backgroundColor: `${color}15` }]}>
-                <Text style={styles.optionEmoji}>{emoji}</Text>
-              </View>
-              <Text style={[styles.optionLabel, selected && { color: '#FFFFFF' }]}>{label}</Text>
-              <View style={[styles.radio, selected && { borderColor: color }]}>
-                {selected && <View style={[styles.radioDot, { backgroundColor: color }]} />}
-              </View>
-            </Pressable>
+            <AnimatedOption key={key} index={idx}>
+              <Pressable
+                style={[styles.option, selected && { borderColor: color, backgroundColor: '#1A1A1A' }]}
+                onPress={() => handleSelect(key)}
+              >
+                <View style={[styles.emojiWrap, { backgroundColor: `${color}15` }]}>
+                  <Text style={styles.optionEmoji}>{emoji}</Text>
+                </View>
+                <Text style={[styles.optionLabel, selected && { color: '#FFFFFF' }]}>{label}</Text>
+                <View style={[styles.radio, selected && { borderColor: color }]}>
+                  {selected && <View style={[styles.radioDot, { backgroundColor: color }]} />}
+                </View>
+              </Pressable>
+            </AnimatedOption>
           );
         })}
       </ScrollView>
 
       <View style={styles.footer}>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <Pressable
           style={[styles.nextButton, !data.experienceLevel && styles.nextButtonDisabled]}
-          onPress={onNext}
-          disabled={!data.experienceLevel}
+          onPress={handleNext}
         >
           <Text style={[styles.nextButtonText, !data.experienceLevel && styles.nextButtonTextDisabled]}>Next →</Text>
         </Pressable>
@@ -69,9 +97,12 @@ export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProp
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111111', paddingHorizontal: 24, paddingBottom: 24 },
   header: { paddingTop: 12, marginBottom: 16 },
-  emoji: { fontSize: 36, marginBottom: 8 },
-  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', marginBottom: 6 },
+  emoji: { fontSize: 36 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
+  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', flex: 1 },
   subtitle: { fontSize: 15, color: '#9E9E9E', lineHeight: 22 },
+  asterisk: { color: '#EF4444', fontSize: 24 },
+  errorText: { color: '#EF4444', fontSize: 13, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
   list: { flex: 1 },
   listContent: { gap: 8, paddingBottom: 16 },
   option: {

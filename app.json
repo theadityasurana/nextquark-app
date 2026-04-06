@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/applogo.png",
-    "scheme": "rork-app",
+    "scheme": "nextquark",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "splash": {
@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rork.hireswipe-v3-clone-ceuofke"
+      "bundleIdentifier": "app.nextquark.hireswipe"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/applogo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.hireswipe_v3_clone_ceuofke",
+      "package": "app.nextquark.hireswipe",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -39,7 +39,7 @@
       [
         "expo-router",
         {
-          "origin": "https://rork.com/"
+          "origin": "https://nextquark.app/"
         }
       ],
       [
@@ -57,7 +57,7 @@
     },
     "extra": {
       "router": {
-        "origin": "https://rork.com/"
+        "origin": "https://nextquark.app/"
       },
       "eas": {
         "projectId": "639de0ac-5a11-423c-ac9f-526386ac19f0"

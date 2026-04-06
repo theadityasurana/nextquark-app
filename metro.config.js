@@ -1,9 +1,7 @@
 const { getDefaultConfig } = require("expo/metro-config");
-const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 
 const config = getDefaultConfig(__dirname);
 
-// Suppress HMR warnings on web
 config.transformer = {
   ...config.transformer,
   minifierConfig: {
@@ -13,4 +11,4 @@ config.transformer = {
   },
 };
 
-module.exports = withRorkMetro(config);
+module.exports = config;

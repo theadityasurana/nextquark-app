@@ -1,21 +1,30 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList, Alert, Linking, Dimensions } from 'react-native';
-import { Check, MapPin, ChevronDown, Search, X, Camera, Link2 } from 'lucide-react-native';
+import { MapPin, ChevronDown, Search, X, Camera, Link2 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { countryCodes, majorCities } from '@/constants/onboarding';
 import { StepProps } from '@/types/onboarding';
 
-const GENDER_OPTIONS = [
-  { value: 'male' as const, label: 'Male' },
-  { value: 'female' as const, label: 'Female' },
-  { value: 'prefer_not_to_say' as const, label: 'Prefer not to say' },
-];
-
 const COUNTER_EPOCH = 1735689600000;
 const COUNTER_BASE = 1347892;
 const COUNTER_RATE = 3.7;
+
+function AnimatedOption({ index, children }: { index: number; children: React.ReactNode }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(20)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(100 + index * 120),
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(slide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
+  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
+}
 
 export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -23,6 +32,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
 
   const [locationQuery, setLocationQuery] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [liveJobCount, setLiveJobCount] = useState(() =>
@@ -46,9 +56,18 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   const isValid = 
     data.firstName.trim().length > 0 && 
     data.lastName.trim().length > 0 && 
-    data.gender !== '' &&
     data.phone.trim().length >= 6 && 
     data.location.trim().length > 0;
+
+  const handleNext = () => {
+    const newErrors: Record<string, string> = {};
+    if (!data.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!data.lastName.trim()) newErrors.lastName = 'Last name is required';
+    if (data.phone.trim().length < 6) newErrors.phone = 'Phone number is required';
+    if (!data.location.trim()) newErrors.location = 'Location is required';
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) onNext();
+  };
 
   const filteredCountries = countryCodes.filter(c =>
     c.country.toLowerCase().includes(countrySearch.toLowerCase()) || c.code.includes(countrySearch)
@@ -97,127 +116,116 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
           </View>
           <Text style={styles.subtitle}>Tell us about yourself</Text>
 
-          {/* Photo Upload */}
-          <View style={styles.photoSection}>
-            <Text style={styles.sectionLabel}>PROFILE PHOTO (OPTIONAL)</Text>
-            <Pressable style={styles.photoUpload} onPress={handlePickImage}>
-              {data.profilePicture ? (
-                <Image source={{ uri: data.profilePicture }} style={styles.photoPreview} />
-              ) : (
-                <View style={styles.photoPlaceholder}>
-                  <Camera size={28} color="#9E9E9E" />
-                  <Text style={styles.photoPlaceholderText}>Add Photo</Text>
-                </View>
-              )}
-            </Pressable>
-          </View>
-
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>FIRST NAME</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Alex"
-              placeholderTextColor="#9E9E9E"
-              value={data.firstName}
-              onChangeText={v => onUpdate({ firstName: v })}
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>LAST NAME</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Rivera"
-              placeholderTextColor="#9E9E9E"
-              value={data.lastName}
-              onChangeText={v => onUpdate({ lastName: v })}
-              returnKeyType="next"
-            />
-          </View>
-
-          {/* Gender */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>GENDER</Text>
-            <View style={styles.genderOptions}>
-              {GENDER_OPTIONS.map((opt) => {
-                const selected = data.gender === opt.value;
-                return (
-                  <Pressable
-                    key={opt.value}
-                    style={[styles.genderOption, selected && styles.genderOptionSelected]}
-                    onPress={() => {
-                      if (Platform.OS !== 'web') Haptics.selectionAsync();
-                      onUpdate({ gender: opt.value });
-                    }}
-                  >
-                    <Text style={[styles.genderOptionText, selected && styles.genderOptionTextSelected]}>{opt.label}</Text>
-                    {selected && <Check size={16} color="#111111" />}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>PHONE NUMBER</Text>
-            <View style={styles.phoneRow}>
-              <Pressable style={styles.countryCodeButton} onPress={() => setShowCountryPicker(true)}>
-                <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-                <Text style={styles.countryCode}>{data.countryCode}</Text>
-                <ChevronDown size={14} color="#9E9E9E" />
+          <AnimatedOption index={0}>
+            <View style={styles.photoSection}>
+              <Text style={styles.sectionLabel}>PROFILE PHOTO (OPTIONAL)</Text>
+              <Pressable style={styles.photoUpload} onPress={handlePickImage}>
+                {data.profilePicture ? (
+                  <Image source={{ uri: data.profilePicture }} style={styles.photoPreview} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Camera size={28} color="#9E9E9E" />
+                    <Text style={styles.photoPlaceholderText}>Add Photo</Text>
+                  </View>
+                )}
               </Pressable>
-              <TextInput
-                style={styles.phoneInput}
-                placeholder="(555) 123-4567"
-                placeholderTextColor="#9E9E9E"
-                keyboardType="phone-pad"
-                value={data.phone}
-                onChangeText={v => onUpdate({ phone: v })}
-              />
             </View>
-          </View>
+          </AnimatedOption>
 
-          {/* Location */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>CURRENT LOCATION</Text>
-            <Pressable style={styles.locationInput} onPress={() => setShowLocationSearch(true)}>
-              <MapPin size={18} color="#9E9E9E" />
-              <Text style={data.location ? styles.locationValue : styles.locationPlaceholder}>
-                {data.location || 'Search your city...'}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* LinkedIn */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>LINKEDIN URL (OPTIONAL)</Text>
-            <View style={styles.urlInputWrapper}>
-              <Link2 size={18} color="#9E9E9E" />
+          <AnimatedOption index={1}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>FIRST NAME <Text style={styles.asterisk}>*</Text></Text>
               <TextInput
-                style={styles.urlInput}
-                placeholder="https://linkedin.com/in/yourprofile"
+                style={styles.input}
+                placeholder="Alex"
                 placeholderTextColor="#9E9E9E"
-                value={data.linkedInUrl}
-                onChangeText={v => onUpdate({ linkedInUrl: v })}
-                autoCapitalize="none"
-                keyboardType="url"
+                value={data.firstName}
+                onChangeText={v => { onUpdate({ firstName: v }); if (errors.firstName) setErrors(prev => ({ ...prev, firstName: '' })); }}
+                returnKeyType="next"
               />
+              {errors.firstName ? <Text style={styles.errorText}>{errors.firstName}</Text> : null}
             </View>
-          </View>
+          </AnimatedOption>
 
-          <View style={styles.tipRow}>
-            <Text style={styles.tipIcon}>💡</Text>
-            <Text style={styles.tipText}>You can add more details like experience and education later in your profile</Text>
-          </View>
+          <AnimatedOption index={2}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>LAST NAME <Text style={styles.asterisk}>*</Text></Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Rivera"
+                placeholderTextColor="#9E9E9E"
+                value={data.lastName}
+                onChangeText={v => { onUpdate({ lastName: v }); if (errors.lastName) setErrors(prev => ({ ...prev, lastName: '' })); }}
+                returnKeyType="next"
+              />
+              {errors.lastName ? <Text style={styles.errorText}>{errors.lastName}</Text> : null}
+            </View>
+          </AnimatedOption>
+
+          <AnimatedOption index={3}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>PHONE NUMBER <Text style={styles.asterisk}>*</Text></Text>
+              <View style={styles.phoneRow}>
+                <Pressable style={styles.countryCodeButton} onPress={() => setShowCountryPicker(true)}>
+                  <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
+                  <Text style={styles.countryCode}>{data.countryCode}</Text>
+                  <ChevronDown size={14} color="#9E9E9E" />
+                </Pressable>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="(555) 123-4567"
+                  placeholderTextColor="#9E9E9E"
+                  keyboardType="phone-pad"
+                  value={data.phone}
+                  onChangeText={v => { onUpdate({ phone: v }); if (errors.phone) setErrors(prev => ({ ...prev, phone: '' })); }}
+                />
+              </View>
+              {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
+            </View>
+          </AnimatedOption>
+
+          <AnimatedOption index={4}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>CURRENT LOCATION <Text style={styles.asterisk}>*</Text></Text>
+              <Pressable style={styles.locationInput} onPress={() => setShowLocationSearch(true)}>
+                <MapPin size={18} color="#9E9E9E" />
+                <Text style={data.location ? styles.locationValue : styles.locationPlaceholder}>
+                  {data.location || 'Search your city...'}
+                </Text>
+              </Pressable>
+              {errors.location ? <Text style={styles.errorText}>{errors.location}</Text> : null}
+            </View>
+          </AnimatedOption>
+
+          <AnimatedOption index={5}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>LINKEDIN URL (OPTIONAL)</Text>
+              <View style={styles.urlInputWrapper}>
+                <Link2 size={18} color="#9E9E9E" />
+                <TextInput
+                  style={styles.urlInput}
+                  placeholder="https://linkedin.com/in/yourprofile"
+                  placeholderTextColor="#9E9E9E"
+                  value={data.linkedInUrl}
+                  onChangeText={v => onUpdate({ linkedInUrl: v })}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+              </View>
+            </View>
+          </AnimatedOption>
+
+          <AnimatedOption index={6}>
+            <View style={styles.tipRow}>
+              <Text style={styles.tipIcon}>{"\ud83d\udca1"}</Text>
+              <Text style={styles.tipText}>You can add more details like experience and education later in your profile</Text>
+            </View>
+          </AnimatedOption>
         </Animated.View>
 
         <Pressable
           style={[styles.nextButton, !isValid && styles.nextButtonDisabled]}
-          onPress={onNext}
-          disabled={!isValid}
+          onPress={handleNext}
         >
           <Text style={[styles.nextButtonText, !isValid && styles.nextButtonTextDisabled]}>Complete Setup →</Text>
         </Pressable>
@@ -351,20 +359,13 @@ const styles = StyleSheet.create({
   photoPlaceholderText: { fontSize: 12, color: '#9E9E9E', fontWeight: '600' as const },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 12, fontWeight: '700' as const, color: '#9E9E9E', letterSpacing: 1, marginBottom: 8 },
+  asterisk: { color: '#EF4444', fontSize: 12 },
+  errorText: { color: '#EF4444', fontSize: 12, fontWeight: '600' as const, marginTop: 4 },
   input: {
     height: 50, borderRadius: 12, paddingHorizontal: 16,
     backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#333333',
     color: '#FFFFFF', fontSize: 15,
   },
-  genderOptions: { gap: 8 },
-  genderOption: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    height: 48, borderRadius: 12, paddingHorizontal: 16,
-    borderWidth: 1.5, borderColor: '#333333',
-  },
-  genderOptionSelected: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
-  genderOptionText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' as const },
-  genderOptionTextSelected: { color: '#111111' },
   phoneRow: { flexDirection: 'row', gap: 10 },
   countryCodeButton: {
     flexDirection: 'row', alignItems: 'center', gap: 6,

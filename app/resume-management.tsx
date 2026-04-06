@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, FileText, Check, Upload, Trash2, Eye, ExternalLink } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { WebView } from 'react-native-webview';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { Resume } from '@/types';
@@ -12,6 +13,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 import { getSubscriptionStatus } from '@/lib/subscription';
 import { useQuery } from '@tanstack/react-query';
+
+const RESUME_NAMES_KEY = 'resume_custom_names';
+
+async function getResumeNamesMap(): Promise<Record<string, string>> {
+  try {
+    const raw = await AsyncStorage.getItem(RESUME_NAMES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+async function saveResumeNameMapping(fileName: string, customName: string) {
+  const map = await getResumeNamesMap();
+  map[fileName] = customName;
+  await AsyncStorage.setItem(RESUME_NAMES_KEY, JSON.stringify(map));
+}
+
+async function removeResumeNameMapping(fileName: string) {
+  const map = await getResumeNamesMap();
+  delete map[fileName];
+  await AsyncStorage.setItem(RESUME_NAMES_KEY, JSON.stringify(map));
+}
 
 export default function ResumeManagementScreen() {
   const colors = useColors();  const insets = useSafeAreaInsets();
@@ -21,6 +43,8 @@ export default function ResumeManagementScreen() {
   const [uploading, setUploading] = useState(false);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
+  const [pendingFile, setPendingFile] = useState<{ uri: string; mimeType: string; ext: string; originalName: string } | null>(null);
+  const [renameText, setRenameText] = useState('');
 
   const { data: subscriptionData } = useQuery({
     queryKey: ['subscription-status', supabaseUserId],
@@ -55,9 +79,10 @@ export default function ResumeManagementScreen() {
       if (error) throw error;
       
       if (files && files.length > 0) {
+        const namesMap = await getResumeNamesMap();
         const loadedResumes: Resume[] = files.map((file, idx) => ({
           id: `r${idx}`,
-          name: file.name.replace(/\.[^/.]+$/, '').replace(/^\d+\./, ''),
+          name: namesMap[file.name] || file.name.replace(/\.[^/.]+$/, '').replace(/^\d+\./, ''),
           fileName: file.name,
           uploadDate: file.created_at || new Date().toISOString(),
           isActive: idx === 0,
@@ -133,6 +158,7 @@ export default function ResumeManagementScreen() {
             if (resume?.fileName && supabaseUserId) {
               const filePath = `${supabaseUserId}/${resume.fileName}`;
               await supabase.storage.from('resumes').remove([filePath]);
+              await removeResumeNameMapping(resume.fileName);
             }
             setResumes((prev) => prev.filter((r) => r.id !== id));
             console.log(`Deleted resume: ${id}`);
@@ -184,22 +210,32 @@ export default function ResumeManagementScreen() {
         return;
       }
 
-      setUploading(true);
+      const fileExt = file.name.split('.').pop() || 'pdf';
+      const originalName = file.name.replace(/\.[^/.]+$/, '');
+      setPendingFile({ uri: file.uri, mimeType: file.mimeType || 'application/pdf', ext: fileExt, originalName });
+      setRenameText(originalName);
+    } catch (error) {
+      console.log('Error picking resume:', error);
+      Alert.alert('Error', 'Failed to pick resume. Please try again.');
+    }
+  };
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
+  const handleConfirmUpload = async () => {
+    if (!pendingFile || !supabaseUserId || !renameText.trim()) return;
+    setUploading(true);
+    try {
+      const fileName = `${Date.now()}.${pendingFile.ext}`;
       const filePath = `${supabaseUserId}/${fileName}`;
 
       const formData = new FormData();
       formData.append('file', {
-        uri: file.uri,
-        type: file.mimeType || 'application/pdf',
+        uri: pendingFile.uri,
+        type: pendingFile.mimeType,
         name: fileName,
       } as any);
 
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-
       if (!token) {
         Alert.alert('Error', 'Authentication required. Please sign in again.');
         setUploading(false);
@@ -207,37 +243,37 @@ export default function ResumeManagementScreen() {
       }
 
       const uploadUrl = getStorageUploadUrl('resumes', filePath);
-      
       const response = await fetch(uploadUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.log('Upload error:', errorText);
         Alert.alert('Upload Failed', 'Could not upload resume. Please try again.');
         setUploading(false);
         return;
       }
 
+      const customName = renameText.trim();
+      await saveResumeNameMapping(fileName, customName);
+
       const newResume: Resume = {
         id: `r${Date.now()}`,
-        name: file.name.replace(/\.[^/.]+$/, ''),
+        name: customName,
         fileName: fileName,
         uploadDate: new Date().toISOString(),
         isActive: resumes.length === 0,
       };
 
       setResumes((prev) => [...prev, newResume]);
+      setPendingFile(null);
+      setRenameText('');
       Alert.alert('Success', 'Resume uploaded successfully!');
-      setUploading(false);
     } catch (error) {
       console.log('Error uploading resume:', error);
       Alert.alert('Error', 'Failed to upload resume. Please try again.');
+    } finally {
       setUploading(false);
     }
   };
@@ -283,13 +319,13 @@ export default function ResumeManagementScreen() {
           const previewUrl = url ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}` : null;
           return (
             <View key={resume.id} style={styles.resumeWrapper}>
-              <View style={styles.previewContainer}>
-                {loadingUrls ? (
-                  <View style={styles.previewLoading}>
-                    <ActivityIndicator size="small" color={colors.accent} />
-                    <Text style={styles.previewLoadingText}>Loading preview...</Text>
-                  </View>
-                ) : previewUrl && Platform.OS !== 'web' ? (
+              {loadingUrls ? (
+                <View style={[styles.previewFallback, { height: 520 }]}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={[styles.previewFallbackText, { color: colors.textTertiary }]}>Loading preview...</Text>
+                </View>
+              ) : previewUrl && Platform.OS !== 'web' ? (
+                <View style={styles.previewWebViewWrap}>
                   <WebView
                     source={{ uri: previewUrl }}
                     style={styles.previewWebView}
@@ -297,32 +333,32 @@ export default function ResumeManagementScreen() {
                     scrollEnabled={false}
                     nestedScrollEnabled={false}
                   />
-                ) : url ? (
-                  <Pressable style={styles.previewFallback} onPress={() => handleView(resume)}>
-                    <FileText size={40} color={colors.textTertiary} />
-                    <Text style={styles.previewFallbackText}>Tap to view resume</Text>
-                  </Pressable>
-                ) : (
-                  <View style={styles.previewFallback}>
-                    <FileText size={40} color={colors.textTertiary} />
-                    <Text style={styles.previewFallbackText}>Preview unavailable</Text>
-                  </View>
-                )}
-              </View>
+                </View>
+              ) : url ? (
+                <Pressable style={[styles.previewFallback, { height: 520 }]} onPress={() => handleView(resume)}>
+                  <FileText size={40} color={colors.textTertiary} />
+                  <Text style={[styles.previewFallbackText, { color: colors.textTertiary }]}>Tap to view resume</Text>
+                </Pressable>
+              ) : (
+                <View style={[styles.previewFallback, { height: 520 }]}>
+                  <FileText size={40} color={colors.textTertiary} />
+                  <Text style={[styles.previewFallbackText, { color: colors.textTertiary }]}>Preview unavailable</Text>
+                </View>
+              )}
 
               <View style={styles.resumeBottomBar}>
-                <Text style={styles.resumeNameSmall} numberOfLines={1}>{resume.name}</Text>
+                <Text style={[styles.resumeNameSmall, { color: colors.textPrimary }]} numberOfLines={1}>{resume.name}</Text>
                 <View style={styles.resumeIconActions}>
-                  <Pressable style={styles.iconBtn} onPress={() => handleView(resume)}>
+                  <Pressable style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => handleView(resume)}>
                     <ExternalLink size={16} color={colors.accent} />
                   </Pressable>
                   <Pressable
-                    style={[styles.iconBtn, resume.isActive && styles.iconBtnActive]}
+                    style={[styles.iconBtn, { backgroundColor: colors.surface }, resume.isActive && styles.iconBtnActive]}
                     onPress={() => handleSetActive(resume.id)}
                   >
                     <Check size={16} color={resume.isActive ? '#FFFFFF' : colors.textTertiary} />
                   </Pressable>
-                  <Pressable style={styles.iconBtn} onPress={() => handleDelete(resume.id)}>
+                  <Pressable style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => handleDelete(resume.id)}>
                     <Trash2 size={16} color={colors.error} />
                   </Pressable>
                 </View>
@@ -336,6 +372,7 @@ export default function ResumeManagementScreen() {
           onPress={handleUpload} 
           disabled={uploading || resumes.length >= resumeLimit}
         >
+          <Upload size={18} color={(uploading || resumes.length >= resumeLimit) ? '#999' : '#000'} />
           <Text style={[styles.uploadBtnText, (uploading || resumes.length >= resumeLimit) && styles.uploadBtnTextDisabled]}>
             {uploading ? 'Uploading...' : resumes.length >= resumeLimit ? `Limit Reached (${resumeLimit} max)` : 'Upload Resume'}
           </Text>
@@ -350,6 +387,42 @@ export default function ResumeManagementScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <Modal visible={!!pendingFile} animationType="slide" transparent>
+        <View style={styles.renameOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.renameContent}>
+            <View style={styles.renameHeader}>
+              <Text style={styles.renameTitle}>Name Your Resume</Text>
+              <Pressable onPress={() => { setPendingFile(null); setRenameText(''); }}>
+                <View style={styles.renameCloseBtn}>
+                  <Text style={{ fontSize: 18, color: '#000' }}>✕</Text>
+                </View>
+              </Pressable>
+            </View>
+            <Text style={styles.renameLabel}>Resume name</Text>
+            <TextInput
+              style={styles.renameInput}
+              value={renameText}
+              onChangeText={setRenameText}
+              autoFocus
+              selectTextOnFocus
+              placeholder="e.g. Software Engineer Resume"
+              placeholderTextColor="#999"
+            />
+            <Pressable
+              style={[styles.renameConfirmBtn, uploading && { opacity: 0.6 }]}
+              onPress={handleConfirmUpload}
+              disabled={uploading || !renameText.trim()}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.renameConfirmBtnText}>Upload</Text>
+              )}
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -408,51 +481,35 @@ const styles = StyleSheet.create({
     color: "#000",
   },
   resumeWrapper: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  previewContainer: {
+  previewWebViewWrap: {
     height: 520,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   previewWebView: {
     flex: 1,
     backgroundColor: 'transparent',
   },
-  previewLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  previewLoadingText: {
-    fontSize: 13,
-    color: '#999',
-  },
   previewFallback: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
   },
   previewFallbackText: {
     fontSize: 13,
-    color: '#999',
   },
   resumeBottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
   },
   resumeNameSmall: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600' as const,
-    color: '#000',
     flex: 1,
     marginRight: 8,
   },
@@ -465,7 +522,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -473,19 +529,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
   },
   uploadBtn: {
-    backgroundColor: '#111111',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   uploadBtnDisabled: {
-    backgroundColor: '#CCCCCC',
+    opacity: 0.4,
   },
   uploadBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#000000',
   },
   uploadBtnTextDisabled: {
     color: '#999999',
@@ -508,5 +572,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#000",
     lineHeight: 20,
+  },
+  renameOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  renameContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+  },
+  renameHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  renameTitle: {
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: '#000',
+  },
+  renameCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  renameLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#666',
+    marginBottom: 6,
+  },
+  renameInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginBottom: 16,
+  },
+  renameConfirmBtn: {
+    backgroundColor: '#111',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  renameConfirmBtnText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#FFF',
   },
 });

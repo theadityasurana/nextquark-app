@@ -53,6 +53,7 @@ export interface OnboardingSkill {
     preferredCities: string[];
     openToRelocation: boolean;
     resumeUri: string | null;
+    userType: 'fresher' | 'job_switch' | '';
     veteranStatus: string;
     disabilityStatus: string;
     ethnicity: string;
@@ -94,6 +95,7 @@ export interface OnboardingSkill {
     preferredCities: [],
     openToRelocation: false,
     resumeUri: null,
+    userType: '',
     veteranStatus: '',
     disabilityStatus: '',
     ethnicity: '',

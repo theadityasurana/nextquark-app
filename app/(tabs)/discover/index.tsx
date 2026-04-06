@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, TextInput } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
-import { Plus, X, ChevronDown, Check, Search, Users, Building2, TrendingUp, Clock, Trophy } from 'lucide-react-native';
+import { Plus, X, ChevronDown, Check, Search, Users, Building2, TrendingUp, Clock, Trophy } from '@/components/ProfileIcons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
@@ -28,14 +28,14 @@ export default function DiscoverScreen() {
 
 
   const [refreshing, setRefreshing] = useState(false);
-  const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
-  const [visibleJobsCount, setVisibleJobsCount] = useState<Record<string, number>>({});
   const [visibleTopCompanies, setVisibleTopCompanies] = useState(10);
+  const [activeFavCompany, setActiveFavCompany] = useState<string | null>(null);
   const [visibleRecentJobs, setVisibleRecentJobs] = useState(10);
   const [friendSearch, setFriendSearch] = useState('');
   const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'24h' | '3d' | '7d' | '30d' | '365d' | 'all'>('30d');
   const [recentJobsTimeRange, setRecentJobsTimeRange] = useState<'24h' | '48h' | '7d' | '30d'>('30d');
 
+  const [visibleFriends, setVisibleFriends] = useState(10);
   const [showFriendSearch, setShowFriendSearch] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
@@ -184,6 +184,10 @@ export default function DiscoverScreen() {
   }, [allProfiles, friendSearch]);
 
   useEffect(() => {
+    setVisibleFriends(10);
+  }, [friendSearch]);
+
+  useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['jobs-by-favorite-companies'] });
   }, [favoriteCompanies, queryClient]);
 
@@ -219,6 +223,12 @@ export default function DiscoverScreen() {
     return shuffled;
   }, [allCompaniesWithLogos]);
 
+  const topCompanyJobCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    topCompanies.forEach((item: any) => { map[item[0]] = item[1] as number; });
+    return map;
+  }, [topCompanies]);
+
   const { data: jobsByCompany = {}, refetch: refetchJobs } = useQuery({
     queryKey: ['jobs-by-favorite-companies', favoriteCompanies],
     queryFn: async () => {
@@ -241,7 +251,7 @@ export default function DiscoverScreen() {
   }, [refetchJobs]);
 
   const handleAddFavoriteCompany = useCallback(() => {
-    router.push({ pathname: '/(tabs)/profile' as any, params: { scrollTo: 'favoritecompanies' } });
+    router.push({ pathname: '/(tabs)/profile/edit-section' as any, params: { section: 'favoritecompanies' } });
   }, [router]);
 
   const handleJobPress = useCallback((job: Job) => {
@@ -301,7 +311,7 @@ export default function DiscoverScreen() {
               <Text style={[styles.emptyFriendsText, { color: colors.textSecondary }]}>No friends found</Text>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendsRow}>
-                {filteredProfiles.map((profile: any, index: number) => {
+                {filteredProfiles.slice(0, visibleFriends).map((profile: any, index: number) => {
                   const defaultUnsplash = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d';
                   let avatarUrl;
                   if (profile.avatar_url && !profile.avatar_url.includes(defaultUnsplash)) {
@@ -323,6 +333,12 @@ export default function DiscoverScreen() {
                     </Pressable>
                   );
                 })}
+                {filteredProfiles.length > visibleFriends && (
+                  <Pressable style={[styles.loadMoreFriend, { borderColor: colors.borderLight }]} onPress={() => setVisibleFriends(prev => prev + 10)}>
+                    <Plus size={20} color={colors.secondary} />
+                    <Text style={[styles.loadMoreText, { color: colors.secondary }]}>More</Text>
+                  </Pressable>
+                )}
               </ScrollView>
             )}
           </View>
@@ -336,10 +352,16 @@ export default function DiscoverScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topCompaniesRow}>
                 {topCompaniesWithLogos.slice(0, visibleTopCompanies).map((company: any, index: number) => {
                   const logoUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/logos/${company.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
-                  
+                  const jobCount = topCompanyJobCounts[company.name] || null;
                   return (
-                    <Pressable key={`${company.name}-${index}`} style={styles.companyLogoTile} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: company.name } })}>
+                    <Pressable key={`${company.name}-${index}`} style={[styles.companyLogoTile, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: company.name } })}>
                       <Image source={{ uri: logoUrl }} style={styles.companyLogoImage} contentFit="contain" transition={200} cachePolicy="memory-disk" />
+                      <Text style={[styles.companyTileName, { color: colors.textPrimary }]} numberOfLines={1}>{company.name}</Text>
+                      {jobCount != null && (
+                        <View style={styles.companyTileBadge}>
+                          <Text style={styles.companyTileBadgeText}>{jobCount} jobs</Text>
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -510,60 +532,25 @@ export default function DiscoverScreen() {
             <View style={styles.emptyState}>
               <Text style={[styles.emptyTitle, { color: colors.secondary }]}>No Favorite Companies</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Add companies to your favorites to see their job postings here</Text>
-              <Pressable style={styles.addButton} onPress={handleAddFavoriteCompany}>
+              <Pressable style={[styles.addButton, { backgroundColor: colors.secondary }]} onPress={handleAddFavoriteCompany}>
                 <Plus size={16} color={colors.surface} />
-                <Text style={styles.addButtonText}>Add Favorite Companies</Text>
+                <Text style={[styles.addButtonText, { color: colors.surface }]}>Add Favorite Companies</Text>
               </Pressable>
             </View>
           ) : (
-            <>
-              <View style={[styles.companiesHeader, { backgroundColor: sectionColors.favorites }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Building2 size={20} color={colors.secondary} />
-                  <Text style={[styles.companiesSectionTitle, { color: colors.secondary }]}>Favorite Companies</Text>
-                </View>
-              </View>
-              {favoriteCompanies.map(company => {
-                const jobs = jobsByCompany[company] || [];
-                const companyData = allCompaniesData.find((c: any) => c.name === company);
-                const logoUrl = companyData?.logo_url ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${companyData.logo_url}` : null;
-                const visible = visibleJobsCount[company] || 10;
-                const visibleJobs = jobs.slice(0, visible);
-                const hasMore = jobs.length > visible;
-                
-                return (
-                  <View key={company} style={[styles.companySection, { backgroundColor: sectionColors.favorites }]}>
-                    <View style={styles.companySectionHeader}>
-                      {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companyLogo} />}
-                      <Text style={[styles.companyName, { color: colors.textPrimary }]}>{company}</Text>
-                      <Text style={[styles.jobCount, { color: colors.textSecondary }]}>{jobs.length} jobs</Text>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.jobsRow}>
-                      {visibleJobs.map(job => (
-                        <Pressable key={job.id} style={[styles.jobCard, appliedJobs.has(job.id) && styles.jobCardApplied]} onPress={() => handleJobPress(job)}>
-                          <Image source={{ uri: job.companyLogo }} style={styles.jobCardLogo} />
-                          <Text style={styles.jobCardTitle} numberOfLines={2}>{job.jobTitle}</Text>
-                          <Text style={styles.jobCardLocation} numberOfLines={1}>{job.location}</Text>
-                        </Pressable>
-                      ))}
-                      {hasMore && (
-                        <Pressable style={[styles.loadMoreCard, { borderColor: colors.borderLight }]} onPress={() => setVisibleJobsCount(prev => ({ ...prev, [company]: visible + 10 }))}>
-                          <Plus size={24} color={colors.secondary} />
-                          <Text style={[styles.loadMoreText, { color: colors.secondary }]}>Load More</Text>
-                        </Pressable>
-                      )}
-                    </ScrollView>
-                  </View>
-                );
-              })}
-
-              <Pressable style={styles.addMoreButton} onPress={handleAddFavoriteCompany}>
-                <Plus size={20} color={Colors.primary} />
-                <Text style={[styles.addMoreText, { color: colors.textPrimary }]}>Add More Companies</Text>
-              </Pressable>
-            </>
+            <FavCompaniesTabbed
+              companies={favoriteCompanies}
+              jobsByCompany={jobsByCompany}
+              allCompaniesData={allCompaniesData}
+              activeCompany={activeFavCompany ?? favoriteCompanies[0]}
+              onSelectCompany={setActiveFavCompany}
+              onJobPress={handleJobPress}
+              onAddCompany={handleAddFavoriteCompany}
+              colors={colors}
+              router={router}
+            />
           )}
-          <View style={{ height: 40 }} />
+          <View style={{ height: 0 }} />
         </View>
         </AnimatedHeaderScrollView>
 
@@ -575,6 +562,69 @@ export default function DiscoverScreen() {
   );
 }
 
+function FavCompaniesTabbed({ companies, jobsByCompany, allCompaniesData, activeCompany, onSelectCompany, onJobPress, onAddCompany, colors, router }: {
+  companies: string[];
+  jobsByCompany: Record<string, Job[]>;
+  allCompaniesData: any[];
+  activeCompany: string;
+  onSelectCompany: (c: string) => void;
+  onJobPress: (j: Job) => void;
+  onAddCompany: () => void;
+  colors: any;
+  router: any;
+}) {
+  const jobs = jobsByCompany[activeCompany] || [];
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          <Building2 size={20} color={colors.secondary} />
+          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.secondary }}>Favorite Companies</Text>
+        </View>
+        <Pressable style={[styles.addCompanyBtn, { backgroundColor: colors.secondary }]} onPress={onAddCompany}>
+          <Plus size={18} color={colors.surface} />
+        </Pressable>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+        {companies.map(company => {
+          const isActive = company === activeCompany;
+          const count = (jobsByCompany[company] || []).length;
+          return (
+            <Pressable
+              key={company}
+              style={[styles.pill, { backgroundColor: isActive ? colors.secondary : colors.surface, borderColor: isActive ? colors.secondary : colors.borderLight }]}
+              onPress={() => onSelectCompany(company)}
+            >
+              <Text style={[styles.pillText, { color: isActive ? colors.surface : colors.textPrimary }]} numberOfLines={1}>{company}</Text>
+              <Text style={[styles.pillCount, { color: isActive ? colors.surface : colors.textTertiary }]}>{count}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      {jobs.length === 0 ? (
+        <Text style={[styles.favEmptyText, { color: colors.textTertiary }]}>No jobs posted yet</Text>
+      ) : (
+        <>
+          <View style={styles.favJobsGrid}>
+            {jobs.slice(0, 6).map(job => (
+              <Pressable key={job.id} style={[styles.favJobCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => onJobPress(job)}>
+                <Image source={{ uri: job.companyLogo }} style={styles.favJobLogo} />
+                <Text style={[styles.favJobTitle, { color: colors.textPrimary }]} numberOfLines={2}>{job.jobTitle}</Text>
+                <Text style={[styles.favJobLocation, { color: colors.textTertiary }]} numberOfLines={1}>{job.location}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {jobs.length > 6 && (
+            <Pressable style={[styles.favSeeAll, { borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/company-profile' as any, params: { companyName: activeCompany } })}>
+              <Text style={[styles.favSeeAllText, { color: colors.secondary }]}>See all {jobs.length} jobs</Text>
+            </Pressable>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
@@ -583,24 +633,25 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, paddingTop: 100 },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: "#000", marginBottom: 8 },
   emptyText: { fontSize: 15, color: "#000", textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  addButton: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: "#FFF", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
-  addButtonText: { fontSize: 16, fontWeight: '700', color: "#000" },
-  companySection: { marginBottom: 6, paddingLeft: 20, paddingVertical: 12, borderRadius: 16 },
-  companySectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, paddingRight: 20 },
-  companyLogo: { width: 32, height: 32, borderRadius: 8 },
-  companyName: { fontSize: 18, fontWeight: '700', flex: 1 },
-  jobCount: { fontSize: 13 },
-  jobsRow: { gap: 12, paddingRight: 20 },
-  jobCard: { width: 180, height: 180, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#DDD", justifyContent: 'space-between' },
-  jobCardApplied: { opacity: 0.5, borderColor: "#DDD", borderWidth: 2 },
-  jobCardLogo: { width: 48, height: 48, borderRadius: 12, marginBottom: 8 },
-  jobCardTitle: { fontSize: 15, fontWeight: '700', color: "#000", marginBottom: 6, lineHeight: 20 },
-  jobCardLocation: { fontSize: 12, color: "#000", marginTop: 'auto' },
+  addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#111', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
+  addButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  pillRow: { paddingLeft: 0, paddingRight: 8, gap: 8, marginBottom: 12 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  pillText: { fontSize: 13, fontWeight: '700' },
+  pillCount: { fontSize: 11, fontWeight: '600', opacity: 0.7 },
+  favJobsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 0 },
+  favJobCard: { width: '31%' as any, borderRadius: 12, padding: 10, borderWidth: 1 },
+  favJobLogo: { width: 28, height: 28, borderRadius: 8, marginBottom: 6 },
+  favJobTitle: { fontSize: 11, fontWeight: '700', lineHeight: 15, marginBottom: 3 },
+  favJobLocation: { fontSize: 10 },
+  favSeeAll: { alignItems: 'center', marginTop: 8, marginHorizontal: 0, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  favSeeAllText: { fontSize: 13, fontWeight: '700' },
+  favEmptyText: { fontSize: 13, textAlign: 'center', paddingVertical: 24, fontStyle: 'italic' as const },
+  loadMoreCardSmall: { width: 80, height: 100, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 4 },
   loadMoreCard: { width: 120, height: 180, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  loadMoreCardSmall: { width: 80, height: 80, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 4 },
+  loadMoreFriend: { width: 76, height: 76, borderRadius: 38, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 2, marginLeft: -20 },
   loadMoreText: { fontSize: 13, fontWeight: '700' },
-  addMoreButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 20, paddingVertical: 14, borderRadius: 12, borderWidth: 2, borderColor: "#DDD", borderStyle: 'dashed' },
-  addMoreText: { fontSize: 15, fontWeight: '600', color: "#000" },
+  addCompanyBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   friendsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
   friendsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   friendsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000", flex: 1 },
@@ -621,8 +672,11 @@ const styles = StyleSheet.create({
   topCompaniesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   topCompaniesSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
   topCompaniesRow: { gap: 12, paddingRight: 20 },
-  companyLogoTile: { width: 80, height: 80, backgroundColor: "#FFF", borderRadius: 12, padding: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD" },
-  companyLogoImage: { width: 64, height: 64, borderRadius: 8 },
+  companyLogoTile: { width: 80, height: 100, borderRadius: 12, padding: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, position: 'relative' as const },
+  companyLogoImage: { width: 40, height: 40, borderRadius: 8, marginBottom: 4 },
+  companyTileName: { fontSize: 10, fontWeight: '600', textAlign: 'center' as const },
+  companyTileBadge: { position: 'absolute' as const, top: 4, right: 4, backgroundColor: '#22c55e', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 5 },
+  companyTileBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
   analyticsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
   analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
   analyticsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },

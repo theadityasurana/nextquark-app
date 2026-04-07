@@ -3,8 +3,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Dimensions } from 'react-n
 import { StepProps } from '@/types/onboarding';
 
 const { width } = Dimensions.get('window');
-
-const CONFETTI_COLORS = ['#111111', '#10B981', '#F59E0B', '#EF4444', '#6366F1', '#EC4899'];
+const CONFETTI_COLORS = ['#007AFF', '#34C759', '#FF9500', '#FF2D55', '#AF52DE', '#5AC8FA'];
 
 function ConfettiPiece({ delay, startX }: { delay: number; startX: number }) {
   const fallAnim = useRef(new Animated.Value(-20)).current;
@@ -44,28 +43,17 @@ export default function StepComplete({ data, onNext }: StepProps) {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const textFade = useRef(new Animated.Value(0)).current;
   const buttonAnim = useRef(new Animated.Value(0)).current;
-  const bounceAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.spring(scaleAnim, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
       Animated.timing(textFade, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.parallel([
-        Animated.timing(buttonAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(bounceAnim, { toValue: 1.05, duration: 600, useNativeDriver: true }),
-            Animated.timing(bounceAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-          ])
-        ),
-      ]),
+      Animated.timing(buttonAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
   }, []);
 
   const confettiPieces = Array.from({ length: 24 }, (_, i) => ({
-    id: i,
-    delay: Math.random() * 800,
-    startX: Math.random() * (width - 20),
+    id: i, delay: Math.random() * 800, startX: Math.random() * (width - 20),
   }));
 
   return (
@@ -77,17 +65,17 @@ export default function StepComplete({ data, onNext }: StepProps) {
       </View>
 
       <Animated.View style={[styles.content, { opacity: scaleAnim, transform: [{ scale: scaleAnim }] }]}>
-        <Text style={styles.celebration}>🎉 ✨ 🎊</Text>
+        <Text style={styles.celebration}>🎉</Text>
 
         <Animated.View style={{ opacity: textFade }}>
-          <Text style={styles.title}>You're All Set,{'\n'}{data.firstName || 'there'}!</Text>
+          <Text style={styles.title}>You're All Set{data.firstName ? `,\n${data.firstName}` : ''}!</Text>
           <Text style={styles.subtitle}>Your profile is ready to start matching with amazing opportunities</Text>
         </Animated.View>
       </Animated.View>
 
-      <Animated.View style={[styles.bottomSection, { opacity: buttonAnim, transform: [{ scale: bounceAnim }] }]}>
+      <Animated.View style={[styles.bottomSection, { opacity: buttonAnim }]}>
         <Pressable style={styles.startButton} onPress={onNext} testID="start-swiping">
-          <Text style={styles.startButtonText}>Start Swiping Jobs! 🎴</Text>
+          <Text style={styles.startButtonText}>Start Swiping Jobs</Text>
         </Pressable>
       </Animated.View>
     </View>
@@ -95,16 +83,16 @@ export default function StepComplete({ data, onNext }: StepProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 24, justifyContent: 'space-between', paddingBottom: 24 },
+  container: { flex: 1, paddingHorizontal: 20, justifyContent: 'space-between', paddingBottom: 16 },
   confettiContainer: { position: 'absolute', top: 0, left: 0, right: 0, height: 400, overflow: 'hidden' },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  celebration: { fontSize: 48, marginBottom: 24, textAlign: 'center' },
-  title: { fontSize: 32, fontWeight: '900' as const, color: '#111111', textAlign: 'center', marginBottom: 12 },
-  subtitle: { fontSize: 15, color: '#616161', textAlign: 'center', lineHeight: 22, paddingHorizontal: 16 },
+  celebration: { fontSize: 64, marginBottom: 24, textAlign: 'center' },
+  title: { fontSize: 34, fontWeight: '700', color: '#000000', textAlign: 'center', marginBottom: 12 },
+  subtitle: { fontSize: 16, color: '#8E8E93', textAlign: 'center', lineHeight: 22, paddingHorizontal: 16 },
   bottomSection: { paddingTop: 16 },
   startButton: {
-    height: 60, borderRadius: 18, backgroundColor: '#111111',
+    height: 50, borderRadius: 12, backgroundColor: '#007AFF',
     alignItems: 'center', justifyContent: 'center',
   },
-  startButtonText: { fontSize: 18, fontWeight: '800' as const, color: '#FFFFFF' },
+  startButtonText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
 });

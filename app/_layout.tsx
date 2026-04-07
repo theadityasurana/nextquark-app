@@ -166,9 +166,9 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="welcome-back" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
-        <Stack.Screen name="sign-up" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-up" options={{ headerShown: false, contentStyle: { backgroundColor: '#111111' } }} />
         <Stack.Screen name="mobile-signup" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ headerShown: false, contentStyle: { backgroundColor: '#111111' } }} />
         <Stack.Screen name="email-verification" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

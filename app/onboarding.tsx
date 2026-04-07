@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-nat
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { ArrowLeft } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
@@ -22,19 +22,13 @@ import StepComplete from '@/components/onboarding/StepComplete';
 
 const TOTAL_PROGRESS_STEPS = 11;
 
-const STEP_BACKGROUNDS: Record<number, string> = {
-  1: '#111111', 2: '#111111', 3: '#111111', 4: '#111111', 5: '#111111',
-  6: '#111111', 7: '#111111', 8: '#111111', 9: '#111111', 10: '#111111', 11: '#111111', 12: '#FFFFFF',
-};
-
-const STEP_LABELS: Record<number, string> = {
-  1: '', 2: '', 3: '', 4: '', 5: '',
-  6: '', 7: '', 8: '', 9: '', 10: '', 11: '', 12: '',
-};
-
 export default function OnboardingScreen() {
   const { onboardingData, completeOnboarding, updateOnboardingData, deleteAccount } = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = onboardingData?.onboardingStep;
+    if (saved && saved >= 1 && saved <= 11) return saved;
+    return 1;
+  });
   const [data, setData] = useState<OnboardingData>(() => ({
     ...defaultOnboardingData,
     ...onboardingData,
@@ -46,7 +40,6 @@ export default function OnboardingScreen() {
 
   const animateTransition = useCallback((direction: 'forward' | 'back', callback: () => void) => {
     const toValue = direction === 'forward' ? -30 : 30;
-    
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue, duration: 500, useNativeDriver: true }),
@@ -77,28 +70,30 @@ export default function OnboardingScreen() {
       return;
     }
     animateTransition('forward', () => {
-      setCurrentStep(prev => prev + 1);
-      updateOnboardingData(data);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      updateOnboardingData({ ...data, onboardingStep: nextStep });
     });
   }, [currentStep, data, animateTransition, completeOnboarding, updateOnboardingData]);
 
   const handleBack = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.selectionAsync();
-    
     if (currentStep === 1) {
       deleteAccount();
       router.replace('/welcome');
       return;
     }
-    
     animateTransition('back', () => {
-      setCurrentStep(prev => prev - 1);
+      const prevStep = currentStep - 1;
+      setCurrentStep(prevStep);
+      updateOnboardingData({ ...data, onboardingStep: prevStep });
     });
   }, [currentStep, animateTransition, deleteAccount]);
 
   const progressStep = Math.min(currentStep, TOTAL_PROGRESS_STEPS);
   const showProgress = currentStep <= 12;
   const showBackButton = currentStep >= 1 && currentStep <= 12;
+  const isComplete = currentStep === 12;
 
   const stepProps = { data, onUpdate: handleUpdate, onNext: handleNext, onBack: handleBack };
 
@@ -120,26 +115,35 @@ export default function OnboardingScreen() {
     }
   };
 
-  const stepBg = STEP_BACKGROUNDS[currentStep] || '#FFFFFF';
-
   return (
-    <View style={[styles.container, { backgroundColor: stepBg }]}>
+    <View style={[styles.container, isComplete && styles.containerComplete]}>
       <SafeAreaView style={styles.safeArea}>
         {showProgress && (
           <View style={styles.header}>
             <View style={styles.headerRow}>
               {showBackButton ? (
                 <Pressable onPress={handleBack} style={styles.backButton} testID="back-button">
-                  <ArrowLeft size={22} color={currentStep <= 11 ? '#FFFFFF' : '#111111'} />
+                  <ChevronLeft size={28} color={isComplete ? '#000000' : '#FFFFFF'} />
                 </Pressable>
               ) : (
                 <View style={styles.backPlaceholder} />
               )}
-              <Text style={[styles.stepLabel, currentStep <= 11 && { color: '#9E9E9E' }]}>{STEP_LABELS[currentStep] || ''}</Text>
+              {!isComplete && (
+                <View style={styles.progressContainer}>
+                  {Array.from({ length: TOTAL_PROGRESS_STEPS }, (_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.progressDot,
+                        i < progressStep && styles.progressDotCompleted,
+                        i === progressStep - 1 && styles.progressDotCurrent,
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
               <View style={styles.backPlaceholder} />
             </View>
-
-
           </View>
         )}
 
@@ -159,20 +163,19 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#000000' },
+  containerComplete: { backgroundColor: '#FFFFFF' },
   safeArea: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  backPlaceholder: { width: 40 },
-  stepLabel: { color: '#616161', fontSize: 13, fontWeight: '600' as const },
-  progressContainer: { flexDirection: 'row', gap: 4 },
-  progressDotWrapper: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  backPlaceholder: { width: 44 },
+  progressContainer: { flex: 1, flexDirection: 'row', gap: 4, paddingHorizontal: 8 },
   progressDot: {
-    height: 4, borderRadius: 2, backgroundColor: '#E0E0E0',
+    flex: 1, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  progressDotCompleted: { backgroundColor: '#111111' },
-  progressDotCurrent: { backgroundColor: '#111111' },
+  progressDotCompleted: { backgroundColor: '#FFFFFF' },
+  progressDotCurrent: { backgroundColor: '#FFFFFF' },
   stepContainer: { flex: 1 },
   blurOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
 });

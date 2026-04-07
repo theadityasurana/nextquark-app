@@ -28,6 +28,32 @@ export interface OnboardingSkill {
     endYear: string;
   }
   
+  export interface OnboardingProject {
+    id: string;
+    title: string;
+    organization: string;
+    date: string;
+    exposure: string[];
+    bullets: string[];
+    link?: string;
+  }
+
+  export interface OnboardingCertification {
+    id: string;
+    name: string;
+    issuingOrganization: string;
+    credentialUrl: string;
+    skills: string[];
+  }
+
+  export interface OnboardingAchievement {
+    id: string;
+    title: string;
+    issuer: string;
+    date: string;
+    description?: string;
+  }
+
   export interface OnboardingData {
     firstName: string;
     lastName: string;
@@ -61,6 +87,12 @@ export interface OnboardingSkill {
     workAuthorizationStatus: string;
     referralCode: string;
     heardAboutUs: string;
+    // Resume-parsed extras (auto-populated)
+    projects?: OnboardingProject[];
+    certifications?: OnboardingCertification[];
+    achievements?: OnboardingAchievement[];
+    // Persisted onboarding step (resumes from here on re-open)
+    onboardingStep?: number;
   }
   
   export interface StepProps {
@@ -103,5 +135,9 @@ export interface OnboardingSkill {
     workAuthorizationStatus: '',
     referralCode: '',
     heardAboutUs: '',
+    projects: [],
+    certifications: [],
+    achievements: [],
+    onboardingStep: 1,
   };
   

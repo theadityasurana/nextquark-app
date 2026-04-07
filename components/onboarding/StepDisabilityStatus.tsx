@@ -10,26 +10,11 @@ const DISABILITY_OPTIONS = [
   'Prefer not to disclose',
 ];
 
-function AnimatedOption({ index, children }: { index: number; children: React.ReactNode }) {
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(20)).current;
-  useEffect(() => {
-    Animated.sequence([
-      Animated.delay(100 + index * 120),
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(slide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
-      ]),
-    ]).start();
-  }, []);
-  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
-}
-
 export default function StepDisabilityStatus({ data, onUpdate, onNext }: StepProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
 
   const handleSelect = (value: string) => {
@@ -41,69 +26,75 @@ export default function StepDisabilityStatus({ data, onUpdate, onNext }: StepPro
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          <View style={styles.titleRow}>
-            <Text style={styles.emoji}>📋</Text>
-            <Text style={styles.title}>Voluntary self-identification</Text>
-          </View>
-          <Text style={styles.subtitle}>
-            This information is collected for compliance purposes. It will not affect your job matches.
-          </Text>
-          <Text style={styles.sectionTitle}>Do you have a disability?</Text>
-          <View style={styles.options}>
-            {DISABILITY_OPTIONS.map((opt, idx) => {
-              const selected = data.disabilityStatus === opt;
-              return (
-                <AnimatedOption key={opt} index={idx}>
-                  <Pressable
-                    style={[styles.option, selected && styles.optionSelected]}
-                    onPress={() => handleSelect(opt)}
-                  >
-                    <Text style={[styles.optionText, selected && styles.optionTextSelected]} numberOfLines={2}>{opt}</Text>
-                    {selected && <Check size={18} color="#111111" />}
-                  </Pressable>
-                </AnimatedOption>
-              );
-            })}
-          </View>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.title}>Voluntary Self-Identification</Text>
+        <Text style={styles.subtitle}>
+          This information is collected for compliance purposes. It will not affect your job matches.
+        </Text>
+        <Text style={styles.sectionHeader}>DO YOU HAVE A DISABILITY?</Text>
+
+        <View style={styles.groupedCard}>
+          {DISABILITY_OPTIONS.map((opt, idx) => {
+            const selected = data.disabilityStatus === opt;
+            const isLast = idx === DISABILITY_OPTIONS.length - 1;
+            return (
+              <Pressable
+                key={opt}
+                style={[styles.row, !isLast && styles.rowBorder]}
+                onPress={() => handleSelect(opt)}
+              >
+                <Text style={styles.rowLabel} numberOfLines={2}>{opt}</Text>
+                {selected && <Check size={20} color="#007AFF" strokeWidth={3} />}
+              </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
 
-      <Pressable
-        style={[styles.nextButton, !canContinue && styles.nextButtonDisabled]}
-        onPress={canContinue ? onNext : undefined}
-        disabled={!canContinue}
-      >
-        <Text style={[styles.nextButtonText, !canContinue && styles.nextButtonTextDisabled]}>Continue →</Text>
-      </Pressable>
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.nextButton, !canContinue && styles.nextButtonDisabled]}
+          onPress={canContinue ? onNext : undefined}
+          disabled={!canContinue}
+        >
+          <Text style={[styles.nextButtonText, !canContinue && styles.nextButtonTextDisabled]}>Continue</Text>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111', paddingHorizontal: 24, justifyContent: 'space-between', paddingBottom: 24 },
+  container: { flex: 1, backgroundColor: '#000000', justifyContent: 'space-between' },
   scrollView: { flex: 1 },
-  content: { paddingTop: 20, paddingBottom: 20 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  emoji: { fontSize: 36 },
-  title: { fontSize: 24, fontWeight: '900' as const, color: '#FFFFFF', flex: 1 },
-  subtitle: { fontSize: 14, color: '#9E9E9E', lineHeight: 20, marginBottom: 28 },
-  sectionTitle: { fontSize: 17, fontWeight: '800' as const, color: '#FFFFFF', marginBottom: 12 },
-  options: { gap: 8 },
-  option: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    minHeight: 48, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#1A1A1A', borderWidth: 1.5, borderColor: '#333333',
+  scrollContent: { paddingTop: 24, paddingHorizontal: 20, paddingBottom: 20 },
+  title: { fontSize: 32, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
+  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.5)', lineHeight: 21, marginBottom: 28 },
+  sectionHeader: {
+    fontSize: 13, fontWeight: '400', color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 0.5, marginBottom: 8, marginLeft: 4,
   },
-  optionSelected: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
-  optionText: { flex: 1, color: '#FFFFFF', fontSize: 14, fontWeight: '600' as const, marginRight: 8 },
-  optionTextSelected: { color: '#111111' },
+  groupedCard: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 13, paddingHorizontal: 16,
+    minHeight: 48,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  rowLabel: { flex: 1, fontSize: 16, color: '#FFFFFF', marginRight: 8 },
+  footer: { paddingHorizontal: 20, paddingBottom: 16 },
   nextButton: {
-    height: 56, borderRadius: 16, backgroundColor: '#FFFFFF',
+    height: 50, borderRadius: 12, backgroundColor: '#007AFF',
     alignItems: 'center', justifyContent: 'center',
   },
-  nextButtonDisabled: { backgroundColor: '#333333' },
-  nextButtonText: { fontSize: 17, fontWeight: '700' as const, color: '#111111' },
-  nextButtonTextDisabled: { color: '#666666' },
+  nextButtonDisabled: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  nextButtonText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  nextButtonTextDisabled: { color: 'rgba(255,255,255,0.3)' },
 });

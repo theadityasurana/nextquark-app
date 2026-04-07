@@ -4,39 +4,24 @@ import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
 
 const LEVELS = [
-  { key: 'internship', label: 'Internship', emoji: '🎒', color: '#8B5CF6' },
-  { key: 'entry_level', label: 'Entry Level & Graduate', emoji: '🎓', color: '#3B82F6' },
-  { key: 'junior', label: 'Junior (1-2 years)', emoji: '🌱', color: '#10B981' },
-  { key: 'mid', label: 'Mid Level (3-5 years)', emoji: '💼', color: '#F59E0B' },
-  { key: 'senior', label: 'Senior (6-9 years)', emoji: '🚀', color: '#EF4444' },
-  { key: 'expert', label: 'Expert & Leadership\n(10+ years)', emoji: '👑', color: '#EC4899' },
+  { key: 'internship', label: 'Internship', emoji: '🎒' },
+  { key: 'entry_level', label: 'Entry Level & Graduate', emoji: '🎓' },
+  { key: 'junior', label: 'Junior (1-2 years)', emoji: '🌱' },
+  { key: 'mid', label: 'Mid Level (3-5 years)', emoji: '💼' },
+  { key: 'senior', label: 'Senior (6-9 years)', emoji: '🚀' },
+  { key: 'expert', label: 'Expert & Leadership (10+ years)', emoji: '👑' },
 ];
-
-function AnimatedOption({ index, children }: { index: number; children: React.ReactNode }) {
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(20)).current;
-  useEffect(() => {
-    Animated.sequence([
-      Animated.delay(100 + index * 120),
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(slide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
-      ]),
-    ]).start();
-  }, []);
-  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
-}
 
 export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
 
   const handleSelect = (key: string) => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== 'web') Haptics.selectionAsync();
     onUpdate({ experienceLevel: key });
     setError('');
   };
@@ -52,33 +37,30 @@ export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProp
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.emoji}>💼</Text>
-          <Text style={styles.title}>How much experience do you have? <Text style={styles.asterisk}>*</Text></Text>
-        </View>
-        <Text style={styles.subtitle}>Select your experience level below.</Text>
+        <Text style={styles.title}>Experience Level</Text>
+        <Text style={styles.subtitle}>Select your current experience level</Text>
       </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-        {LEVELS.map(({ key, label, emoji, color }, idx) => {
-          const selected = data.experienceLevel === key;
-          return (
-            <AnimatedOption key={key} index={idx}>
+        <View style={styles.groupedCard}>
+          {LEVELS.map(({ key, label, emoji }, idx) => {
+            const selected = data.experienceLevel === key;
+            const isLast = idx === LEVELS.length - 1;
+            return (
               <Pressable
-                style={[styles.option, selected && { borderColor: color, backgroundColor: '#1A1A1A' }]}
+                key={key}
+                style={[styles.row, !isLast && styles.rowBorder]}
                 onPress={() => handleSelect(key)}
               >
-                <View style={[styles.emojiWrap, { backgroundColor: `${color}15` }]}>
-                  <Text style={styles.optionEmoji}>{emoji}</Text>
-                </View>
-                <Text style={[styles.optionLabel, selected && { color: '#FFFFFF' }]}>{label}</Text>
-                <View style={[styles.radio, selected && { borderColor: color }]}>
-                  {selected && <View style={[styles.radioDot, { backgroundColor: color }]} />}
+                <Text style={styles.rowEmoji}>{emoji}</Text>
+                <Text style={styles.rowLabel}>{label}</Text>
+                <View style={[styles.radio, selected && styles.radioSelected]}>
+                  {selected && <View style={styles.radioDot} />}
                 </View>
               </Pressable>
-            </AnimatedOption>
-          );
-        })}
+            );
+          })}
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -87,7 +69,7 @@ export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProp
           style={[styles.nextButton, !data.experienceLevel && styles.nextButtonDisabled]}
           onPress={handleNext}
         >
-          <Text style={[styles.nextButtonText, !data.experienceLevel && styles.nextButtonTextDisabled]}>Next →</Text>
+          <Text style={[styles.nextButtonText, !data.experienceLevel && styles.nextButtonTextDisabled]}>Continue</Text>
         </Pressable>
       </View>
     </Animated.View>
@@ -95,38 +77,42 @@ export default function StepExperienceLevel({ data, onUpdate, onNext }: StepProp
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111', paddingHorizontal: 24, paddingBottom: 24 },
-  header: { paddingTop: 12, marginBottom: 16 },
-  emoji: { fontSize: 36 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
-  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', flex: 1 },
-  subtitle: { fontSize: 15, color: '#9E9E9E', lineHeight: 22 },
-  asterisk: { color: '#EF4444', fontSize: 24 },
-  errorText: { color: '#EF4444', fontSize: 13, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: '#000000' },
+  header: { paddingTop: 24, paddingHorizontal: 20, marginBottom: 20 },
+  title: { fontSize: 32, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
+  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.5)' },
   list: { flex: 1 },
-  listContent: { gap: 8, paddingBottom: 16 },
-  option: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14,
-    backgroundColor: '#1E1E1E', borderWidth: 1.5, borderColor: '#2A2A2A',
+  listContent: { paddingHorizontal: 20, paddingBottom: 16 },
+  groupedCard: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  emojiWrap: {
-    width: 38, height: 38, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
+  row: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 13, paddingHorizontal: 16,
+    minHeight: 50,
   },
-  optionEmoji: { fontSize: 20 },
-  optionLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#BBBBBB' },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  rowEmoji: { fontSize: 22, marginRight: 14 },
+  rowLabel: { flex: 1, fontSize: 16, color: '#FFFFFF' },
   radio: {
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2, borderColor: '#3A3A3A', alignItems: 'center', justifyContent: 'center',
-  },
-  radioDot: { width: 10, height: 10, borderRadius: 5 },
-  footer: { paddingTop: 8 },
-  nextButton: {
-    height: 56, borderRadius: 16, backgroundColor: '#FFFFFF',
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
-  nextButtonDisabled: { backgroundColor: '#333333' },
-  nextButtonText: { fontSize: 17, fontWeight: '700', color: '#111111' },
-  nextButtonTextDisabled: { color: '#666666' },
+  radioSelected: { borderColor: '#007AFF', backgroundColor: '#007AFF' },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
+  errorText: { color: '#FF453A', fontSize: 13, marginBottom: 8, textAlign: 'center' },
+  footer: { paddingHorizontal: 20, paddingBottom: 16 },
+  nextButton: {
+    height: 50, borderRadius: 12, backgroundColor: '#007AFF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  nextButtonDisabled: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  nextButtonText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  nextButtonTextDisabled: { color: 'rgba(255,255,255,0.3)' },
 });

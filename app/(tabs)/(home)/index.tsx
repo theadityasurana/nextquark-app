@@ -26,6 +26,7 @@ import JobCard from '@/components/JobCard';
 import { MAJOR_CITIES } from '@/constants/cities';
 import { mockUser } from '@/mocks/user';
 import { fetchJobsFromSupabase, fetchRemainingJobs, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
+import { computeMatchScores } from '@/lib/match-scoring';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
@@ -389,6 +390,9 @@ export default function HomeScreen() {
     } else {
       jobsList = mockJobs;
     }
+
+    // Compute real match scores based on user profile
+    jobsList = computeMatchScores(userProfile || null, jobsList);
     
     // Shuffle the jobs array using a seeded approach so it's stable
     const shuffled = [...jobsList];
@@ -398,7 +402,7 @@ export default function HomeScreen() {
     }
     
     return shuffled;
-  }, [supabaseJobs, remainingJobs]);
+  }, [supabaseJobs, remainingJobs, userProfile]);
 
   // Calculate For You count separately (constant regardless of active section)
   const forYouCount = useMemo(() => {
@@ -1271,7 +1275,7 @@ export default function HomeScreen() {
           <View style={styles.logoRow}>
             <Image source={require('@/assets/images/header.png')} style={styles.appLogo} resizeMode="contain" />
           </View>
-          <Text style={[styles.headerTitle, { color: colors.secondary }]}>{greeting}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.headerTitle, { color: colors.secondary }]}>{greeting}</Text>
           <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>
             {isLoadingJobs 
               ? 'Loading jobs...' 

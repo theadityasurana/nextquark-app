@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Linking } from 'react-native';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -9,6 +10,7 @@ import Colors from '@/constants/colors';
 import { Job } from '@/types';
 import { fetchJobsByCompany, fetchCompanyFromSupabase, fetchUserApplications } from '@/lib/jobs';
 import { useAuth } from '@/contexts/AuthContext';
+import { SkeletonCompanyProfile } from '@/components/Skeleton';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -39,6 +41,7 @@ export default function CompanyProfileScreen() {
   const router = useRouter();
   const { companyName } = useLocalSearchParams<{ companyName: string }>();
   const [activeTab, setActiveTab] = useState<TabType>('Overview');
+  const [visibleJobs, setVisibleJobs] = useState(10);
   const { supabaseUserId } = useAuth();
 
   const { data: supabaseCompanyJobs, isLoading: isLoadingJobs } = useQuery({
@@ -98,9 +101,15 @@ export default function CompanyProfileScreen() {
 
   if (isLoadingJobs || isLoadingCompany) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={[styles.emptyText, { marginTop: 12 }]}>Loading company...</Text>
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#F5F5F5' }]}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: Colors.textPrimary }]}>{companyName || 'Company'}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <SkeletonCompanyProfile />
       </View>
     );
   }
@@ -232,7 +241,7 @@ export default function CompanyProfileScreen() {
   const renderJobs = () => (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
       <Text style={styles.jobsCount}>{companyJobs.length} open position{companyJobs.length !== 1 ? 's' : ''}</Text>
-      {companyJobs.map((job) => (
+      {companyJobs.slice(0, visibleJobs).map((job) => (
         <Pressable key={job.id} style={styles.jobListCard} onPress={() => handleJobPress(job)}>
           <View style={styles.jobListHeader}>
             <Text style={styles.jobListTitle}>{job.jobTitle}</Text>
@@ -262,6 +271,11 @@ export default function CompanyProfileScreen() {
           </View>
         </Pressable>
       ))}
+      {visibleJobs < companyJobs.length && (
+        <Pressable style={styles.showMoreBtn} onPress={() => setVisibleJobs(prev => prev + 10)}>
+          <Text style={styles.showMoreText}>Show more jobs</Text>
+        </Pressable>
+      )}
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -301,18 +315,19 @@ export default function CompanyProfileScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>{companyName}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={styles.companyHero}>
-        <Image source={{ uri: companyLogoUrl || `https://logo.clearbit.com/${(companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '')}.com` }} style={styles.companyLogo} />
-        <Text style={styles.companyName}>{companyName}</Text>
-        <Text style={styles.companyOneLiner}>{companyMeta.oneLiner}</Text>
+      <View style={styles.heroSection}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle} numberOfLines={1}>{companyName}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.companyHero}>
+          <Image source={{ uri: companyLogoUrl || `https://logo.clearbit.com/${(companyName || '').toLowerCase().replace(/[^a-z0-9]/g, '')}.com` }} style={styles.companyLogo} />
+          <Text style={styles.companyName}>{companyName}</Text>
+          <Text style={styles.companyOneLiner}>{companyMeta.oneLiner}</Text>
+        </View>
       </View>
 
       <View style={styles.tabBar}>
@@ -339,12 +354,13 @@ export default function CompanyProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F8FF' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
-  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary, flex: 1, textAlign: 'center' },
-  companyHero: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 20 },
-  companyLogo: { width: 72, height: 72, borderRadius: 20, backgroundColor: Colors.borderLight, marginBottom: 12 },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  heroSection: { paddingHorizontal: 16, paddingBottom: 20, backgroundColor: '#F5F5F5' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.borderLight, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary, flex: 1, textAlign: 'center' },
+  companyHero: { alignItems: 'center', paddingVertical: 12 },
+  companyLogo: { width: 72, height: 72, borderRadius: 20, backgroundColor: Colors.borderLight, marginBottom: 12, borderWidth: 2, borderColor: Colors.borderLight },
   companyName: { fontSize: 24, fontWeight: '900' as const, color: Colors.secondary, marginBottom: 4 },
   companyOneLiner: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center' },
   tabBar: { flexDirection: 'row', marginHorizontal: 16, backgroundColor: '#F0F0F0', borderRadius: 12, padding: 4, marginBottom: 4 },
@@ -390,6 +406,8 @@ const styles = StyleSheet.create({
   locTypeText: { fontSize: 10, fontWeight: '600' as const, color: Colors.textSecondary, textTransform: 'capitalize' as const },
   remoteText: { color: Colors.accent },
   jobListSalary: { fontSize: 14, fontWeight: '700' as const, color: Colors.secondary },
+  showMoreBtn: { alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.surface, marginTop: 4 },
+  showMoreText: { fontSize: 14, fontWeight: '600' as const, color: Colors.primary },
   emptyAppState: { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyAppTitle: { fontSize: 18, fontWeight: '700' as const, color: Colors.secondary },
   emptyAppText: { fontSize: 14, color: Colors.textTertiary, textAlign: 'center' },

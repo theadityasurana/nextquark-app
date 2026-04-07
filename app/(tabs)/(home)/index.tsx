@@ -1917,7 +1917,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 12 },
   headerLeft: { flex: 1 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  appLogo: { height: 28, width: 200, alignSelf: 'flex-start' },
+  appLogo: { height: 42, width: 180, alignSelf: 'flex-start' },
   appName: { fontSize: 12, fontWeight: '800' as const, color: "#000", letterSpacing: 2, textTransform: 'uppercase' as const },
   subscriptionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   subscriptionBadgeFree: { backgroundColor: '#10B981' },

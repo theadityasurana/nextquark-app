@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, Briefcase, GraduationCap, Rocket, TrendingUp, Award, Crown } from '@/components/ProfileIcons';
@@ -24,6 +25,7 @@ export default function EditExperienceLevelScreen() {
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
   const [selected, setSelected] = useState(userProfile?.experienceLevel || '');
+  const hasChanges = selected !== (userProfile?.experienceLevel || '');
 
   const handleSave = async () => {
     if (!userProfile) return;
@@ -33,16 +35,19 @@ export default function EditExperienceLevelScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Experience Level</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <LinearGradient colors={['#1A365D', '#2A4A7F', colors.background]} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtnGrad} onPress={() => router.back()}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitleGrad}>Experience Level</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
+        <Text style={[styles.heroSubtext, { color: colors.textPrimary }]}>Select your current professional level</Text>
+      </LinearGradient>
 
-      <View style={styles.content}>
-        <Text style={[styles.helperText, { color: colors.textTertiary }]}>Select the level that best describes your current professional experience. This helps us match you with roles at the right seniority.</Text>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
         {LEVELS.map(({ key, label, icon: Icon, color }) => {
           const sel = selected === key;
           return (
@@ -62,10 +67,10 @@ export default function EditExperienceLevelScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
-        <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
+        <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }, !hasChanges && { opacity: 0.4 }]} onPress={handleSave} disabled={!hasChanges}>
           <Check size={18} color={colors.surface} />
           <Text style={[styles.saveBtnText, { color: colors.surface }]}>Save</Text>
         </Pressable>
@@ -76,11 +81,16 @@ export default function EditExperienceLevelScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  heroGradient: { paddingHorizontal: 16, paddingBottom: 18 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  backBtnGrad: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitleGrad: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  heroSubtext: { fontSize: 15, textAlign: 'center', marginTop: 4, fontWeight: '500' as const, lineHeight: 21 },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700' },
-  content: { flex: 1, padding: 16, gap: 10 },
-  helperText: { fontSize: 13, lineHeight: 19, marginBottom: 6 },
+  content: { flex: 1 },
+  contentInner: { padding: 16, gap: 10, paddingBottom: 20 },
   option: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 16, borderRadius: 14, borderWidth: 1,
@@ -88,6 +98,6 @@ const styles = StyleSheet.create({
   iconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   optionText: { flex: 1, fontSize: 15, fontWeight: '600' },
   footer: { paddingHorizontal: 16, paddingTop: 8 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14 },
-  saveBtnText: { fontSize: 16, fontWeight: '700' },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10 },
+  saveBtnText: { fontSize: 14, fontWeight: '700' },
 });

@@ -13,6 +13,7 @@ import { fetchJobsByCompany } from '@/lib/jobs';
 import { Job } from '@/types';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { supabase } from '@/lib/supabase';
+import { SkeletonFriendCircle } from '@/components/Skeleton';
 
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share } from 'react-native';
@@ -306,7 +307,9 @@ export default function DiscoverScreen() {
               </View>
             )}
             {isLoadingProfiles ? (
-              <Text style={styles.loadingText}>Loading friends...</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+                {[1,2,3,4,5].map(i => <SkeletonFriendCircle key={i} />)}
+              </ScrollView>
             ) : filteredProfiles.length === 0 ? (
               <Text style={[styles.emptyFriendsText, { color: colors.textSecondary }]}>No friends found</Text>
             ) : (

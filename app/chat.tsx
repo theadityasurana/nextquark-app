@@ -21,6 +21,7 @@ import { ArrowLeft, Reply, Forward, Paperclip, Send, ImageIcon, FileText, File, 
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAvatarUrl, fetchThreadMessages, sendEmailViaResend, getOrCreateProxyEmail, type InboundEmail, type SentEmail } from '@/lib/resend';
+import { SkeletonChatThread } from '@/components/Skeleton';
 
 const TEXT_SIZES = [
   { label: 'Small', size: 12 },
@@ -224,10 +225,7 @@ function ChatScreen() {
       </View>
 
       {threadQuery.isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.secondary} />
-          <Text style={styles.loadingText}>Loading thread...</Text>
-        </View>
+        <SkeletonChatThread />
       ) : threadQuery.isError ? (
         <View style={styles.errorContainer}>
           <AlertCircle size={44} color={Colors.error} />

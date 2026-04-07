@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Check, X, Trophy } from '@/components/ProfileIcons';
@@ -28,13 +29,15 @@ export default function EditAchievementsScreen() {
   const [issuer, setIssuer] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
+  const [formTouched, setFormTouched] = useState(false);
 
-  const resetForm = () => { setTitle(''); setIssuer(''); setDate(''); setDescription(''); setEditing(null); };
+  const resetForm = () => { setTitle(''); setIssuer(''); setDate(''); setDescription(''); setEditing(null); setFormTouched(false); };
   const openAdd = () => { resetForm(); setShowForm(true); };
   const openEdit = (a: Achievement) => { setEditing(a); setTitle(a.title); setIssuer(a.issuer); setDate(a.date); setDescription(a.description ?? ''); setShowForm(true); };
 
   const handleSave = () => {
-    if (!title.trim() || !issuer.trim()) { Alert.alert('Required', 'Fill in title and issuer'); return; }
+    setFormTouched(true);
+    if (!title.trim() || !issuer.trim()) return;
     const a: Achievement = { id: editing?.id ?? `ach${Date.now()}`, title: title.trim(), issuer: issuer.trim(), date: date.trim(), description: description.trim() || undefined };
     if (editing) { setItems(prev => prev.map(i => i.id === editing.id ? a : i)); } else { setItems(prev => [...prev, a]); }
     setShowForm(false); resetForm();
@@ -58,9 +61,11 @@ export default function EditAchievementsScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={s.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[s.label, { color: colors.textSecondary }]}>Title *</Text>
-            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Best Innovation Award" placeholderTextColor={colors.textTertiary} value={title} onChangeText={setTitle} />
+            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !title.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Best Innovation Award" placeholderTextColor={colors.textTertiary} value={title} onChangeText={setTitle} />
+            {formTouched && !title.trim() && <Text style={s.fieldError}>Title is required</Text>}
             <Text style={[s.label, { color: colors.textSecondary }]}>Issuer *</Text>
-            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. TechCorp" placeholderTextColor={colors.textTertiary} value={issuer} onChangeText={setIssuer} />
+            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !issuer.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. TechCorp" placeholderTextColor={colors.textTertiary} value={issuer} onChangeText={setIssuer} />
+            {formTouched && !issuer.trim() && <Text style={s.fieldError}>Issuer is required</Text>}
             <Text style={[s.label, { color: colors.textSecondary }]}>Date</Text>
             <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. 2024" placeholderTextColor={colors.textTertiary} value={date} onChangeText={setDate} />
             <Text style={[s.label, { color: colors.textSecondary }]}>Description</Text>
@@ -74,13 +79,29 @@ export default function EditAchievementsScreen() {
 
   return (
     <View style={[s.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={s.header}>
-        <Pressable style={[s.backBtn, { backgroundColor: colors.surface }]} onPress={handleSaveAll}><ArrowLeft size={22} color={colors.textPrimary} /></Pressable>
-        <Text style={[s.headerTitle, { color: colors.textPrimary }]}>Achievements & Honors</Text>
-        <Pressable style={[s.backBtn, { backgroundColor: colors.surface }]} onPress={openAdd}><Plus size={22} color={colors.textPrimary} /></Pressable>
-      </View>
+      <LinearGradient colors={['#4A2C0A', '#6B4423', colors.background]} style={s.heroGradient}>
+        <View style={s.header}>
+          <Pressable style={s.backBtnGrad} onPress={handleSaveAll}><ArrowLeft size={22} color="#FFFFFF" /></Pressable>
+          <Text style={s.headerTitleGrad}>Achievements & Honors</Text>
+          <Pressable style={s.backBtnGrad} onPress={openAdd}><Plus size={22} color="#FFFFFF" /></Pressable>
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=800&h=200&fit=crop' }} style={s.heroBanner} />
+        <Text style={[s.heroSubtext, { color: colors.textPrimary }]}>Showcase what sets you apart</Text>
+      </LinearGradient>
       <ScrollView contentContainerStyle={s.listContent}>
-        {items.length === 0 && <Text style={[s.emptyText, { color: colors.textTertiary }]}>No achievements yet. Tap + to add.</Text>}
+        {items.length === 0 && (
+          <View style={s.emptyState}>
+            <View style={s.emptyIconCircle}>
+              <Trophy size={32} color="#B8860B" />
+            </View>
+            <Text style={[s.emptyTitle, { color: colors.textPrimary }]}>No achievements yet</Text>
+            <Text style={[s.emptyText, { color: colors.textTertiary }]}>Tap + above to showcase your honors</Text>
+            <Pressable style={[s.emptyAddBtn, { backgroundColor: colors.secondary }]} onPress={openAdd}>
+              <Plus size={16} color={colors.surface} />
+              <Text style={[s.emptyAddBtnText, { color: colors.surface }]}>Add Achievement</Text>
+            </Pressable>
+          </View>
+        )}
         {items.map(a => (
           <Pressable key={a.id} style={[s.itemCard, { backgroundColor: colors.surface }]} onPress={() => openEdit(a)}>
             <View style={[s.itemIcon, { backgroundColor: 'rgba(255,215,0,0.15)' }]}><Trophy size={18} color="#FFD700" /></View>
@@ -106,15 +127,27 @@ export default function EditAchievementsScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  container: { flex: 1 }, heroGradient: { paddingHorizontal: 16, paddingBottom: 18 },
+  backBtnGrad: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitleGrad: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  heroSubtext: { fontSize: 15, textAlign: 'center', marginTop: 4, fontWeight: '500', lineHeight: 21 },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' }, headerTitle: { fontSize: 17, fontWeight: '700' },
   listContent: { padding: 16, gap: 10 }, formContent: { padding: 16, paddingBottom: 40 }, emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
   itemCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, gap: 12 },
   itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   itemTitle: { fontSize: 15, fontWeight: '700' }, itemSub: { fontSize: 13, marginTop: 2 }, itemDate: { fontSize: 12, marginTop: 2 },
+  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIconCircle: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#FFF8E1', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyText: { fontSize: 13, textAlign: 'center' },
+  emptyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
+  emptyAddBtnText: { fontSize: 14, fontWeight: '700' },
+  fieldError: { fontSize: 11, color: '#EF4444', marginTop: -6, marginBottom: 6 },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 8 },
   input: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, marginBottom: 8, borderWidth: 1 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-  saveBtnText: { fontSize: 16, fontWeight: '700' },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10, marginTop: 16 },
+  saveBtnText: { fontSize: 14, fontWeight: '700' },
 });

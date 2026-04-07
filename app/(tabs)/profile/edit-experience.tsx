@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Check, X, Pencil, Briefcase, MapPin } from '@/components/ProfileIcons';
@@ -39,12 +40,13 @@ export default function EditExperienceScreen() {
   const [expType, setExpType] = useState('Full-time');
   const [expMode, setExpMode] = useState('Onsite');
   const [expLocation, setExpLocation] = useState('');
+  const [formTouched, setFormTouched] = useState(false);
 
   const resetForm = () => {
     setExpTitle(''); setExpCompany(''); setExpStartDate(''); setExpEndDate('');
     setExpDescription('• '); setExpIsCurrent(false); setExpSkills('');
     setExpType('Full-time'); setExpMode('Onsite'); setExpLocation('');
-    setEditing(null);
+    setEditing(null); setFormTouched(false);
   };
 
   const openAdd = () => { resetForm(); setShowForm(true); };
@@ -62,10 +64,8 @@ export default function EditExperienceScreen() {
   };
 
   const handleSave = () => {
-    if (!expTitle.trim() || !expCompany.trim()) {
-      Alert.alert('Required', 'Please fill in title and company');
-      return;
-    }
+    setFormTouched(true);
+    if (!expTitle.trim() || !expCompany.trim()) return;
     const exp: WorkExperience = {
       id: editing?.id ?? `e${Date.now()}`,
       title: expTitle.trim(), company: expCompany.trim(),
@@ -104,6 +104,14 @@ export default function EditExperienceScreen() {
     }
   };
 
+  const moveItem = (idx: number, dir: -1 | 1) => {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= experiences.length) return;
+    const arr = [...experiences];
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    setExperiences(arr);
+  };
+
   const handleExpDescriptionChange = (text: string) => {
     if (text.endsWith('\n') && !text.endsWith('\n\n')) {
       setExpDescription(text + '• ');
@@ -129,9 +137,11 @@ export default function EditExperienceScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Job Title *</Text>
-            <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Software Engineer" placeholderTextColor={colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !expTitle.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Software Engineer" placeholderTextColor={colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />
+            {formTouched && !expTitle.trim() && <Text style={styles.fieldError}>Job title is required</Text>}
             <Text style={[styles.label, { color: colors.textSecondary }]}>Company *</Text>
-            <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Google" placeholderTextColor={colors.textTertiary} value={expCompany} onChangeText={setExpCompany} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !expCompany.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Google" placeholderTextColor={colors.textTertiary} value={expCompany} onChangeText={setExpCompany} />
+            {formTouched && !expCompany.trim() && <Text style={styles.fieldError}>Company is required</Text>}
             <Text style={[styles.label, { color: colors.textSecondary }]}>Employment Type</Text>
             <View style={styles.chipGrid}>
               {EXP_TYPE_OPTIONS.map(t => (
@@ -176,45 +186,72 @@ export default function EditExperienceScreen() {
             <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. React, TypeScript" placeholderTextColor={colors.textTertiary} value={expSkills} onChangeText={setExpSkills} />
             <Text style={[styles.label, { color: colors.textSecondary }]}>Description</Text>
             <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="Describe your role..." placeholderTextColor={colors.textTertiary} value={expDescription} onChangeText={handleExpDescriptionChange} multiline numberOfLines={4} />
-            <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
-              <Check size={18} color={colors.surface} />
-              <Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
-            </Pressable>
+            <View style={{ height: 70 }} />
           </ScrollView>
         </KeyboardAvoidingView>
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
+            <Check size={16} color={colors.surface} />
+            <Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={handleSaveAll}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Experience</Text>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={openAdd}>
-          <Plus size={22} color={colors.textPrimary} />
-        </Pressable>
-      </View>
+      <LinearGradient colors={['#1B2838', '#2C3E50', colors.background]} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtnGrad} onPress={handleSaveAll}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitleGrad}>Experience</Text>
+          <Pressable style={styles.backBtnGrad} onPress={openAdd}>
+            <Plus size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
+        <Text style={[styles.heroSubtext, { color: colors.textPrimary }]}>Add your work history to stand out</Text>
+      </LinearGradient>
       <ScrollView contentContainerStyle={styles.listContent}>
         {experiences.length === 0 && (
-          <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No experience added yet. Tap + to add.</Text>
-        )}
-        {experiences.map(exp => (
-          <Pressable key={exp.id} style={[styles.itemCard, { backgroundColor: colors.surface }]} onPress={() => openEdit(exp)}>
-            <View style={[styles.itemIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
-              <Briefcase size={18} color={colors.accent} />
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <Briefcase size={32} color="#1B2838" />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{exp.title}</Text>
-              <Text style={[styles.itemSub, { color: colors.textSecondary }]}>{exp.company}</Text>
-              <Text style={[styles.itemDate, { color: colors.textTertiary }]}>{exp.startDate} — {exp.isCurrent ? 'Present' : exp.endDate}</Text>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No experience yet</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Tap + above to add your work history</Text>
+            <Pressable style={[styles.emptyAddBtn, { backgroundColor: colors.secondary }]} onPress={openAdd}>
+              <Plus size={16} color={colors.surface} />
+              <Text style={[styles.emptyAddBtnText, { color: colors.surface }]}>Add Experience</Text>
+            </Pressable>
+          </View>
+        )}
+        {experiences.map((exp, idx) => (
+          <View key={exp.id} style={[styles.itemCard, { backgroundColor: colors.surface }]}>
+            <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }} onPress={() => openEdit(exp)}>
+              <View style={[styles.itemIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
+                <Briefcase size={18} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{exp.title}</Text>
+                <Text style={[styles.itemSub, { color: colors.textSecondary }]}>{exp.company}</Text>
+                <Text style={[styles.itemDate, { color: colors.textTertiary }]}>{exp.startDate} — {exp.isCurrent ? 'Present' : exp.endDate}</Text>
+              </View>
+            </Pressable>
+            <View style={styles.reorderCol}>
+              <Pressable onPress={() => moveItem(idx, -1)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.2 : 1 }}>
+                <ArrowLeft size={14} color={colors.textTertiary} style={{ transform: [{ rotate: '90deg' }] }} />
+              </Pressable>
+              <Pressable onPress={() => moveItem(idx, 1)} disabled={idx === experiences.length - 1} style={{ opacity: idx === experiences.length - 1 ? 0.2 : 1 }}>
+                <ArrowLeft size={14} color={colors.textTertiary} style={{ transform: [{ rotate: '-90deg' }] }} />
+              </Pressable>
             </View>
             <Pressable onPress={() => handleDelete(exp.id)} hitSlop={8}>
               <X size={16} color={colors.textTertiary} />
             </Pressable>
-          </Pressable>
+          </View>
         ))}
       </ScrollView>
       {isWizard && (
@@ -231,12 +268,25 @@ export default function EditExperienceScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  heroGradient: { paddingHorizontal: 16, paddingBottom: 18 },
+  backBtnGrad: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitleGrad: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  heroSubtext: { fontSize: 15, textAlign: 'center', marginTop: 4, fontWeight: '500', lineHeight: 21 },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700' },
   listContent: { padding: 16, gap: 10 },
-  formContent: { padding: 16, paddingBottom: 40 },
-  emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
+  formContent: { padding: 16, paddingBottom: 20 },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
+  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIconCircle: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#E8F0FE', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyText: { fontSize: 13, textAlign: 'center' },
+  emptyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
+  emptyAddBtnText: { fontSize: 14, fontWeight: '700' },
+  reorderCol: { gap: 6, alignItems: 'center' },
+  fieldError: { fontSize: 11, color: '#EF4444', marginTop: -6, marginBottom: 6 },
   itemCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, gap: 12 },
   itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   itemTitle: { fontSize: 15, fontWeight: '700' },
@@ -252,6 +302,6 @@ const styles = StyleSheet.create({
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   checkboxLabel: { fontSize: 14 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-  saveBtnText: { fontSize: 16, fontWeight: '700' },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10, marginTop: 16 },
+  saveBtnText: { fontSize: 14, fontWeight: '700' },
 });

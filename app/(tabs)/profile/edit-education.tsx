@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Check, X, GraduationCap, ChevronDown } from '@/components/ProfileIcons';
@@ -37,11 +38,12 @@ export default function EditEducationScreen() {
   const [extracurriculars, setExtracurriculars] = useState('');
   const [uniSearch, setUniSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [formTouched, setFormTouched] = useState(false);
 
   const resetForm = () => {
     setInstitution(''); setDegree(''); setField(''); setStartDate(''); setEndDate('');
     setDescription(''); setAchievements(''); setExtracurriculars('');
-    setUniSearch(''); setShowDropdown(false); setEditing(null);
+    setUniSearch(''); setShowDropdown(false); setEditing(null); setFormTouched(false);
   };
 
   const openAdd = () => { resetForm(); setShowForm(true); };
@@ -55,7 +57,8 @@ export default function EditEducationScreen() {
   };
 
   const handleSave = () => {
-    if (!institution.trim() || !degree.trim()) { Alert.alert('Required', 'Please fill in institution and degree'); return; }
+    setFormTouched(true);
+    if (!institution.trim() || !degree.trim()) return;
     const edu: Education = {
       id: editing?.id ?? `ed${Date.now()}`, institution: institution.trim(), degree: degree.trim(),
       field: field.trim(), startDate: startDate.trim(), endDate: endDate.trim(),
@@ -83,6 +86,14 @@ export default function EditEducationScreen() {
     if (supabaseProfile) { await saveProfile({ ...supabaseProfile, education: items }); }
   };
 
+  const moveItem = (idx: number, dir: -1 | 1) => {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    const arr = [...items];
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    setItems(arr);
+  };
+
   if (showForm) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
@@ -96,10 +107,11 @@ export default function EditEducationScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Institution *</Text>
-            <View style={[styles.uniInputWrap, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <View style={[styles.uniInputWrap, { backgroundColor: colors.surface, borderColor: formTouched && !institution.trim() ? '#EF4444' : colors.borderLight }]}>
               <TextInput style={[styles.uniInput, { color: colors.textPrimary }]} placeholder="Select or type university" placeholderTextColor={colors.textTertiary} value={uniSearch} onChangeText={t => { setUniSearch(t); setInstitution(t); setShowDropdown(true); }} onFocus={() => setShowDropdown(true)} />
               <ChevronDown size={14} color={colors.textTertiary} />
             </View>
+            {formTouched && !institution.trim() && <Text style={styles.fieldError}>Institution is required</Text>}
             {showDropdown && (
               <View style={[styles.dropdown, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
                 <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -117,7 +129,8 @@ export default function EditEducationScreen() {
               </View>
             )}
             <Text style={[styles.label, { color: colors.textSecondary }]}>Degree *</Text>
-            <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Bachelor's" placeholderTextColor={colors.textTertiary} value={degree} onChangeText={setDegree} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !degree.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Bachelor's" placeholderTextColor={colors.textTertiary} value={degree} onChangeText={setDegree} />
+            {formTouched && !degree.trim() && <Text style={styles.fieldError}>Degree is required</Text>}
             <Text style={[styles.label, { color: colors.textSecondary }]}>Field of Study</Text>
             <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Computer Science" placeholderTextColor={colors.textTertiary} value={field} onChangeText={setField} />
             <View style={styles.dateRow}>
@@ -130,40 +143,69 @@ export default function EditEducationScreen() {
             <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="Dean's List, Awards..." placeholderTextColor={colors.textTertiary} value={achievements} onChangeText={setAchievements} multiline numberOfLines={2} />
             <Text style={[styles.label, { color: colors.textSecondary }]}>Extracurriculars</Text>
             <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="Clubs, Sports..." placeholderTextColor={colors.textTertiary} value={extracurriculars} onChangeText={setExtracurriculars} multiline numberOfLines={2} />
-            <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
-              <Check size={18} color={colors.surface} /><Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
-            </Pressable>
+            <View style={{ height: 70 }} />
           </ScrollView>
         </KeyboardAvoidingView>
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
+            <Check size={16} color={colors.surface} /><Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={handleSaveAll}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Education</Text>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={openAdd}>
-          <Plus size={22} color={colors.textPrimary} />
-        </Pressable>
-      </View>
+      <LinearGradient colors={['#0C2D48', '#145374', colors.background]} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtnGrad} onPress={handleSaveAll}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitleGrad}>Education</Text>
+          <Pressable style={styles.backBtnGrad} onPress={openAdd}>
+            <Plus size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
+        <Text style={[styles.heroSubtext, { color: colors.textPrimary }]}>Your academic background and qualifications</Text>
+      </LinearGradient>
       <ScrollView contentContainerStyle={styles.listContent}>
-        {items.length === 0 && <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No education added yet. Tap + to add.</Text>}
-        {items.map(edu => (
-          <Pressable key={edu.id} style={[styles.itemCard, { backgroundColor: colors.surface }]} onPress={() => openEdit(edu)}>
-            <View style={[styles.itemIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
-              <GraduationCap size={18} color={colors.accent} />
+        {items.length === 0 && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <GraduationCap size={32} color="#0C2D48" />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{edu.degree} in {edu.field}</Text>
-              <Text style={[styles.itemSub, { color: colors.textSecondary }]}>{edu.institution}</Text>
-              <Text style={[styles.itemDate, { color: colors.textTertiary }]}>{edu.startDate} — {edu.endDate}</Text>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No education yet</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Tap + above to add your academic background</Text>
+            <Pressable style={[styles.emptyAddBtn, { backgroundColor: colors.secondary }]} onPress={openAdd}>
+              <Plus size={16} color={colors.surface} />
+              <Text style={[styles.emptyAddBtnText, { color: colors.surface }]}>Add Education</Text>
+            </Pressable>
+          </View>
+        )}
+        {items.map((edu, idx) => (
+          <View key={edu.id} style={[styles.itemCard, { backgroundColor: colors.surface }]}>
+            <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }} onPress={() => openEdit(edu)}>
+              <View style={[styles.itemIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
+                <GraduationCap size={18} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{edu.degree} in {edu.field}</Text>
+                <Text style={[styles.itemSub, { color: colors.textSecondary }]}>{edu.institution}</Text>
+                <Text style={[styles.itemDate, { color: colors.textTertiary }]}>{edu.startDate} — {edu.endDate}</Text>
+              </View>
+            </Pressable>
+            <View style={styles.reorderCol}>
+              <Pressable onPress={() => moveItem(idx, -1)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.2 : 1 }}>
+                <ArrowLeft size={14} color={colors.textTertiary} style={{ transform: [{ rotate: '90deg' }] }} />
+              </Pressable>
+              <Pressable onPress={() => moveItem(idx, 1)} disabled={idx === items.length - 1} style={{ opacity: idx === items.length - 1 ? 0.2 : 1 }}>
+                <ArrowLeft size={14} color={colors.textTertiary} style={{ transform: [{ rotate: '-90deg' }] }} />
+              </Pressable>
             </View>
             <Pressable onPress={() => handleDelete(edu.id)} hitSlop={8}><X size={16} color={colors.textTertiary} /></Pressable>
-          </Pressable>
+          </View>
         ))}
       </ScrollView>
       {isWizard && (
@@ -180,12 +222,25 @@ export default function EditEducationScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  heroGradient: { paddingHorizontal: 16, paddingBottom: 18 },
+  backBtnGrad: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitleGrad: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  heroSubtext: { fontSize: 15, textAlign: 'center', marginTop: 4, fontWeight: '500', lineHeight: 21 },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700' },
   listContent: { padding: 16, gap: 10 },
-  formContent: { padding: 16, paddingBottom: 40 },
-  emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
+  formContent: { padding: 16, paddingBottom: 20 },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
+  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIconCircle: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyText: { fontSize: 13, textAlign: 'center' },
+  emptyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
+  emptyAddBtnText: { fontSize: 14, fontWeight: '700' },
+  reorderCol: { gap: 6, alignItems: 'center' },
+  fieldError: { fontSize: 11, color: '#EF4444', marginTop: -6, marginBottom: 6 },
   itemCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, gap: 12 },
   itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   itemTitle: { fontSize: 15, fontWeight: '700' },
@@ -195,8 +250,8 @@ const styles = StyleSheet.create({
   input: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, marginBottom: 8, borderWidth: 1 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   dateRow: { flexDirection: 'row', gap: 12 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-  saveBtnText: { fontSize: 16, fontWeight: '700' },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10, marginTop: 16 },
+  saveBtnText: { fontSize: 14, fontWeight: '700' },
   uniInputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8, borderWidth: 1 },
   uniInput: { flex: 1, fontSize: 15 },
   dropdown: { borderRadius: 12, borderWidth: 1, marginBottom: 8, maxHeight: 220 },

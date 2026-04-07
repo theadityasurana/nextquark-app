@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Lightbulb } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import { ArrowLeft, Lightbulb } from '@/components/ProfileIcons';
+import { darkColors } from '@/constants/colors';
 
 const tips = [
   {
@@ -81,24 +82,27 @@ const tips = [
 export default function QuickTipsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = darkColors;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Quick Tips</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <LinearGradient colors={['#0F172A', '#1E293B', colors.background]} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Quick Tips</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <RNImage source={require('@/assets/images/image.png')} style={styles.heroBanner} />
+        <View style={styles.heroSection}>
+          <Lightbulb size={32} color="#FFD700" />
+          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Level Up Your Job Search</Text>
+          <Text style={[styles.heroSubtext, { color: colors.textSecondary }]}>Expert tips to help you stand out and land your dream role faster.</Text>
+        </View>
+      </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.heroCard}>
-          <Lightbulb size={32} color="#FF9800" />
-          <Text style={styles.heroTitle}>Level Up Your Job Search</Text>
-          <Text style={styles.heroSubtext}>Expert tips to help you stand out and land your dream role faster.</Text>
-        </View>
-
         {tips.map((tip, idx) => (
           <View key={idx}>
             {tip.image && (
@@ -118,23 +122,25 @@ export default function QuickTipsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#EDF5FF' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
-  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary },
-  scrollContent: { paddingHorizontal: 16 },
-  heroCard: { alignItems: 'center', backgroundColor: '#FFF8E1', borderRadius: 20, padding: 24, marginBottom: 16 },
-  heroTitle: { fontSize: 22, fontWeight: '800' as const, color: Colors.secondary, marginTop: 12, textAlign: 'center' },
-  heroSubtext: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginTop: 6, lineHeight: 20 },
+  container: { flex: 1 },
+  heroGradient: { paddingHorizontal: 16, paddingBottom: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '800' as const, color: '#FFFFFF' },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  heroSection: { alignItems: 'center', paddingVertical: 8, gap: 8 },
+  heroTitle: { fontSize: 22, fontWeight: '800' as const, textAlign: 'center' },
+  heroSubtext: { fontSize: 13, textAlign: 'center', marginTop: 0, lineHeight: 20 },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
   tipCard: {
-    backgroundColor: Colors.surface, borderRadius: 16, padding: 20, marginBottom: 12,
+    backgroundColor: '#1E1E1E', borderRadius: 16, padding: 20, marginBottom: 12,
   },
   tipCardDark: {
     backgroundColor: '#111111',
   },
-  tipTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary, marginBottom: 10 },
+  tipTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF', marginBottom: 10 },
   tipTitleDark: { color: '#FFFFFF' },
-  tipBody: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24 },
+  tipBody: { fontSize: 15, color: 'rgba(255,255,255,0.7)', lineHeight: 24 },
   tipBodyDark: { color: 'rgba(255,255,255,0.75)' },
-  tipImage: { width: '100%', height: 180, borderRadius: 16, marginBottom: 12, backgroundColor: Colors.borderLight },
+  tipImage: { width: '100%', height: 180, borderRadius: 16, marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.1)' },
 });

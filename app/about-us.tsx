@@ -1,35 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Linkedin, Twitter, Github, Globe, Instagram } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import { ArrowLeft, Linkedin, Twitter, Github, Globe, Instagram } from '@/components/ProfileIcons';
+import { darkColors } from '@/constants/colors';
 import { Linking } from 'react-native';
 
 export default function AboutUsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = darkColors;
 
   const openLink = (url: string) => {
     Linking.openURL(url);
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>About Us</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <LinearGradient colors={['#0F172A', '#1E293B', colors.background]} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>About Us</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <RNImage source={require('@/assets/images/image.png')} style={styles.heroBanner} />
+        <View style={styles.heroSection}>
+          <Text style={[styles.brandName, { color: colors.textPrimary }]}>NEXTQUARK</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>Building the future of job hunting</Text>
+        </View>
+      </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.heroSection}>
-          <Text style={styles.brandName}>NEXTQUARK</Text>
-          <Text style={styles.tagline}>Building the future of job hunting</Text>
-        </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>About NextQuark</Text>
@@ -76,19 +81,19 @@ export default function AboutUsScreen() {
             <Text style={styles.socialTitle}>Connect with the Founder</Text>
             <View style={styles.socialIcons}>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://linkedin.com/in/adityasurana7')}>
-                <Linkedin size={22} color={Colors.textPrimary} />
+                <Linkedin size={22} color="#FFFFFF" />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://twitter.com/theadityasurana')}>
-                <Twitter size={22} color={Colors.textPrimary} />
+                <Twitter size={22} color="#FFFFFF" />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://github.com/theadityasurana')}>
-                <Github size={22} color={Colors.textPrimary} />
+                <Github size={22} color="#FFFFFF" />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://nextquark.in')}>
-                <Globe size={22} color={Colors.textPrimary} />
+                <Globe size={22} color="#FFFFFF" />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://www.instagram.com/adityasurana7/')}>
-                <Instagram size={22} color={Colors.textPrimary} />
+                <Instagram size={22} color="#FFFFFF" />
               </Pressable>
             </View>
           </View>
@@ -103,32 +108,34 @@ export default function AboutUsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
-  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary },
+  container: { flex: 1 },
+  heroGradient: { paddingHorizontal: 16, paddingBottom: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '800' as const, color: '#FFFFFF' },
   scrollContent: { paddingHorizontal: 16 },
   heroSection: { alignItems: 'center', paddingVertical: 24 },
-  brandName: { fontSize: 32, fontWeight: '900' as const, color: Colors.secondary, letterSpacing: 3 },
-  tagline: { fontSize: 15, color: Colors.textSecondary, marginTop: 6, fontWeight: '500' as const },
-  heroImage: { width: '100%', height: 180, borderRadius: 16, marginBottom: 16, backgroundColor: Colors.borderLight },
-  card: { backgroundColor: Colors.surface, borderRadius: 16, padding: 20, marginBottom: 16 },
-  cardTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary, marginBottom: 12 },
-  bodyText: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24, marginBottom: 10 },
+  brandName: { fontSize: 32, fontWeight: '900' as const, letterSpacing: 3 },
+  tagline: { fontSize: 15, color: undefined, marginTop: 0, fontWeight: '500' as const },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
+  heroImage: { width: '100%', height: 180, borderRadius: 16, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.1)' },
+  card: { backgroundColor: '#1E1E1E', borderRadius: 16, padding: 20, marginBottom: 16 },
+  cardTitle: { fontSize: 20, fontWeight: '800' as const, color: '#FFFFFF', marginBottom: 12 },
+  bodyText: { fontSize: 15, color: 'rgba(255,255,255,0.7)', lineHeight: 24, marginBottom: 10 },
   valuesGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  valueCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, alignItems: 'center' },
+  valueCard: { flex: 1, backgroundColor: '#1E1E1E', borderRadius: 16, padding: 16, alignItems: 'center' },
   valueIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  valueTitle: { fontSize: 16, fontWeight: '700' as const, color: Colors.secondary, marginBottom: 6 },
-  valueText: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', lineHeight: 19 },
+  valueTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF', marginBottom: 6 },
+  valueText: { fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', lineHeight: 19 },
   statsSection: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  statBox: { flex: 1, backgroundColor: Colors.secondary, borderRadius: 16, padding: 18, alignItems: 'center' },
-  statNum: { fontSize: 24, fontWeight: '900' as const, color: Colors.textInverse },
+  statBox: { flex: 1, backgroundColor: '#1E1E1E', borderRadius: 16, padding: 18, alignItems: 'center' },
+  statNum: { fontSize: 24, fontWeight: '900' as const, color: '#FFFFFF' },
   statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4, fontWeight: '500' as const },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  goalText: { fontSize: 15, color: Colors.textSecondary, flex: 1 },
-  socialSection: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  socialTitle: { fontSize: 16, fontWeight: '700' as const, color: Colors.secondary, marginBottom: 12, textAlign: 'center' },
+  goalText: { fontSize: 15, color: 'rgba(255,255,255,0.7)', flex: 1 },
+  socialSection: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
+  socialTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF', marginBottom: 12, textAlign: 'center' },
   socialIcons: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },
-  socialBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
-  founderImage: { width: '100%', height: 300, borderRadius: 16, backgroundColor: Colors.borderLight },
+  socialBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  founderImage: { width: '100%', height: 300, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)' },
 });

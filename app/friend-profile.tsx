@@ -9,6 +9,7 @@ import { useColors } from '@/contexts/useColors';
 import { supabase, getProfilePictureUrl, getCompanyLogoStorageUrl } from '@/lib/supabase';
 import { fetchJobById } from '@/lib/jobs';
 import { Job } from '@/types';
+import { SkeletonProfile } from '@/components/Skeleton';
 
 const JOBS_PER_PAGE = 10;
 
@@ -52,8 +53,13 @@ export default function FriendProfileScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
+            <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}>
+              <X size={22} color={colors.textPrimary} />
+            </Pressable>
+          </View>
+          <SkeletonProfile />
         </View>
       </>
     );

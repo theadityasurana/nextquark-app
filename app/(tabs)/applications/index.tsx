@@ -17,6 +17,7 @@ import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews, getCo
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { Image } from 'expo-image';
 import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
+import { SkeletonAppCard } from '@/components/Skeleton';
 
 export default function ApplicationsScreen() {
   const insets = useSafeAreaInsets();
@@ -136,8 +137,11 @@ export default function ApplicationsScreen() {
   return (
     <TabTransitionWrapper routeName="applications">
       {isLoading ? (
-        <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+          <Text style={{ fontSize: 34, fontWeight: '800', color: colors.secondary, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>Applications</Text>
+          <View style={{ paddingHorizontal: 16 }}>
+            {[1,2,3,4,5].map(i => <SkeletonAppCard key={i} />)}
+          </View>
         </View>
       ) : (
         <>

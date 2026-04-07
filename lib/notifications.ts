@@ -379,6 +379,38 @@ export async function sendWelcomeNotification(firstName: string) {
 }
 
 // ============================================================
+// SUBSCRIPTION UPGRADE NOTIFICATION
+// ============================================================
+
+const SUBSCRIPTION_NOTIFICATIONS: Record<string, { title: string; body: string }> = {
+  pro: { title: 'You\'re now a Pro! \u{1F389}', body: 'Enjoy 200 swipes/month, AI auto-fill, priority support & profile boost. Start swiping!' },
+  premium: { title: 'Welcome to Premium! \u{1F451}', body: 'You\'ve unlocked 500 swipes/month and all exclusive features. Go land your dream job!' },
+  custom: { title: 'Swipes Added! \u{26A1}', body: 'Your custom swipes have been added to your account. Happy swiping!' },
+  coupon: { title: 'Plan Activated! \u{1F381}', body: 'Your coupon has been applied and your plan is now active. Enjoy!' },
+};
+
+export async function sendSubscriptionNotification(planType: string, isCoupon?: boolean) {
+  if (!Notifications) return;
+  try {
+    const config = isCoupon ? SUBSCRIPTION_NOTIFICATIONS.coupon : (SUBSCRIPTION_NOTIFICATIONS[planType] || SUBSCRIPTION_NOTIFICATIONS.custom);
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: config.title,
+        body: config.body,
+        data: { type: 'subscription_upgrade', plan: planType },
+        ...(Platform.OS === 'android' && { channelId: 'default' }),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 2,
+      },
+    });
+  } catch (e) {
+    if (__DEV__) console.log('Error sending subscription notification:', e);
+  }
+}
+
+// ============================================================
 // SCHEDULE GOOD MORNING (7 AM daily, rotating)
 // ============================================================
 

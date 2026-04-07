@@ -1,21 +1,28 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image as RNImage, RefreshControl, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { X, Trophy, Crown } from 'lucide-react-native';
+import { X, Trophy, Crown, TrendingUp } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase, getProfilePictureUrl } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 import { Stack } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { SkeletonLeaderboardRow } from '@/components/Skeleton';
+import * as Haptics from 'expo-haptics';
 
 export default function LeaderboardScreen() {
   const colors = useColors();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { supabaseUserId } = useAuth();
 
-  const { data: leaderboardData = [], isLoading } = useQuery({
+  const { data: leaderboardData = [], isLoading, refetch } = useQuery({
     queryKey: ['leaderboard'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -36,31 +43,61 @@ export default function LeaderboardScreen() {
     },
   });
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
+  const haptic = () => { if (Platform.OS !== 'web') Haptics.selectionAsync(); };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable style={[styles.closeButton, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
-          <X size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.headerTitleContainer}>
-          <Trophy size={24} color={Colors.primary} />
-          <Text style={[styles.headerTitle, { color: colors.secondary }]}>Leaderboard</Text>
+      <LinearGradient colors={['#0F172A', '#1E293B', colors.background]} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.closeButton} onPress={() => router.back()}>
+            <X size={22} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.headerTitleContainer}>
+            <Trophy size={24} color="#FFD700" />
+            <Text style={styles.headerTitle}>Leaderboard</Text>
+          </View>
+          <View style={{ width: 40 }} />
         </View>
-        <View style={{ width: 40 }} />
-      </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
+        <Text style={[styles.heroSubtext, { color: colors.textSecondary }]}>See how you rank against other job seekers</Text>
+      </LinearGradient>
+
+      {!isLoading && leaderboardData.length > 0 && (() => {
+        const myIdx = leaderboardData.findIndex((u: any) => u.id === supabaseUserId);
+        if (myIdx === -1) return null;
+        const me = leaderboardData[myIdx] as any;
+        return (
+          <View style={[styles.yourRankCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <View style={styles.yourRankLeft}>
+              <Text style={[styles.yourRankLabel, { color: colors.textTertiary }]}>Your Rank</Text>
+              <Text style={[styles.yourRankNum, { color: colors.textPrimary }]}>#{myIdx + 1}</Text>
+            </View>
+            <View style={styles.yourRankCenter}>
+              <Text style={[styles.yourRankLabel, { color: colors.textTertiary }]}>Swipes</Text>
+              <Text style={[styles.yourRankNum, { color: colors.textPrimary }]}>{me.swipeCount}</Text>
+            </View>
+            <View style={styles.yourRankRight}>
+              <TrendingUp size={16} color="#10B981" />
+              <Text style={styles.yourRankTrend}>Top {Math.max(1, Math.round(((myIdx + 1) / leaderboardData.length) * 100))}%</Text>
+            </View>
+          </View>
+        );
+      })()}
 
       {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+        <View style={styles.scrollContent}>
+          {[1,2,3,4,5,6].map(i => <SkeletonLeaderboardRow key={i} />)}
         </View>
       ) : leaderboardData.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No users found</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textTertiary} />}>
           {leaderboardData.map((user: any, index: number) => {
             let avatarUrl;
             const defaultUnsplash = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d';
@@ -83,9 +120,10 @@ export default function LeaderboardScreen() {
                 style={[
                   styles.userRow,
                   { backgroundColor: colors.surface, borderColor: colors.borderLight },
-                  isTopThree && { borderColor: rankColors[index], borderWidth: 2 }
+                  isTopThree && { borderColor: rankColors[index], borderWidth: 2 },
+                  user.id === supabaseUserId && { backgroundColor: theme === 'dark' ? '#1E3A5F' : '#EFF6FF', borderColor: '#3B82F6', borderWidth: 2 },
                 ]}
-                onPress={() => router.push({ pathname: '/friend-profile' as any, params: { userId: user.id } })}
+                onPress={() => { haptic(); router.push({ pathname: '/friend-profile' as any, params: { userId: user.id } }); }}
               >
                 <View style={styles.rankContainer}>
                   {isTopThree ? (
@@ -108,7 +146,7 @@ export default function LeaderboardScreen() {
 
                 <View style={styles.userInfo}>
                   <Text style={[styles.userName, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {user.full_name || 'Anonymous'}
+                    {user.full_name || 'Anonymous'}{user.id === supabaseUserId ? ' (You)' : ''}
                   </Text>
                   {isPremium && (
                     <Text style={[styles.subscriptionText, { color: badgeColor }]}>
@@ -138,17 +176,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  heroGradient: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
     paddingVertical: 12,
+  },
+  heroBanner: {
+    width: '100%',
+    height: 90,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  heroSubtext: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 0,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -158,8 +213,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -176,7 +232,27 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 4,
+  },
+  yourRankCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  yourRankLeft: { flex: 1, alignItems: 'center' },
+  yourRankCenter: { flex: 1, alignItems: 'center' },
+  yourRankRight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  yourRankLabel: { fontSize: 11, fontWeight: '500' },
+  yourRankNum: { fontSize: 20, fontWeight: '800' },
+  yourRankTrend: { fontSize: 13, fontWeight: '700', color: '#10B981' },
+  currentUserRow: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+    borderWidth: 2,
   },
   userRow: {
     flexDirection: 'row',
@@ -185,6 +261,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rankContainer: {
     width: 40,

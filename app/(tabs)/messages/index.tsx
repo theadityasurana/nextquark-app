@@ -81,18 +81,88 @@ import {
   type SentEmail,
   subscribeToMailChanges,
 } from '@/lib/resend';
+import { SkeletonMailRow } from '@/components/Skeleton';
 
 type SidebarView = 'inbox' | 'starred' | 'sent' | 'archived';
-type CategoryTab = 'Primary' | 'Promotions' | 'Social' | 'Updates';
-const CATEGORY_TABS: CategoryTab[] = ['Primary', 'Updates', 'Promotions', 'Social'];
+type CategoryTab = 'Primary' | 'Promotions' | 'Social' | 'Updates' | 'OTP' | 'Interview' | 'Job Offers' | 'Onboarding' | 'Reminder' | 'Rejection' | 'Assessment';
+const CATEGORY_TABS: CategoryTab[] = ['Primary', 'Updates', 'Promotions', 'Social', 'OTP', 'Interview', 'Job Offers', 'Onboarding', 'Reminder', 'Rejection', 'Assessment'];
 
 const CATEGORY_COLORS: Record<CategoryTab, { light: string; dark: string }> = {
   Primary: { light: '#EEF2FF', dark: '#4F46E5' },
   Updates: { light: '#FEF3C7', dark: '#D97706' },
   Promotions: { light: '#DCFCE7', dark: '#16A34A' },
   Social: { light: '#DBEAFE', dark: '#2563EB' },
+  OTP: { light: '#FEE2E2', dark: '#DC2626' },
+  Interview: { light: '#E0E7FF', dark: '#4338CA' },
+  'Job Offers': { light: '#D1FAE5', dark: '#059669' },
+  Onboarding: { light: '#CFFAFE', dark: '#0891B2' },
+  Reminder: { light: '#FEF9C3', dark: '#CA8A04' },
+  Rejection: { light: '#FCE7F3', dark: '#DB2777' },
+  Assessment: { light: '#F3E8FF', dark: '#7C3AED' },
 };
 
+const OTP_KEYWORDS = [
+  'otp', 'one-time password', 'one time password', 'verification code',
+  'verify your email', 'confirm your email', 'your code is', 'your code:',
+  'security code', 'login code', 'sign-in code', 'authentication code',
+  '2fa code', 'two-factor', '2fa', 'passcode', 'temporary password',
+  'use this code', 'enter this code', 'your pin is', 'confirm code',
+  'magic link', 'verify your account',
+];
+const INTERVIEW_KEYWORDS = [
+  'interview', 'interview scheduled', 'interview invitation',
+  'phone screen', 'technical interview', 'behavioral interview',
+  'panel interview', 'interview round', 'interview slot',
+  'interview confirmation', 'interview reminder', 'meet the team',
+  'hiring manager', 'recruiter call', 'screening call',
+  'video interview', 'on-site interview', 'final round',
+  'interview feedback', 'interview availability', 'schedule your interview',
+  'interview link', 'interview details',
+];
+const JOB_OFFER_KEYWORDS = [
+  'job offer', 'offer letter', 'we are pleased to offer',
+  'pleased to extend', 'offer of employment', 'compensation package',
+  'salary offer', 'your offer', 'formal offer', 'contingent offer',
+  'offer details', 'accept this offer', 'sign your offer',
+  'congratulations on your offer', 'employment offer',
+  'we would like to offer you', 'extend an offer',
+];
+const ONBOARDING_KEYWORDS = [
+  'onboarding', 'welcome aboard', 'welcome to the team',
+  'first day', 'start date', 'new hire', 'new employee',
+  'orientation', 'pre-boarding', 'employee handbook',
+  'set up your account', 'your equipment', 'laptop setup',
+  'welcome kit', 'joining formalities', 'i-9 form', 'w-4 form',
+  'background check', 'new joiner', 'getting started at',
+  'welcome to', 'your first week',
+];
+const REMINDER_KEYWORDS = [
+  'reminder', 'don\'t forget', 'follow up', 'follow-up',
+  'gentle reminder', 'friendly reminder', 'just a reminder',
+  'action required', 'action needed', 'pending', 'overdue',
+  'due date', 'deadline', 'expiring soon', 'expires on',
+  'last chance', 'time sensitive', 'urgent reminder',
+  'please complete', 'still waiting', 'nudge',
+];
+const REJECTION_KEYWORDS = [
+  'unfortunately', 'we regret to inform', 'not moving forward',
+  'decided not to proceed', 'will not be proceeding',
+  'other candidates', 'not selected', 'application unsuccessful',
+  'position has been filled', 'we have decided to go with',
+  'not a fit', 'after careful consideration',
+  'we will not be able to', 'unable to offer',
+  'your application was not', 'rejected', 'rejection',
+  'we appreciate your interest but', 'not shortlisted',
+];
+const ASSESSMENT_KEYWORDS = [
+  'assessment', 'coding test', 'coding challenge', 'take-home',
+  'online test', 'aptitude test', 'skill assessment',
+  'technical assessment', 'hackerrank', 'codility', 'leetcode',
+  'codesignal', 'testgorilla', 'complete this test',
+  'assignment', 'case study', 'work sample', 'test link',
+  'assessment link', 'timed test', 'complete the assessment',
+  'your test is ready', 'evaluation', 'pre-employment test',
+];
 const PROMO_KEYWORDS = [
   'unsubscribe', 'offer', 'discount', 'sale', 'deal', 'promo', 'coupon',
   'free trial', 'limited time', 'buy now', 'shop now', 'order now',
@@ -115,10 +185,10 @@ const SOCIAL_SENDERS = [
 const UPDATE_KEYWORDS = [
   'your order', 'shipping', 'delivered', 'tracking', 'receipt',
   'invoice', 'payment', 'transaction', 'confirmation', 'verified',
-  'security alert', 'password', 'two-factor', '2fa', 'otp',
-  'verification code', 'account update', 'billing', 'subscription',
+  'security alert', 'password',
+  'account update', 'billing', 'subscription',
   'renewal', 'expiring', 'statement', 'alert', 'notification',
-  'your account', 'sign-in', 'login', 'welcome to',
+  'your account', 'sign-in', 'login',
 ];
 
 function classifyEmail(item: MailItem): CategoryTab {
@@ -127,6 +197,15 @@ function classifyEmail(item: MailItem): CategoryTab {
   const blob = [
     d.from_email, d.from_name, d.subject, d.body_text,
   ].filter(Boolean).join(' ').toLowerCase();
+
+  // Check specific categories first (more specific → less specific)
+  if (OTP_KEYWORDS.some((k) => blob.includes(k))) return 'OTP';
+  if (REJECTION_KEYWORDS.some((k) => blob.includes(k))) return 'Rejection';
+  if (JOB_OFFER_KEYWORDS.some((k) => blob.includes(k))) return 'Job Offers';
+  if (ASSESSMENT_KEYWORDS.some((k) => blob.includes(k))) return 'Assessment';
+  if (INTERVIEW_KEYWORDS.some((k) => blob.includes(k))) return 'Interview';
+  if (ONBOARDING_KEYWORDS.some((k) => blob.includes(k))) return 'Onboarding';
+  if (REMINDER_KEYWORDS.some((k) => blob.includes(k))) return 'Reminder';
 
   const senderLower = (d.from_email || '').toLowerCase();
   if (SOCIAL_SENDERS.some((s) => senderLower.includes(s)) ||
@@ -552,6 +631,14 @@ function MessagesScreen() {
     const q = searchQuery.trim().toLowerCase();
 
     if (sidebarView === 'inbox') {
+      // For Updates category, show individual emails instead of threads
+      if (activeCategory === 'Updates') {
+        const allItems = listQuery.data || [];
+        let items = allItems.filter((m) => classifyEmail(m) === 'Updates');
+        if (q) items = items.filter((item) => matchesQuery(item, q));
+        return items;
+      }
+
       let groups = threadGroups;
 
       // Filter by category
@@ -750,6 +837,16 @@ function MessagesScreen() {
       const tid = threadId || item.data.thread_id || computeThreadIdLocal(item.data.subject);
       setActiveThreadId(tid);
 
+      // If no threadId passed, show single email only (e.g. unbatched Updates)
+      if (!threadId) {
+        if (item.kind === 'inbound' && !item.data.is_read) {
+          markReadMutation.mutate({ emailId: item.data.id, read: true });
+        }
+        setThreadMessages([]);
+        setThreadLoading(false);
+        return;
+      }
+
       // Mark ALL unread inbound emails in this thread as read
       const allItems = listQuery.data || [];
       const threadItems = allItems.filter((m) => {
@@ -764,7 +861,6 @@ function MessagesScreen() {
       });
 
       if (threadItems.length > 1) {
-        // Convert to the format threadMessages expects
         const msgs = threadItems.map((m) => ({
           ...m.data,
           _kind: m.kind as 'inbound' | 'sent',
@@ -776,7 +872,6 @@ function MessagesScreen() {
         setThreadMessages(msgs as any);
         setThreadLoading(false);
       } else if (supabaseUserId && tid) {
-        // Fallback to DB fetch for threads not fully in cache
         setThreadLoading(true);
         fetchThreadMessages(supabaseUserId, tid).then((msgs) => {
           setThreadMessages(msgs);
@@ -916,7 +1011,7 @@ function MessagesScreen() {
         const group = item as ThreadGroup;
         return <MailRowInner item={group.latestItem} threadCount={group.count} isThread />
       }
-      // Other views: item is MailItem
+      // Other views or Updates category: item is MailItem
       return <MailRowInner item={item as MailItem} threadCount={1} isThread={false} />;
     },
     [MailRowInner, sidebarView]
@@ -1352,10 +1447,8 @@ function MessagesScreen() {
             }
             if (listQuery.isLoading) {
               return (
-                <View style={styles.emptyState}>
-                  <ActivityIndicator size="large" color="#4F46E5" />
-                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Loading…</Text>
-                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Fetching your NextQuark mail</Text>
+                <View style={{ padding: 16 }}>
+                  {[1,2,3,4,5].map(i => <SkeletonMailRow key={i} />)}
                 </View>
               );
             }
@@ -1766,8 +1859,8 @@ const styles = StyleSheet.create({
   selectBarBtn: {
     padding: 10,
   },
-  categoryTabsScroll: { flexGrow: 0, marginBottom: 4 },
-  categoryTabsContainer: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  categoryTabsScroll: { flexGrow: 0, minHeight: 48 },
+  categoryTabsContainer: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, alignItems: 'center' },
   categoryTab: {
     paddingHorizontal: 16,
     paddingVertical: 8,

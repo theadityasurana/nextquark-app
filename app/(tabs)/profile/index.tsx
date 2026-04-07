@@ -93,6 +93,7 @@ import { Share, Clipboard } from 'react-native';
 import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboarding';
 import { getRolesGroupedByCategory } from '@/constants/roles';
 import { universities } from '@/constants/universities';
+import { SkeletonProfile } from '@/components/Skeleton';
 
 type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | null;
 
@@ -1114,6 +1115,16 @@ const MAJOR_CITIES = [
     setUniversitySearch('');
   }, []);
 
+  if (!supabaseProfile || !hasLoadedProfileRef.current) {
+    return (
+      <TabTransitionWrapper routeName="profile">
+        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 50 }]}>
+          <SkeletonProfile />
+        </View>
+      </TabTransitionWrapper>
+    );
+  }
+
   return (
     <TabTransitionWrapper routeName="profile">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1242,7 +1253,7 @@ const MAJOR_CITIES = [
               </Text>
               <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>apps left</Text>
               <Text style={[styles.quickActionSub, { color: subscriptionData?.subscription_type === 'free' ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.6)' }]}>
-                {subscriptionData?.subscription_type === 'premium' ? '✦ Premium' : subscriptionData?.subscription_type === 'pro' ? 'Upgrade ↑' : 'Go Pro ↑'}
+                {subscriptionData?.subscription_type === 'premium' ? '✦ Premium' : subscriptionData?.subscription_type === 'pro' ? '✦ Pro · Tap to upgrade' : '⚡ Tap to upgrade plan'}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -1321,6 +1332,79 @@ const MAJOR_CITIES = [
             </View>
           )}
         </View>
+
+        {profileTab === 'personal' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {[user.phone, user.email, user.linkedinUrl, user.githubUrl, user.workAuthorizationStatus, user.veteranStatus].filter(Boolean).length}/6 fields complete
+              {user.workAuthorizationStatus ? '' : '  ·  Add work authorization'}
+            </Text>
+          </View>
+        )}
+
+        {profileTab === 'preferences' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {user.jobPreferences.length} job type{user.jobPreferences.length !== 1 ? 's' : ''}
+              {' · '}
+              {user.workModePreferences.length} work mode{user.workModePreferences.length !== 1 ? 's' : ''}
+              {' · '}
+              {(user.preferredCities || []).length} cit{(user.preferredCities || []).length !== 1 ? 'ies' : 'y'}
+              {' · '}
+              {(user.desiredRoles || []).length} role{(user.desiredRoles || []).length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+
+        {profileTab === 'workexperience' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {user.experience.length} role{user.experience.length !== 1 ? 's' : ''}
+              {' · '}
+              {user.topSkills.length} skill{user.topSkills.length !== 1 ? 's' : ''} highlighted
+              {' · '}
+              {user.certifications.length} cert{user.certifications.length !== 1 ? 's' : ''}
+              {' · '}
+              {user.achievements.length} achievement{user.achievements.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+
+        {profileTab === 'education' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {user.education.length} degree{user.education.length !== 1 ? 's' : ''}
+              {user.education.length > 0 ? ` · ${user.education[0].institution}` : ''}
+            </Text>
+          </View>
+        )}
+
+        {profileTab === 'projects' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {(user.projects || []).length} project{(user.projects || []).length !== 1 ? 's' : ''}
+              {(user.projects || []).length > 0 ? ` · ${(user.projects || []).reduce((acc, p) => acc + p.exposure.length, 0)} technologies` : ''}
+            </Text>
+          </View>
+        )}
+
+        {profileTab === 'documents' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {user.resumeUrl ? '1 resume' : 'No resume'}
+              {' · '}
+              {(user.documents || []).length} document{(user.documents || []).length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+
+        {profileTab === 'coverletter' && (
+          <View style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+              {user.coverLetter ? `${user.coverLetter.split(/\s+/).filter(w => w).length} words` : 'Not written yet'}
+            </Text>
+          </View>
+        )}
 
         {profileTab === 'preferences' && (
         <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
@@ -1542,12 +1626,21 @@ const MAJOR_CITIES = [
             </View>
             <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
-          {user.experience.map((exp) => (
-            <View key={exp.id} style={styles.experienceItem}>
-              <View style={[styles.expIcon, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-                <Briefcase size={18} color="#FFFFFF" />
+          {user.experience.map((exp, idx) => (
+            <View key={exp.id} style={styles.timelineRow}>
+              <View style={styles.timelineTrack}>
+                {exp.isCurrent ? (
+                  <View style={styles.timelineDotCurrentOuter}>
+                    <View style={styles.timelineDotCurrentInner} />
+                  </View>
+                ) : (
+                  <View style={[styles.timelineDot, { backgroundColor: 'rgba(255,255,255,0.35)' }]} />
+                )}
+                {idx < user.experience.length - 1 && (
+                  <View style={[styles.timelineLine, { backgroundColor: 'rgba(255,255,255,0.15)' }]} />
+                )}
               </View>
-              <View style={styles.expContent}>
+              <View style={styles.timelineContent}>
                 <Text style={[styles.expTitle, { color: '#FFFFFF' }]}>{exp.title}</Text>
                 <Text style={[styles.expCompany, { color: 'rgba(255,255,255,0.6)' }]}>{exp.company}</Text>
                 <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>
@@ -1586,12 +1679,15 @@ const MAJOR_CITIES = [
             </View>
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
-          {user.education.map((edu) => (
-            <View key={edu.id} style={styles.experienceItem}>
-              <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#EEEEEE' }]}>
-                <GraduationCap size={18} color={colors.accent} />
+          {user.education.map((edu, idx) => (
+            <View key={edu.id} style={styles.timelineRow}>
+              <View style={styles.timelineTrack}>
+                <View style={[styles.timelineDot, { backgroundColor: colors.accent }]} />
+                {idx < user.education.length - 1 && (
+                  <View style={[styles.timelineLine, { backgroundColor: colors.borderLight }]} />
+                )}
               </View>
-              <View style={styles.expContent}>
+              <View style={styles.timelineContent}>
                 <Text style={[styles.expTitle, { color: colors.secondary }]}>{edu.degree} in {edu.field}</Text>
                 <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{edu.institution}</Text>
                 <Text style={[styles.expDate, { color: colors.textTertiary }]}>{edu.startDate} — {edu.endDate}</Text>
@@ -1855,7 +1951,7 @@ const MAJOR_CITIES = [
             <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Job Requirements</Text>
             <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
           </View>
-          <Text style={[styles.demoNote, { color: colors.textTertiary }]}>Your work authorization and visa status</Text>
+          <Text style={[styles.demoNote, { color: colors.textSecondary }]}>Your work authorization and visa status</Text>
           {user.workAuthorizationStatus ? (
             <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
               <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Work Authorization</Text>
@@ -1879,7 +1975,7 @@ const MAJOR_CITIES = [
             </View>
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
-          <Text style={[styles.demoNote, { color: colors.textTertiary }]}>This information is confidential and voluntary</Text>
+          <Text style={[styles.demoNote, { color: colors.textSecondary }]}>This information is confidential and voluntary</Text>
           
           <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
             <View style={[styles.eeoIconWrap, { backgroundColor: '#8B5CF620' }]}>
@@ -2325,6 +2421,13 @@ const styles = StyleSheet.create({
   skillTagTextTop: { color: '#8B6914' },
   addSkillBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.secondary, justifyContent: 'center', alignItems: 'center' },
   experienceItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  timelineRow: { flexDirection: 'row' as const },
+  timelineTrack: { width: 24, alignItems: 'center' as const, paddingTop: 4 },
+  timelineDot: { width: 10, height: 10, borderRadius: 5 },
+  timelineDotCurrentOuter: { width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(16,185,129,0.25)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  timelineDotCurrentInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981' },
+  timelineLine: { width: 2, flex: 1, marginTop: 4, marginBottom: -4, borderRadius: 1 },
+  timelineContent: { flex: 1, marginLeft: 12, paddingBottom: 20 },
   expIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EEEEEE', justifyContent: 'center', alignItems: 'center' },
   expContent: { flex: 1, marginLeft: 14 },
   expTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
@@ -2399,7 +2502,7 @@ const styles = StyleSheet.create({
   demoSection: { marginTop: 4, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
   demoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   demoHeaderTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
-  demoNote: { fontSize: 11, color: Colors.textTertiary, marginBottom: 12 },
+  demoNote: { fontSize: 13, fontWeight: '500' as const, marginBottom: 12 },
   demoItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   demoLabel: { fontSize: 11, fontWeight: '600' as const, color: Colors.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 2 },
   demoValue: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const },
@@ -2422,6 +2525,8 @@ const styles = StyleSheet.create({
   tabItem: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   tabItemText: { fontSize: 13, fontWeight: '700' as const },
   tabScrollHint: { position: 'absolute' as const, right: 0, top: 0, bottom: 0, width: 32, justifyContent: 'center', alignItems: 'center', borderTopRightRadius: 14, borderBottomRightRadius: 14 },
+  summaryStrip: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, marginTop: 4, borderWidth: 1 },
+  summaryText: { fontSize: 12, fontWeight: '600' as const },
   docSubTabs: { flexDirection: 'row', gap: 6, marginTop: 4 },
   docSubTab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'transparent' },
   docSubTabActive: { borderColor: '#10B981' },

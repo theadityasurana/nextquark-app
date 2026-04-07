@@ -1,8 +1,8 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Animated, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Factory, Shield, Camera, Globe, ExternalLink } from 'lucide-react-native';
+import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Factory, Shield, Camera, Globe, ExternalLink, Share2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useColors } from '@/contexts/useColors';
 import { Job } from '@/types';
@@ -161,7 +161,7 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
         </View>
       </ScrollView>
 
-      <Pressable onPress={handleFlip} style={styles.frontHintBar}>
+      <Pressable onPress={handleFlip} style={[styles.frontHintBar, { backgroundColor: cardBg }]}>
         <Text style={styles.tapHintText}>Tap to see full details</Text>
       </Pressable>
     </Animated.View>
@@ -181,6 +181,13 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
             <Text style={[styles.backCompanyName, { color: colors.textPrimary }]}>{job.companyName}</Text>
             <Text style={[styles.backJobTitle, { color: colors.secondary }]} numberOfLines={2}>{job.jobTitle}</Text>
           </View>
+          <Pressable
+            style={styles.backShareBtn}
+            onPress={() => { Share.share({ message: `${job.jobTitle} at ${job.companyName}${job.portalUrl ? `\n${job.portalUrl}` : ''}` }).catch(() => {}); }}
+            hitSlop={8}
+          >
+            <Share2 size={18} color={colors.textSecondary} />
+          </Pressable>
         </View>
 
         <View style={styles.backInnerPadding}>
@@ -267,7 +274,7 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
         </Pressable>
       </ScrollView>
 
-      <Pressable onPress={handleFlip} style={styles.backHintBar}>
+      <Pressable onPress={handleFlip} style={[styles.backHintBar, { backgroundColor: cardBg }]}>
         <Text style={styles.tapHintText}>Tap anywhere to go back</Text>
       </Pressable>
     </Animated.View>
@@ -327,11 +334,12 @@ const styles = StyleSheet.create({
   benefitText: { fontSize: 12, color: Colors.accent, fontWeight: '600' as const },
   aboutRoleText: { fontSize: 13, lineHeight: 20 },
   tapHintBar: { paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.05)' },
-  frontHintBar: { paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.05)', position: 'absolute' as const, bottom: 0, left: 0, right: 0 },
-  backHintBar: { paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.05)', position: 'absolute' as const, bottom: 0, left: 0, right: 0 },
+  frontHintBar: { paddingVertical: 10, alignItems: 'center', position: 'absolute' as const, bottom: 0, left: 0, right: 0 },
+  backHintBar: { paddingVertical: 10, alignItems: 'center', position: 'absolute' as const, bottom: 0, left: 0, right: 0 },
   tapHintText: { fontSize: 12, fontWeight: '600' as const, color: '#888', letterSpacing: 0.3 },
   backHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: 8 },
   backLogo: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.borderLight },
+  backShareBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
   backCompanyName: { fontSize: 14, fontWeight: '700' as const },
   backJobTitle: { fontSize: 18, fontWeight: '800' as const, lineHeight: 22, marginTop: 2 },
   infoCards: { flexDirection: 'row', gap: 8, marginBottom: 12 },

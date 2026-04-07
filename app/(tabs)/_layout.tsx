@@ -8,6 +8,7 @@ import { lightColors, darkColors } from '@/constants/colors';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUserApplications, fetchJobsFromSupabase } from '@/lib/jobs';
 import { initUnreadMailListener, cleanupUnreadMailListener, subscribeUnreadCount } from '@/lib/unreadMail';
+import { CommonActions } from '@react-navigation/native';
 
 function TabBarBadge({ count, type = 'count' }: { count: number; type?: 'count' | 'alert' }) {
   if (count === 0 && type === 'count') return null;
@@ -102,6 +103,21 @@ export default function TabLayout() {
     return filtered.length;
   }, [supabaseJobs, swipedJobIds, userProfile]);
 
+  const resetStackOnTabPress = ({ navigation }: any) => ({
+    tabPress: (e: any) => {
+      const state = navigation.getState();
+      const currentRoute = state.routes[state.index];
+      if (currentRoute.state && currentRoute.state.index > 0) {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: currentRoute.name }],
+          })
+        );
+      }
+    },
+  });
+
   return (
     <Tabs
       screenOptions={{
@@ -124,6 +140,7 @@ export default function TabLayout() {
               badgeCount={isProfileIncomplete ? 1 : 0} badgeType="alert" />
           ),
         }}
+        listeners={resetStackOnTabPress}
       />
       <Tabs.Screen
         name="discover"
@@ -134,6 +151,7 @@ export default function TabLayout() {
               badgeCount={favoriteCompaniesCount} />
           ),
         }}
+        listeners={resetStackOnTabPress}
       />
       <Tabs.Screen
         name="(home)"
@@ -144,6 +162,7 @@ export default function TabLayout() {
               badgeCount={forYouCount} />
           ),
         }}
+        listeners={resetStackOnTabPress}
       />
       <Tabs.Screen
         name="applications"
@@ -154,6 +173,7 @@ export default function TabLayout() {
               badgeCount={applicationsCount} />
           ),
         }}
+        listeners={resetStackOnTabPress}
       />
       <Tabs.Screen
         name="messages"
@@ -164,6 +184,7 @@ export default function TabLayout() {
               badgeCount={unreadMessages} />
           ),
         }}
+        listeners={resetStackOnTabPress}
       />
     </Tabs>
   );

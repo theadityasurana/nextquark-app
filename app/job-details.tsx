@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Alert, ActivityIndicator, Linking } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Alert, Linking, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -7,10 +7,11 @@ import { X, MapPin, Briefcase, Clock, Users, Heart, Bookmark, Share2, Wifi, Buil
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
-import { fetchJobById, incrementRightSwipe, addToLiveApplicationQueue } from '@/lib/jobs';
+import { fetchJobById, incrementRightSwipe, addToLiveApplicationQueue, saveJob, unsaveJob, isJobSaved } from '@/lib/jobs';
 import { useAuth } from '@/contexts/AuthContext';
 import { decrementApplicationCount } from '@/lib/subscription';
 import { useQueryClient } from '@tanstack/react-query';
+import { SkeletonJobDetails } from '@/components/Skeleton';
 
 export default function JobDetailsScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +24,12 @@ export default function JobDetailsScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
 
+  useEffect(() => {
+    if (supabaseUserId && id) {
+      isJobSaved(supabaseUserId, id).then(setIsSaved);
+    }
+  }, [supabaseUserId, id]);
+
   const { data: supabaseJob, isLoading } = useQuery({
     queryKey: ['job-detail', id],
     queryFn: () => fetchJobById(id || ''),
@@ -33,8 +40,14 @@ export default function JobDetailsScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surface }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
+        <View style={styles.plainHeader}>
+          <Pressable style={[styles.closeButton, { backgroundColor: colors.background }]} onPress={() => router.back()}>
+            <X size={22} color={colors.textPrimary} />
+          </Pressable>
+          <View style={styles.headerActions} />
+        </View>
+        <SkeletonJobDetails />
       </View>
     );
   }
@@ -80,20 +93,32 @@ export default function JobDetailsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
-      <View style={styles.header}>
-        <Pressable style={[styles.closeButton, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
+      <View style={styles.plainHeader}>
+        <Pressable style={[styles.closeButton, { backgroundColor: colors.background }]} onPress={() => router.back()}>
           <X size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.headerActions}>
-          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.surface }]}>
+          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.background }]} onPress={async () => {
+            if (!job) return;
+            try {
+              await Share.share({ message: `${job.jobTitle} at ${job.companyName}${job.portalUrl ? `\n${job.portalUrl}` : ''}` });
+            } catch {}
+          }}>
             <Share2 size={20} color={colors.textSecondary} />
           </Pressable>
-          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.surface }]} onPress={() => {
-            setIsSaved(!isSaved);
-            Alert.alert(isSaved ? 'Removed' : 'Saved', isSaved ? 'Job removed from saved jobs.' : 'Job saved successfully!');
-            console.log(isSaved ? 'Job unsaved:' : 'Job saved:', job?.jobTitle);
+          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.background }]} onPress={async () => {
+            if (!supabaseUserId || !id) return;
+            const newSaved = !isSaved;
+            setIsSaved(newSaved);
+            const success = newSaved ? await saveJob(supabaseUserId, id) : await unsaveJob(supabaseUserId, id);
+            if (success) {
+              queryClient.invalidateQueries({ queryKey: ['saved-jobs'] });
+            } else {
+              setIsSaved(!newSaved);
+              Alert.alert('Error', 'Could not update saved status.');
+            }
           }}>
-            <Bookmark size={20} color={isSaved ? '#111111' : colors.textSecondary} fill={isSaved ? '#111111' : 'transparent'} />
+            <Bookmark size={20} color={isSaved ? colors.accent : colors.textSecondary} fill={isSaved ? colors.accent : 'transparent'} />
           </Pressable>
         </View>
       </View>
@@ -287,7 +312,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFF",
   },
-  header: {
+  plainHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -298,6 +323,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -309,6 +335,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },

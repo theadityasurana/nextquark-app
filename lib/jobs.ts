@@ -675,20 +675,38 @@ export async function fetchUniqueLocations(): Promise<string[]> {
 
 export async function saveJob(userId: string, jobId: string): Promise<boolean> {
   try {
-    console.log('Saving job:', jobId, 'for user:', userId);
     const { error } = await supabase
       .from('saved_jobs')
       .insert({ user_id: userId, job_id: jobId });
+    return !error;
+  } catch {
+    return false;
+  }
+}
 
-    if (error) {
-      console.log('Error saving job:', error.message);
-      return false;
-    }
+export async function unsaveJob(userId: string, jobId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('saved_jobs')
+      .delete()
+      .eq('user_id', userId)
+      .eq('job_id', jobId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
 
-    console.log('Job saved successfully');
-    return true;
-  } catch (e) {
-    console.log('Exception saving job:', e);
+export async function isJobSaved(userId: string, jobId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('saved_jobs')
+      .select('job_id')
+      .eq('user_id', userId)
+      .eq('job_id', jobId)
+      .single();
+    return !!data;
+  } catch {
     return false;
   }
 }

@@ -117,12 +117,15 @@ export default function EditProjectsScreen() {
             <Text style={[styles.label, { color: colors.textSecondary }]}>Link (optional)</Text>
             <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="https://github.com/..." placeholderTextColor={colors.textTertiary} value={link} onChangeText={setLink} autoCapitalize="none" />
 
-            <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
-              <Check size={18} color={colors.surface} />
-              <Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
-            </Pressable>
+            <View style={{ height: 70 }} />
           </ScrollView>
         </KeyboardAvoidingView>
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
+            <Check size={16} color={colors.surface} />
+            <Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -187,7 +190,8 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700' },
   listContent: { padding: 16, gap: 10 },
-  formContent: { padding: 16, paddingBottom: 40 },
+  formContent: { padding: 16, paddingBottom: 20 },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
   emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
   itemCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, gap: 12 },
   itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
@@ -200,6 +204,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 8 },
   input: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, marginBottom: 8, borderWidth: 1 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-  saveBtnText: { fontSize: 16, fontWeight: '700' },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10, marginTop: 16 },
+  saveBtnText: { fontSize: 14, fontWeight: '700' },
 });

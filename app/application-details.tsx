@@ -46,6 +46,7 @@ import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { getCompanyLogoUrl, updateApplicationProgress } from '@/lib/jobs';
+import { SkeletonApplicationDetails } from '@/components/Skeleton';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: 'AI is cooking 🔥', color: '#92400E', bg: '#FEF3C7' },
@@ -224,8 +225,13 @@ export default function ApplicationDetailsScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
+          <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}>
+            <ArrowLeft size={22} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+        <SkeletonApplicationDetails />
       </View>
     );
   }

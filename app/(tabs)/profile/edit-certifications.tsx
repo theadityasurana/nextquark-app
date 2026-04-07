@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, Image as RNImage } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Check, X, Award } from '@/components/ProfileIcons';
@@ -28,13 +29,15 @@ export default function EditCertificationsScreen() {
   const [org, setOrg] = useState('');
   const [url, setUrl] = useState('');
   const [skills, setSkills] = useState('');
+  const [formTouched, setFormTouched] = useState(false);
 
-  const resetForm = () => { setName(''); setOrg(''); setUrl(''); setSkills(''); setEditing(null); };
+  const resetForm = () => { setName(''); setOrg(''); setUrl(''); setSkills(''); setEditing(null); setFormTouched(false); };
   const openAdd = () => { resetForm(); setShowForm(true); };
   const openEdit = (c: Certification) => { setEditing(c); setName(c.name); setOrg(c.issuingOrganization); setUrl(c.credentialUrl); setSkills(c.skills.join(', ')); setShowForm(true); };
 
   const handleSave = () => {
-    if (!name.trim() || !org.trim()) { Alert.alert('Required', 'Fill in name and organization'); return; }
+    setFormTouched(true);
+    if (!name.trim() || !org.trim()) return;
     const c: Certification = { id: editing?.id ?? `c${Date.now()}`, name: name.trim(), issuingOrganization: org.trim(), credentialUrl: url.trim(), skills: skills.split(',').map(s => s.trim()).filter(Boolean) };
     if (editing) { setItems(prev => prev.map(i => i.id === editing.id ? c : i)); } else { setItems(prev => [...prev, c]); }
     setShowForm(false); resetForm();
@@ -58,9 +61,11 @@ export default function EditCertificationsScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={s.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[s.label, { color: colors.textSecondary }]}>Name *</Text>
-            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. AWS Solutions Architect" placeholderTextColor={colors.textTertiary} value={name} onChangeText={setName} />
+            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !name.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. AWS Solutions Architect" placeholderTextColor={colors.textTertiary} value={name} onChangeText={setName} />
+            {formTouched && !name.trim() && <Text style={s.fieldError}>Name is required</Text>}
             <Text style={[s.label, { color: colors.textSecondary }]}>Issuing Organization *</Text>
-            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Amazon Web Services" placeholderTextColor={colors.textTertiary} value={org} onChangeText={setOrg} />
+            <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !org.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Amazon Web Services" placeholderTextColor={colors.textTertiary} value={org} onChangeText={setOrg} />
+            {formTouched && !org.trim() && <Text style={s.fieldError}>Organization is required</Text>}
             <Text style={[s.label, { color: colors.textSecondary }]}>Credential URL</Text>
             <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="https://..." placeholderTextColor={colors.textTertiary} value={url} onChangeText={setUrl} autoCapitalize="none" />
             <Text style={[s.label, { color: colors.textSecondary }]}>Skills (comma-separated)</Text>
@@ -74,13 +79,29 @@ export default function EditCertificationsScreen() {
 
   return (
     <View style={[s.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={s.header}>
-        <Pressable style={[s.backBtn, { backgroundColor: colors.surface }]} onPress={handleSaveAll}><ArrowLeft size={22} color={colors.textPrimary} /></Pressable>
-        <Text style={[s.headerTitle, { color: colors.textPrimary }]}>Licenses & Certifications</Text>
-        <Pressable style={[s.backBtn, { backgroundColor: colors.surface }]} onPress={openAdd}><Plus size={22} color={colors.textPrimary} /></Pressable>
-      </View>
+      <LinearGradient colors={['#2D1B4E', '#4A2D7A', colors.background]} style={s.heroGradient}>
+        <View style={s.header}>
+          <Pressable style={s.backBtnGrad} onPress={handleSaveAll}><ArrowLeft size={22} color="#FFFFFF" /></Pressable>
+          <Text style={s.headerTitleGrad}>Licenses & Certifications</Text>
+          <Pressable style={s.backBtnGrad} onPress={openAdd}><Plus size={22} color="#FFFFFF" /></Pressable>
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&h=200&fit=crop' }} style={s.heroBanner} />
+        <Text style={[s.heroSubtext, { color: colors.textPrimary }]}>Credentials that validate your expertise</Text>
+      </LinearGradient>
       <ScrollView contentContainerStyle={s.listContent}>
-        {items.length === 0 && <Text style={[s.emptyText, { color: colors.textTertiary }]}>No certifications yet. Tap + to add.</Text>}
+        {items.length === 0 && (
+          <View style={s.emptyState}>
+            <View style={s.emptyIconCircle}>
+              <Award size={32} color="#4A2D7A" />
+            </View>
+            <Text style={[s.emptyTitle, { color: colors.textPrimary }]}>No certifications yet</Text>
+            <Text style={[s.emptyText, { color: colors.textTertiary }]}>Tap + above to add your credentials</Text>
+            <Pressable style={[s.emptyAddBtn, { backgroundColor: colors.secondary }]} onPress={openAdd}>
+              <Plus size={16} color={colors.surface} />
+              <Text style={[s.emptyAddBtnText, { color: colors.surface }]}>Add Certification</Text>
+            </Pressable>
+          </View>
+        )}
         {items.map(c => (
           <Pressable key={c.id} style={[s.itemCard, { backgroundColor: colors.surface }]} onPress={() => openEdit(c)}>
             <View style={[s.itemIcon, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#FFF3E0' }]}><Award size={18} color={colors.warning} /></View>
@@ -105,14 +126,26 @@ export default function EditCertificationsScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  container: { flex: 1 }, heroGradient: { paddingHorizontal: 16, paddingBottom: 18 },
+  backBtnGrad: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  headerTitleGrad: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  heroSubtext: { fontSize: 15, textAlign: 'center', marginTop: 4, fontWeight: '500', lineHeight: 21 },
+  heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' }, headerTitle: { fontSize: 17, fontWeight: '700' },
   listContent: { padding: 16, gap: 10 }, formContent: { padding: 16, paddingBottom: 40 }, emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
   itemCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, gap: 12 },
   itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   itemTitle: { fontSize: 15, fontWeight: '700' }, itemSub: { fontSize: 13, marginTop: 2 },
+  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIconCircle: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#EDE9FE', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyText: { fontSize: 13, textAlign: 'center' },
+  emptyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
+  emptyAddBtnText: { fontSize: 14, fontWeight: '700' },
+  fieldError: { fontSize: 11, color: '#EF4444', marginTop: -6, marginBottom: 6 },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 8 },
   input: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, marginBottom: 8, borderWidth: 1 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-  saveBtnText: { fontSize: 16, fontWeight: '700' },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10, marginTop: 16 },
+  saveBtnText: { fontSize: 14, fontWeight: '700' },
 });

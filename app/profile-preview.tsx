@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image as RNImage, Share } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -13,15 +14,15 @@ import {
   Award,
   Star,
   Link2,
-  DollarSign,
   Target,
   FileText,
   Trophy,
   Linkedin,
   Github,
-} from 'lucide-react-native';
-import { useColors } from '@/contexts/useColors';
-import Colors from '@/constants/colors';
+  Share2,
+  DollarSign,
+} from '@/components/ProfileIcons';
+import { darkColors } from '@/constants/colors';
 import { CURRENCIES } from '@/constants/cities';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -29,7 +30,7 @@ export default function ProfilePreviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userProfile } = useAuth();
-  const colors = useColors();
+  const colors = darkColors;
   const user = userProfile;
 
   if (!user) {
@@ -48,14 +49,20 @@ export default function ProfilePreviewScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Profile Preview</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <LinearGradient colors={['#0F172A', '#1E293B', colors.background]} style={styles.heroGradientHeader}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Profile Preview</Text>
+          <Pressable style={styles.backBtn} onPress={() => Share.share({ message: `Check out ${user?.name}'s profile on NextQuark!`, title: 'Share Profile' })}>
+            <Share2 size={20} color="#FFFFFF" />
+          </Pressable>
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
+        <Text style={[styles.heroSubtext, { color: colors.textSecondary }]}>This is how recruiters see your profile</Text>
+      </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroSection}>
@@ -359,27 +366,43 @@ export default function ProfilePreviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF",
+  },
+  heroGradientHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  heroBanner: {
+    width: '100%',
+    height: 90,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  heroSubtext: {
+    fontSize: 13,
+    color: '#000',
+    textAlign: 'center',
+    marginTop: 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '700' as const,
-    color: "#000",
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -404,7 +427,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 32,
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   onlineDot: {
     position: 'absolute',
@@ -413,9 +436,9 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "#FFF",
+    backgroundColor: '#10B981',
     borderWidth: 3,
-    borderColor: "#DDD",
+    borderColor: '#111111',
   },
   name: {
     fontSize: 24,
@@ -439,7 +462,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
   },
   contactCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: '#1E1E1E',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -454,18 +477,18 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   contactText: {
     fontSize: 14,
-    color: "#000",
+    color: '#FFFFFF',
     fontWeight: '500' as const,
   },
   contactDivider: {
     height: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginVertical: 10,
   },
   resumeButton: {
@@ -473,7 +496,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     paddingVertical: 12,
     marginTop: 6,
@@ -481,7 +504,7 @@ const styles = StyleSheet.create({
   resumeButtonText: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: "#000",
+    color: '#FFFFFF',
   },
   statsRow: {
     flexDirection: 'row',
@@ -490,7 +513,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: '#1E1E1E',
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
@@ -498,16 +521,16 @@ const styles = StyleSheet.create({
   statNum: {
     fontSize: 22,
     fontWeight: '800' as const,
-    color: "#000",
+    color: '#FFFFFF',
   },
   statLabel: {
     fontSize: 12,
-    color: "#000",
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '500' as const,
     marginTop: 2,
   },
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: '#1E1E1E',
     borderRadius: 16,
     padding: 18,
     marginBottom: 12,
@@ -521,11 +544,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
-    color: "#000",
+    color: '#FFFFFF',
   },
   bioText: {
     fontSize: 15,
-    color: "#000",
+    color: 'rgba(255,255,255,0.7)',
     lineHeight: 23,
     marginTop: 8,
   },
@@ -535,14 +558,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   prefChip: {
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
   },
   prefChipText: {
     fontSize: 13,
-    color: "#000",
+    color: '#FFFFFF',
     fontWeight: '600' as const,
   },
   salaryText: {
@@ -572,14 +595,14 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
   },
   skillChip: {
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
   skillChipText: {
     fontSize: 13,
-    color: "#000",
+    color: '#FFFFFF',
     fontWeight: '600' as const,
   },
   timelineItem: {
@@ -595,7 +618,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.3)',
     marginTop: 4,
   },
   timelineLine: {
@@ -604,7 +627,7 @@ const styles = StyleSheet.create({
     top: 20,
     bottom: -16,
     width: 2,
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   timelineContent: {
     flex: 1,
@@ -613,27 +636,27 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: "#000",
+    color: '#FFFFFF',
   },
   timelineCompany: {
     fontSize: 14,
-    color: "#000",
+    color: 'rgba(255,255,255,0.6)',
     marginTop: 2,
   },
   timelineDate: {
     fontSize: 12,
-    color: "#000",
+    color: 'rgba(255,255,255,0.4)',
     marginTop: 3,
   },
   timelineDesc: {
     fontSize: 13,
-    color: "#000",
+    color: 'rgba(255,255,255,0.6)',
     lineHeight: 20,
     marginTop: 6,
   },
   emptyText: {
     fontSize: 15,
-    color: "#000",
+    color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -643,7 +666,7 @@ const styles = StyleSheet.create({
   eduExtraLabel: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: "#000",
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 2,
   },
   certItem: {
@@ -652,16 +675,16 @@ const styles = StyleSheet.create({
   },
   certItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   certName: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: "#000",
+    color: '#FFFFFF',
   },
   certOrg: {
     fontSize: 13,
-    color: "#000",
+    color: 'rgba(255,255,255,0.6)',
     marginTop: 2,
   },
   certUrlRow: {
@@ -672,7 +695,7 @@ const styles = StyleSheet.create({
   },
   certUrlText: {
     fontSize: 12,
-    color: "#000",
+    color: '#64B5F6',
     flex: 1,
   },
   certSkillsWrap: {
@@ -682,14 +705,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   certSkillBadge: {
-    backgroundColor: "#FFF",
+    backgroundColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
   certSkillBadgeText: {
     fontSize: 11,
-    color: "#000",
+    color: 'rgba(255,255,255,0.7)',
     fontWeight: '600' as const,
   },
   darkCard: {
@@ -697,7 +720,7 @@ const styles = StyleSheet.create({
   },
   jobLocationText: {
     fontSize: 12,
-    color: "#000",
+    color: 'rgba(255,255,255,0.4)',
     marginTop: 2,
   },
   infoRow: {
@@ -705,16 +728,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   infoLabel: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: "#000",
+    color: 'rgba(255,255,255,0.5)',
   },
   infoValue: {
     fontSize: 14,
-    color: "#000",
+    color: '#FFFFFF',
     fontWeight: '500' as const,
   },
 });

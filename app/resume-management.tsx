@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking, Platform, Modal, TextInput, KeyboardAvoidingView, Image as RNImage, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, FileText, Check, Upload, Trash2, Eye, ExternalLink } from 'lucide-react-native';
+import { ArrowLeft, FileText, Check, Upload, Trash2, Eye, ExternalLink, ChevronLeft, ChevronRight, Pencil } from 'lucide-react-native';
+
+const CARD_WIDTH = Dimensions.get('window').width * 0.75;
+const CARD_GAP = 12;
 import * as DocumentPicker from 'expo-document-picker';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { Resume } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +39,19 @@ async function removeResumeNameMapping(fileName: string) {
 }
 
 export default function ResumeManagementScreen() {
-  const colors = useColors();  const insets = useSafeAreaInsets();
+  const dk = {
+    background: '#121212',
+    surface: '#1E1E1E',
+    surfaceElevated: '#2A2A2A',
+    border: '#333333',
+    borderLight: '#2A2A2A',
+    secondary: '#FFFFFF',
+    accent: '#00E676',
+    textPrimary: '#FFFFFF',
+    textSecondary: '#B0B0B0',
+    textTertiary: '#808080',
+  };
+  const colors = dk as any;  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { supabaseUserId } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -45,6 +60,7 @@ export default function ResumeManagementScreen() {
   const [loadingUrls, setLoadingUrls] = useState(false);
   const [pendingFile, setPendingFile] = useState<{ uri: string; mimeType: string; ext: string; originalName: string } | null>(null);
   const [renameText, setRenameText] = useState('');
+  const [renamingResume, setRenamingResume] = useState<Resume | null>(null);
 
   const { data: subscriptionData } = useQuery({
     queryKey: ['subscription-status', supabaseUserId],
@@ -278,20 +294,41 @@ export default function ResumeManagementScreen() {
     }
   };
 
+  const handleRename = (resume: Resume) => {
+    setRenamingResume(resume);
+    setRenameText(resume.name);
+  };
+
+  const handleConfirmRename = async () => {
+    if (!renamingResume || !renameText.trim()) return;
+    const newName = renameText.trim();
+    await saveResumeNameMapping(renamingResume.fileName, newName);
+    setResumes(prev => prev.map(r => r.id === renamingResume.id ? { ...r, name: newName } : r));
+    setRenamingResume(null);
+    setRenameText('');
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={() => router.back()}>
-          <ArrowLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Resumes</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#121212' }]}>
+      <LinearGradient colors={['#0F172A', '#1E293B', '#121212']} style={styles.heroGradient}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>My Resumes</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
+        <View style={styles.heroSection}>
+          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Manage Your Resumes</Text>
+          <Text style={[styles.heroSubtext, { color: colors.textSecondary }]}>Upload and organize resumes for different roles</Text>
+        </View>
+      </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.limitBanner}>
@@ -311,91 +348,86 @@ export default function ResumeManagementScreen() {
         </View>
 
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Select your active resume to use when applying for jobs.
+          Tap a resume to set it as active. Active resume is used when applying.
         </Text>
 
-        {resumes.map((resume) => {
-          const url = signedUrls[resume.id];
-          const previewUrl = url ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}` : null;
-          return (
-            <View key={resume.id} style={styles.resumeWrapper}>
-              {loadingUrls ? (
-                <View style={[styles.previewFallback, { height: 520 }]}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                  <Text style={[styles.previewFallbackText, { color: colors.textTertiary }]}>Loading preview...</Text>
-                </View>
-              ) : previewUrl && Platform.OS !== 'web' ? (
-                <View style={styles.previewWebViewWrap}>
-                  <WebView
-                    source={{ uri: previewUrl }}
-                    style={styles.previewWebView}
-                    scalesPageToFit
-                    scrollEnabled={false}
-                    nestedScrollEnabled={false}
-                  />
-                </View>
-              ) : url ? (
-                <Pressable style={[styles.previewFallback, { height: 520 }]} onPress={() => handleView(resume)}>
-                  <FileText size={40} color={colors.textTertiary} />
-                  <Text style={[styles.previewFallbackText, { color: colors.textTertiary }]}>Tap to view resume</Text>
+        {resumes.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_WIDTH + CARD_GAP}
+            decelerationRate="fast"
+            contentContainerStyle={styles.carouselContent}
+          >
+            {resumes.map((resume) => {
+              const url = signedUrls[resume.id];
+              const previewUrl = url ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}` : null;
+              return (
+                <Pressable
+                  key={resume.id}
+                  style={[styles.carouselCard, resume.isActive && styles.carouselCardActive]}
+                  onPress={() => handleSetActive(resume.id)}
+                >
+                  {resume.isActive && (
+                    <View style={styles.activeBadge}>
+                      <Check size={10} color="#FFF" />
+                      <Text style={styles.activeBadgeText}>Active</Text>
+                    </View>
+                  )}
+                  <View style={styles.carouselPreview}>
+                    {loadingUrls ? (
+                      <ActivityIndicator size="small" color={colors.accent} />
+                    ) : previewUrl && Platform.OS !== 'web' ? (
+                      <View style={styles.carouselWebViewWrap}>
+                        <WebView source={{ uri: previewUrl }} style={{ flex: 1 }} scalesPageToFit scrollEnabled={false} />
+                      </View>
+                    ) : (
+                      <FileText size={36} color={resume.isActive ? '#10B981' : colors.textTertiary} />
+                    )}
+                  </View>
+                  <Text style={[styles.carouselName, { color: colors.textPrimary }]} numberOfLines={1}>{resume.name}</Text>
+                  <Text style={[styles.carouselDate, { color: colors.textTertiary }]}>Uploaded {formatDate(resume.uploadDate)}</Text>
+                  <View style={styles.carouselActions}>
+                    <Pressable style={[styles.carouselActionBtn, { backgroundColor: colors.background }]} onPress={() => handleRename(resume)}>
+                      <Pencil size={14} color={colors.textSecondary} />
+                    </Pressable>
+                    <Pressable style={[styles.carouselActionBtn, { backgroundColor: colors.background }]} onPress={() => handleView(resume)}>
+                      <ExternalLink size={14} color={colors.accent} />
+                    </Pressable>
+                    <Pressable style={[styles.carouselActionBtn, { backgroundColor: '#3A1B1B' }]} onPress={() => handleDelete(resume.id)}>
+                      <Trash2 size={14} color="#EF4444" />
+                    </Pressable>
+                  </View>
                 </Pressable>
-              ) : (
-                <View style={[styles.previewFallback, { height: 520 }]}>
-                  <FileText size={40} color={colors.textTertiary} />
-                  <Text style={[styles.previewFallbackText, { color: colors.textTertiary }]}>Preview unavailable</Text>
-                </View>
-              )}
+              );
+            })}
+          </ScrollView>
+        )}
 
-              <View style={styles.resumeBottomBar}>
-                <Text style={[styles.resumeNameSmall, { color: colors.textPrimary }]} numberOfLines={1}>{resume.name}</Text>
-                <View style={styles.resumeIconActions}>
-                  <Pressable style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => handleView(resume)}>
-                    <ExternalLink size={16} color={colors.accent} />
-                  </Pressable>
-                  <Pressable
-                    style={[styles.iconBtn, { backgroundColor: colors.surface }, resume.isActive && styles.iconBtnActive]}
-                    onPress={() => handleSetActive(resume.id)}
-                  >
-                    <Check size={16} color={resume.isActive ? '#FFFFFF' : colors.textTertiary} />
-                  </Pressable>
-                  <Pressable style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => handleDelete(resume.id)}>
-                    <Trash2 size={16} color={colors.error} />
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          );
-        })}
+        <View style={{ height: 80 }} />
+      </ScrollView>
 
+      <View style={[styles.stickyUploadBar, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: '#121212', borderTopColor: '#333333' }]}>
         <Pressable 
           style={[styles.uploadBtn, (uploading || resumes.length >= resumeLimit) && styles.uploadBtnDisabled]} 
           onPress={handleUpload} 
           disabled={uploading || resumes.length >= resumeLimit}
         >
-          <Upload size={18} color={(uploading || resumes.length >= resumeLimit) ? '#999' : '#000'} />
+          <Upload size={18} color={(uploading || resumes.length >= resumeLimit) ? '#999' : '#FFF'} />
           <Text style={[styles.uploadBtnText, (uploading || resumes.length >= resumeLimit) && styles.uploadBtnTextDisabled]}>
             {uploading ? 'Uploading...' : resumes.length >= resumeLimit ? `Limit Reached (${resumeLimit} max)` : 'Upload Resume'}
           </Text>
         </Pressable>
+      </View>
 
-        <View style={styles.tipCard}>
-          <Text style={styles.tipTitle}>Pro Tip</Text>
-          <Text style={styles.tipText}>
-            Keep multiple resumes tailored for different roles. Select the most relevant one before applying to maximize your match score.
-          </Text>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-
-      <Modal visible={!!pendingFile} animationType="slide" transparent>
+      <Modal visible={!!pendingFile || !!renamingResume} animationType="slide" transparent>
         <View style={styles.renameOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.renameContent}>
             <View style={styles.renameHeader}>
-              <Text style={styles.renameTitle}>Name Your Resume</Text>
-              <Pressable onPress={() => { setPendingFile(null); setRenameText(''); }}>
+              <Text style={styles.renameTitle}>{renamingResume ? 'Rename Resume' : 'Name Your Resume'}</Text>
+              <Pressable onPress={() => { setPendingFile(null); setRenamingResume(null); setRenameText(''); }}>
                 <View style={styles.renameCloseBtn}>
-                  <Text style={{ fontSize: 18, color: '#000' }}>✕</Text>
+                  <Text style={{ fontSize: 18, color: '#FFF' }}>✕</Text>
                 </View>
               </Pressable>
             </View>
@@ -410,14 +442,14 @@ export default function ResumeManagementScreen() {
               placeholderTextColor="#999"
             />
             <Pressable
-              style={[styles.renameConfirmBtn, uploading && { opacity: 0.6 }]}
-              onPress={handleConfirmUpload}
-              disabled={uploading || !renameText.trim()}
+              style={[styles.renameConfirmBtn, (uploading && !renamingResume) && { opacity: 0.6 }]}
+              onPress={renamingResume ? handleConfirmRename : handleConfirmUpload}
+              disabled={renamingResume ? !renameText.trim() : (uploading || !renameText.trim())}
             >
-              {uploading ? (
+              {uploading && !renamingResume ? (
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
-                <Text style={styles.renameConfirmBtnText}>Upload</Text>
+                <Text style={styles.renameConfirmBtnText}>{renamingResume ? 'Rename' : 'Upload'}</Text>
               )}
             </Pressable>
           </KeyboardAvoidingView>
@@ -430,25 +462,50 @@ export default function ResumeManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFE4E1',
+  },
+  heroGradient: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '700' as const,
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  heroSection: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 4,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '900' as const,
+    textAlign: 'center',
+  },
+  heroSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  heroBanner: {
+    width: '100%',
+    height: 90,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 4,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -456,92 +513,117 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    marginBottom: 20,
+    marginBottom: 12,
     lineHeight: 20,
+  },
+  carouselContent: {
+    paddingRight: 16,
+    gap: CARD_GAP,
+    marginBottom: 20,
+  },
+  carouselCard: {
+    width: CARD_WIDTH,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  carouselCardActive: {
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  activeBadge: {
+    position: 'absolute' as const,
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    zIndex: 2,
+  },
+  activeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#FFF',
+  },
+  carouselPreview: {
+    height: 320,
+    borderRadius: 10,
+    backgroundColor: '#2A2A2A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  carouselWebViewWrap: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  carouselName: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+  },
+  carouselDate: {
+    fontSize: 11,
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  carouselActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  carouselActionBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   limitBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: "#FFF",
+    backgroundColor: '#1E1E1E',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#DDD",
+    borderColor: '#2A2A2A',
   },
   limitText: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: "#000",
+    color: '#FFFFFF',
   },
   upgradeLink: {
     fontSize: 13,
     fontWeight: '700' as const,
-    color: "#000",
+    color: '#00E676',
   },
-  resumeWrapper: {
-    marginBottom: 24,
-  },
-  previewWebViewWrap: {
-    height: 520,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  previewWebView: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  previewFallback: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  previewFallbackText: {
-    fontSize: 13,
-  },
-  resumeBottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-  },
-  resumeNameSmall: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    flex: 1,
-    marginRight: 8,
-  },
-  resumeIconActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconBtnActive: {
-    backgroundColor: '#111',
-  },
+
   uploadBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#111',
     borderRadius: 14,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
   uploadBtnDisabled: {
     opacity: 0.4,
@@ -549,29 +631,20 @@ const styles = StyleSheet.create({
   uploadBtnText: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: '#000000',
+    color: '#FFF',
   },
   uploadBtnTextDisabled: {
     color: '#999999',
   },
-  tipCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: "#E8F5E9",
-  },
-  tipTitle: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: "#000",
-    marginBottom: 6,
-  },
-  tipText: {
-    fontSize: 13,
-    color: "#000",
-    lineHeight: 20,
+  stickyUploadBar: {
+    position: 'absolute' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
   },
   renameOverlay: {
     flex: 1,
@@ -579,7 +652,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   renameContent: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#1E1E1E',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -593,31 +666,31 @@ const styles = StyleSheet.create({
   renameTitle: {
     fontSize: 20,
     fontWeight: '800' as const,
-    color: '#000',
+    color: '#FFFFFF',
   },
   renameCloseBtn: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#2A2A2A',
     justifyContent: 'center',
     alignItems: 'center',
   },
   renameLabel: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: '#666',
+    color: '#B0B0B0',
     marginBottom: 6,
   },
   renameInput: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#2A2A2A',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
-    color: '#000',
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#333333',
     marginBottom: 16,
   },
   renameConfirmBtn: {

@@ -60,8 +60,6 @@ export default function ProfilePreviewScreen() {
             <Share2 size={20} color="#FFFFFF" />
           </Pressable>
         </View>
-        <RNImage source={{ uri: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=200&fit=crop' }} style={styles.heroBanner} />
-        <Text style={[styles.heroSubtext, { color: colors.textSecondary }]}>This is how recruiters see your profile</Text>
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>

@@ -269,7 +269,7 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
           </Pressable>
         </View>
 
-        <Modal visible={showCurrencyPicker} animationType="slide" transparent>
+        <Modal visible={showCurrencyPicker} animationType="slide" transparent onRequestClose={() => setShowCurrencyPicker(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>

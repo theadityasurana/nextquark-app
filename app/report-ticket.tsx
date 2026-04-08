@@ -140,7 +140,7 @@ export default function ReportTicketScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={showDropdown} animationType="slide" transparent>
+      <Modal visible={showDropdown} animationType="slide" transparent onRequestClose={() => setShowDropdown(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.modalHeader}>

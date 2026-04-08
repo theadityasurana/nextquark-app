@@ -117,7 +117,7 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
         </Pressable>
       </ScrollView>
 
-      <Modal visible={showCountryPicker} animationType="slide" transparent>
+      <Modal visible={showCountryPicker} animationType="slide" transparent onRequestClose={() => setShowCountryPicker(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -158,7 +158,7 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
         </View>
       </Modal>
 
-      <Modal visible={showLocationSearch} animationType="slide" transparent>
+      <Modal visible={showLocationSearch} animationType="slide" transparent onRequestClose={() => setShowLocationSearch(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>

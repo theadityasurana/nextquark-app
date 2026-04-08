@@ -95,6 +95,7 @@ import { suggestedSkills, suggestedRoles, majorCities } from '@/constants/onboar
 import { getRolesGroupedByCategory } from '@/constants/roles';
 import { universities } from '@/constants/universities';
 import { SkeletonProfile } from '@/components/Skeleton';
+import FreeSwipesModal from '@/components/FreeSwipesModal';
 
 type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | null;
 
@@ -1299,7 +1300,7 @@ const MAJOR_CITIES = [
           >
             <LinearGradient colors={['#43E97B', '#38B866', '#1B8A4A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickActionGradient}>
               <Gift size={32} color="#FFFFFF" strokeWidth={1.2} style={{ marginBottom: 6 }} />
-              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.95)' }]}>Share & Earn</Text>
+              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.95)' }]}>Free Swipes</Text>
             </LinearGradient>
           </Pressable>
 
@@ -2105,7 +2106,7 @@ const MAJOR_CITIES = [
         <View style={{ height: 40 }} />
       </AnimatedHeaderScrollView>
 
-      <Modal visible={activeModal === 'skill'} animationType="slide" transparent>
+      <Modal visible={activeModal === 'skill'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
@@ -2163,7 +2164,7 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'bio'} animationType="slide" transparent>
+      <Modal visible={activeModal === 'bio'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -2188,7 +2189,7 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'headline'} animationType="slide" transparent>
+      <Modal visible={activeModal === 'headline'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -2211,7 +2212,7 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'location'} animationType="slide" transparent>
+      <Modal visible={activeModal === 'location'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -2226,7 +2227,7 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'avatar'} animationType="slide" transparent>
+      <Modal visible={activeModal === 'avatar'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -2253,7 +2254,7 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'contact'} animationType="slide" transparent>
+      <Modal visible={activeModal === 'contact'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.iosSheetOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeModal}>
             <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -2327,69 +2328,28 @@ const MAJOR_CITIES = [
         </View>
       </Modal>
 
-      <Modal visible={activeModal === 'referral'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Share & Earn</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
-              </Pressable>
-            </View>
-            <View style={styles.referralCodeBox}>
-              <Text style={styles.referralCodeLabel}>Your Referral Code</Text>
-              <Text style={styles.referralCodeText}>{referralStats?.referralCode || 'Loading...'}</Text>
-              <Pressable
-                style={styles.copyCodeBtn}
-                onPress={() => {
-                  if (referralStats?.referralCode) {
-                    Clipboard.setString(referralStats.referralCode);
-                    Alert.alert('Copied!', 'Referral code copied to clipboard');
-                  }
-                }}
-              >
-                <Text style={styles.copyCodeBtnText}>Copy Code</Text>
-              </Pressable>
-            </View>
-            <View style={styles.referralStatsBox}>
-              <View style={styles.referralStatItem}>
-                <Text style={styles.referralStatValue}>{referralStats?.totalReferrals || 0}</Text>
-                <Text style={styles.referralStatLabel}>Friends Joined</Text>
-              </View>
-              <View style={styles.referralStatDivider} />
-              <View style={styles.referralStatItem}>
-                <Text style={styles.referralStatValue}>{referralStats?.totalSwipesEarned || 0}</Text>
-                <Text style={styles.referralStatLabel}>Swipes Earned</Text>
-              </View>
-            </View>
-            <View style={styles.referralInfoBox}>
-              <Text style={styles.referralInfoTitle}>How it works:</Text>
-              <Text style={styles.referralInfoText}>• Share your code with friends</Text>
-              <Text style={styles.referralInfoText}>• They enter it during sign-up</Text>
-              <Text style={styles.referralInfoText}>• You both get 5 free swipes!</Text>
-            </View>
-            <Pressable
-              style={styles.shareNowBtn}
-              onPress={async () => {
-                if (referralStats?.referralCode) {
-                  try {
-                    await Share.share({
-                      message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${referralStats.referralCode} and get 5 free application swipes to get started. Download now!`,
-                    });
-                  } catch (error) {
-                    console.error('Error sharing:', error);
-                  }
-                }
-              }}
-            >
-              <Share2 size={18} color="#FFFFFF" />
-              <Text style={styles.shareNowBtnText}>Share Now</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <FreeSwipesModal
+        visible={activeModal === 'referral'}
+        onClose={closeModal}
+        theme={theme}
+        colors={colors}
+        referralStats={referralStats}
+        onShare={async () => {
+          if (referralStats?.referralCode) {
+            try {
+              await Share.share({ message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${referralStats.referralCode} and get 5 free application swipes to get started. Download now!` });
+            } catch (error) { console.error('Error sharing:', error); }
+          }
+        }}
+        onCopy={() => {
+          if (referralStats?.referralCode) {
+            Clipboard.setString(referralStats.referralCode);
+            Alert.alert('Copied!', 'Referral code copied to clipboard');
+          }
+        }}
+      />
 
-      <Modal visible={!!pendingDocFile} animationType="slide" transparent>
+      <Modal visible={!!pendingDocFile} animationType="slide" transparent onRequestClose={() => setPendingDocFile(null)}>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
@@ -2675,11 +2635,6 @@ const styles = StyleSheet.create({
   referralStatValue: { fontSize: 24, fontWeight: '800' as const, color: Colors.secondary },
   referralStatLabel: { fontSize: 12, color: Colors.textTertiary, marginTop: 4 },
   referralStatDivider: { width: 1, backgroundColor: Colors.borderLight, marginHorizontal: 16 },
-  referralInfoBox: { backgroundColor: '#E8F5E9', borderRadius: 12, padding: 16, marginBottom: 16 },
-  referralInfoTitle: { fontSize: 14, fontWeight: '700' as const, color: '#2E7D32', marginBottom: 8 },
-  referralInfoText: { fontSize: 13, color: '#558B2F', marginBottom: 4 },
-  shareNowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#43A047', borderRadius: 14, paddingVertical: 14 },
-  shareNowBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
   universityInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12, borderWidth: 1, borderColor: Colors.borderLight },
   universityInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
   universityDropdown: { backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, marginBottom: 12, maxHeight: 250 },

@@ -17,7 +17,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, ShieldCheck, Building2, FileText, Plus, Crown } from '@/components/ProfileIcons';
+import { X, Heart, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, ShieldCheck, Building2, FileText, Plus, Crown, Gift } from '@/components/ProfileIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
@@ -38,6 +38,9 @@ import { WebView } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendWelcomeNotification, scheduleAllNotifications } from '@/lib/notifications';
+import { getReferralStats, createReferralCode } from '@/lib/referral';
+import FreeSwipesModal from '@/components/FreeSwipesModal';
+import { Share as RNShare, Clipboard } from 'react-native';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 const WELCOME_NOTIF_SENT_KEY = 'nextquark_welcome_notif_sent';
@@ -154,6 +157,7 @@ export default function HomeScreen() {
   const [loadingResumes, setLoadingResumes] = useState(false);
   const resumeSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [showOutOfSwipes, setShowOutOfSwipes] = useState(false);
+  const [showFreeSwipes, setShowFreeSwipes] = useState(false);
   const outOfSwipesAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
   // Each card gets a fresh Animated position. We use a ref keyed by currentIndex
@@ -314,6 +318,12 @@ export default function HomeScreen() {
     queryKey: ['all-locations'],
     queryFn: fetchUniqueLocations,
     staleTime: 1000 * 60 * 10,
+  });
+
+  const { data: referralStats, refetch: refetchReferralStats } = useQuery({
+    queryKey: ['referral-stats-home', supabaseUserId],
+    queryFn: () => getReferralStats(supabaseUserId!),
+    enabled: !!supabaseUserId,
   });
 
   const { data: subscriptionData } = useQuery({
@@ -1305,15 +1315,28 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           {subscriptionData && (
-            <View style={[
-              styles.subscriptionBadge,
-              subscriptionData.subscription_type === 'free' && styles.subscriptionBadgeFree,
-              subscriptionData.subscription_type === 'pro' && styles.subscriptionBadgePro,
-              subscriptionData.subscription_type === 'premium' && styles.subscriptionBadgePremium,
-            ]}>
-              <Text style={styles.subscriptionBadgeText}>
-                {subscriptionData.subscription_type.toUpperCase()}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[
+                styles.subscriptionBadge,
+                subscriptionData.subscription_type === 'free' && styles.subscriptionBadgeFree,
+                subscriptionData.subscription_type === 'pro' && styles.subscriptionBadgePro,
+                subscriptionData.subscription_type === 'premium' && styles.subscriptionBadgePremium,
+              ]}>
+                <Text style={styles.subscriptionBadgeText}>
+                  {subscriptionData.subscription_type.toUpperCase()}
+                </Text>
+              </View>
+              <Pressable
+                onPress={async () => {
+                  if (!referralStats?.referralCode && supabaseUserId) {
+                    await createReferralCode(supabaseUserId, userName || 'User');
+                    await refetchReferralStats();
+                  }
+                  setShowFreeSwipes(true);
+                }}
+              >
+                <Gift size={28} color="#EF4444" />
+              </Pressable>
             </View>
           )}
         </View>
@@ -1323,50 +1346,50 @@ export default function HomeScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feedToggleRow}>
         <Pressable
           style={[styles.feedToggleBtn, feedMode === 'discover'
-            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#000000', borderColor: isDark ? '#FFFFFF' : '#000000' }
             : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
           onPress={() => setFeedMode('discover')}
         >
-          <Globe size={14} color={feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000')} />
-          <Text style={[styles.feedToggleText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>Global</Text>
-          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'discover' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>1.3Mn+</Text>
+          <Globe size={14} color={feedMode === 'discover' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000')} />
+          <Text style={[styles.feedToggleText, { color: feedMode === 'discover' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>Global</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'discover' ? (isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)') : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'discover' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>1.3Mn+</Text>
           </View>
         </Pressable>
         <Pressable
           style={[styles.feedToggleBtn, feedMode === 'india'
-            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#000000', borderColor: isDark ? '#FFFFFF' : '#000000' }
             : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
           onPress={() => setFeedMode('india')}
         >
           <Text style={{ fontSize: 14 }}>🇮🇳</Text>
-          <Text style={[styles.feedToggleText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>India</Text>
-          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'india' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'india' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>19k+</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'india' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>India</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'india' ? (isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)') : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'india' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>19k+</Text>
           </View>
         </Pressable>
         <Pressable
           style={[styles.feedToggleBtn, feedMode === 'foryou'
-            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#000000', borderColor: isDark ? '#FFFFFF' : '#000000' }
             : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
           onPress={() => setFeedMode('foryou')}
         >
           <Heart size={14} color={feedMode === 'foryou' ? '#EF4444' : (isDark ? '#FFFFFF' : '#000000')} fill={feedMode === 'foryou' ? '#EF4444' : 'transparent'} />
-          <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>For You</Text>
-          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{forYouCount}</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'foryou' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>For You</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'foryou' ? (isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)') : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'foryou' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>{forYouCount}</Text>
           </View>
         </Pressable>
         <Pressable
           style={[styles.feedToggleBtn, feedMode === 'remote'
-            ? { backgroundColor: isDark ? '#FFFFFF' : '#FFFFFF', borderColor: isDark ? '#FFFFFF' : '#000000' }
+            ? { backgroundColor: isDark ? '#FFFFFF' : '#000000', borderColor: isDark ? '#FFFFFF' : '#000000' }
             : { backgroundColor: 'transparent', borderColor: isDark ? '#FFFFFF' : '#000000', borderWidth: 1 }]}
           onPress={() => setFeedMode('remote')}
         >
           <Text style={{ fontSize: 14 }}>🌴</Text>
-          <Text style={[styles.feedToggleText, { color: feedMode === 'remote' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>Remote</Text>
-          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'remote' ? 'rgba(0,0,0,0.1)' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
-            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'remote' ? '#000000' : (isDark ? '#FFFFFF' : '#000000') }]}>{remoteCount}</Text>
+          <Text style={[styles.feedToggleText, { color: feedMode === 'remote' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>Remote</Text>
+          <View style={[styles.feedToggleBadge, { backgroundColor: feedMode === 'remote' ? (isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)') : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)') }]}>
+            <Text style={[styles.feedToggleBadgeText, { color: feedMode === 'remote' ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000') }]}>{remoteCount}</Text>
           </View>
         </Pressable>
       </ScrollView>
@@ -1580,7 +1603,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <Modal visible={showFilters} animationType="slide" transparent>
+      <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
         <View style={styles.filterOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilters(false)}>
             <BlurView intensity={40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -1749,7 +1772,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showCityPicker} animationType="slide" transparent>
+      <Modal visible={showCityPicker} animationType="slide" transparent onRequestClose={() => setShowCityPicker(false)}>
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.iosPickerNav}>
@@ -1777,7 +1800,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showCompanyPicker} animationType="slide" transparent>
+      <Modal visible={showCompanyPicker} animationType="slide" transparent onRequestClose={() => setShowCompanyPicker(false)}>
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.iosPickerNav}>
@@ -1844,7 +1867,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showLocationPicker} animationType="slide" transparent>
+      <Modal visible={showLocationPicker} animationType="slide" transparent onRequestClose={() => setShowLocationPicker(false)}>
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.iosPickerNav}>
@@ -1903,7 +1926,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showRolePicker} animationType="slide" transparent>
+      <Modal visible={showRolePicker} animationType="slide" transparent onRequestClose={() => setShowRolePicker(false)}>
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.iosPickerNav}>
@@ -1962,6 +1985,26 @@ export default function HomeScreen() {
         </View>
       </Modal>
     </View>
+
+      <FreeSwipesModal
+        visible={showFreeSwipes}
+        onClose={() => setShowFreeSwipes(false)}
+        theme={isDark ? 'dark' : 'light'}
+        colors={colors}
+        referralStats={referralStats}
+        onShare={async () => {
+          if (referralStats?.referralCode) {
+            try {
+              await RNShare.share({ message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${referralStats.referralCode} and get 5 free application swipes to get started. Download now!` });
+            } catch (error) { console.error('Error sharing:', error); }
+          }
+        }}
+        onCopy={() => {
+          if (referralStats?.referralCode) {
+            Clipboard.setString(referralStats.referralCode);
+          }
+        }}
+      />
     </TabTransitionWrapper>
   );
 }

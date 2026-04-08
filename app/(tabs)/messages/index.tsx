@@ -1637,7 +1637,7 @@ function MessagesScreen() {
           </KeyboardAvoidingView>
         </Modal>
 
-        <Modal visible={showSidebar} animationType="fade" transparent>
+        <Modal visible={showSidebar} animationType="fade" transparent onRequestClose={() => setShowSidebar(false)}>
           <Pressable style={styles.sidebarOverlay} onPress={() => setShowSidebar(false)}>
             <View style={[styles.sidebarContent, { backgroundColor: colors.background }]}>
               <View style={styles.sidebarHeader}>

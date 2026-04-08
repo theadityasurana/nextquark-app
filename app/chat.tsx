@@ -263,7 +263,7 @@ function ChatScreen() {
             </Pressable>
           </View>
 
-          <Modal visible={showReplyModal} animationType="slide" transparent>
+          <Modal visible={showReplyModal} animationType="slide" transparent onRequestClose={() => setShowReplyModal(false)}>
             <KeyboardAvoidingView style={styles.replyModalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
               <Pressable style={styles.replyModalBackdrop} onPress={closeReplyModal} />
               <View style={[styles.replyModalContent, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -398,7 +398,7 @@ function ChatScreen() {
         </KeyboardAvoidingView>
       )}
 
-      <Modal visible={showAttachMenu} animationType="slide" transparent>
+      <Modal visible={showAttachMenu} animationType="slide" transparent onRequestClose={() => setShowAttachMenu(false)}>
         <Pressable style={styles.attachOverlay} onPress={() => setShowAttachMenu(false)}>
           <View style={styles.attachMenu}>
             <View style={styles.attachMenuHeader}>

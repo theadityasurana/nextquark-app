@@ -383,7 +383,7 @@ export default function ApplicationDetailsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={showVideoModal} animationType="slide" presentationStyle="fullScreen">
+      <Modal visible={showVideoModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowVideoModal(false)}>
         <View style={styles.videoModalOverlay}>
           <Pressable onPress={() => setShowVideoModal(false)} style={styles.videoCloseBtn}>
             <X size={28} color="#FFFFFF" />

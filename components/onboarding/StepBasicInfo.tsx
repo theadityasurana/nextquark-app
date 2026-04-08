@@ -197,7 +197,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
       </ScrollView>
 
       {/* Country Picker Modal */}
-      <Modal visible={showCountryPicker} animationType="slide" transparent>
+      <Modal visible={showCountryPicker} animationType="slide" transparent onRequestClose={() => setShowCountryPicker(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
@@ -242,7 +242,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
       </Modal>
 
       {/* Location Search Modal */}
-      <Modal visible={showLocationSearch} animationType="slide" transparent>
+      <Modal visible={showLocationSearch} animationType="slide" transparent onRequestClose={() => setShowLocationSearch(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />

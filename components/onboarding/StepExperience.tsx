@@ -290,7 +290,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
             <ChevronDown size={14} color="#9E9E9E" />
           </Pressable>
         </View>
-        <Modal visible={showStartMonth} transparent animationType="slide">
+        <Modal visible={showStartMonth} transparent animationType="slide" onRequestClose={() => setShowStartMonth(false)}>
           <Pressable style={styles.modalOverlay} onPress={() => setShowStartMonth(false)}>
             <View style={styles.pickerModal}>
               <View style={styles.pickerHeader}>
@@ -311,7 +311,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
             </View>
           </Pressable>
         </Modal>
-        <Modal visible={showStartYear} transparent animationType="slide">
+        <Modal visible={showStartYear} transparent animationType="slide" onRequestClose={() => setShowStartYear(false)}>
           <Pressable style={styles.modalOverlay} onPress={() => setShowStartYear(false)}>
             <View style={styles.pickerModal}>
               <View style={styles.pickerHeader}>
@@ -350,7 +350,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
                 <ChevronDown size={14} color="#9E9E9E" />
               </Pressable>
             </View>
-            <Modal visible={showEndMonth} transparent animationType="slide">
+            <Modal visible={showEndMonth} transparent animationType="slide" onRequestClose={() => setShowEndMonth(false)}>
               <Pressable style={styles.modalOverlay} onPress={() => setShowEndMonth(false)}>
                 <View style={styles.pickerModal}>
                   <View style={styles.pickerHeader}>
@@ -371,7 +371,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
                 </View>
               </Pressable>
             </Modal>
-            <Modal visible={showEndYear} transparent animationType="slide">
+            <Modal visible={showEndYear} transparent animationType="slide" onRequestClose={() => setShowEndYear(false)}>
               <Pressable style={styles.modalOverlay} onPress={() => setShowEndYear(false)}>
                 <View style={styles.pickerModal}>
                   <View style={styles.pickerHeader}>

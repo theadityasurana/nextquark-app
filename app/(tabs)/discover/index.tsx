@@ -13,7 +13,7 @@ import { fetchJobsByCompany } from '@/lib/jobs';
 import { Job } from '@/types';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { supabase } from '@/lib/supabase';
-import { SkeletonFriendCircle, SkeletonFavCompanies } from '@/components/Skeleton';
+import { SkeletonFriendCircle, SkeletonFavCompanies, SkeletonTopCompaniesRow, SkeletonRecentJobsRow } from '@/components/Skeleton';
 
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share } from 'react-native';
@@ -144,7 +144,7 @@ export default function DiscoverScreen() {
     },
   });
 
-  const { data: recentJobs = [] } = useQuery({
+  const { data: recentJobs = [], isLoading: isLoadingRecentJobs } = useQuery({
     queryKey: ['recent-jobs', recentJobsTimeRange, userProfile?.desiredRoles],
     queryFn: async () => {
       const hours = recentJobsTimeRange === '24h' ? 24 : recentJobsTimeRange === '48h' ? 48 : recentJobsTimeRange === '7d' ? 168 : 720;
@@ -203,7 +203,7 @@ export default function DiscoverScreen() {
     },
   });
 
-  const { data: allCompaniesWithLogos = [] } = useQuery({
+  const { data: allCompaniesWithLogos = [], isLoading: isLoadingTopCompanies } = useQuery({
     queryKey: ['top-companies-logos'],
     queryFn: async () => {
       const { data, error } = await supabase.from('companies').select('name, logo_url').not('logo_url', 'is', null).order('name');
@@ -285,7 +285,7 @@ export default function DiscoverScreen() {
               <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => router.push('/leaderboard' as any)}>
                 <Trophy size={18} color={colors.textPrimary} />
               </Pressable>
-              <Pressable style={styles.inviteButton} onPress={async () => {
+              <Pressable style={[styles.inviteButton, { backgroundColor: isLight ? '#000' : '#FFF' }]} onPress={async () => {
                 if (!referralStats?.referralCode && supabaseUserId) {
                   const code = await createReferralCode(supabaseUserId, userProfile?.name || 'User');
                   if (code) await refetchReferralStats();
@@ -298,7 +298,7 @@ export default function DiscoverScreen() {
                   }
                 }
               }}>
-                <Text style={styles.inviteButtonText}>Invite</Text>
+                <Text style={[styles.inviteButtonText, { color: isLight ? '#FFF' : '#000' }]}>Invite</Text>
               </Pressable>
             </View>
             {showFriendSearch && (
@@ -362,7 +362,11 @@ export default function DiscoverScreen() {
               <Building2 size={20} color={colors.secondary} />
               <Text style={[styles.topCompaniesSectionTitle, { color: colors.secondary }]}>Top Companies Hiring This Week</Text>
             </View>
-            {topCompaniesWithLogos.length > 0 ? (
+            {isLoadingTopCompanies ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <SkeletonTopCompaniesRow />
+              </ScrollView>
+            ) : topCompaniesWithLogos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topCompaniesRow}>
                 {topCompaniesWithLogos.slice(0, visibleTopCompanies).map((company: any, index: number) => {
                   const logoUrl = `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/logos/${company.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
@@ -411,7 +415,11 @@ export default function DiscoverScreen() {
                 </Pressable>
               ))}
             </View>
-            {recentJobs.length > 0 ? (
+            {isLoadingRecentJobs ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <SkeletonRecentJobsRow />
+              </ScrollView>
+            ) : recentJobs.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentJobsRow}>
                 {recentJobs.slice(0, visibleRecentJobs).map((job: any) => {
                   const mappedJob = require('@/lib/jobs').mapSupabaseJobToJob(job);
@@ -674,8 +682,8 @@ const styles = StyleSheet.create({
   iconButton: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD", position: 'relative' },
   iconBadge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   iconBadgeText: { fontSize: 9, fontWeight: '700', color: "#000" },
-  inviteButton: { backgroundColor: "#FFF", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  inviteButtonText: { fontSize: 12, fontWeight: '700', color: "#000" },
+  inviteButton: { backgroundColor: "#000", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  inviteButtonText: { fontSize: 12, fontWeight: '700', color: "#FFF" },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, paddingHorizontal: 10, height: 36, marginHorizontal: 20, marginBottom: 12 },
   searchInput: { flex: 1, fontSize: 17, padding: 0 },
   searchClearBtn: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#8E8E93', justifyContent: 'center', alignItems: 'center' },

@@ -232,7 +232,7 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
               <ChevronDown size={14} color="#9E9E9E" />
             </Pressable>
           </View>
-          <Modal visible={showStartYear} transparent animationType="slide">
+          <Modal visible={showStartYear} transparent animationType="slide" onRequestClose={() => setShowStartYear(false)}>
             <Pressable style={styles.modalOverlay} onPress={() => setShowStartYear(false)}>
               <View style={styles.pickerModal}>
                 <View style={styles.pickerHeader}>
@@ -262,7 +262,7 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
               <ChevronDown size={14} color="#9E9E9E" />
             </Pressable>
           </View>
-          <Modal visible={showEndYear} transparent animationType="slide">
+          <Modal visible={showEndYear} transparent animationType="slide" onRequestClose={() => setShowEndYear(false)}>
             <Pressable style={styles.modalOverlay} onPress={() => setShowEndYear(false)}>
               <View style={styles.pickerModal}>
                 <View style={styles.pickerHeader}>

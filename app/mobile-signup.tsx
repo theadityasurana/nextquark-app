@@ -193,7 +193,7 @@ export default function MobileSignUpScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        <Modal visible={showCountryPicker} animationType="slide" transparent>
+        <Modal visible={showCountryPicker} animationType="slide" transparent onRequestClose={() => setShowCountryPicker(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>

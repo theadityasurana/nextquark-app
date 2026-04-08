@@ -222,6 +222,35 @@ export function SkeletonJobDetails() {
   );
 }
 
+export function SkeletonTopCompaniesRow() {
+  const colors = useColors();
+  return (
+    <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 20 }}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <View key={i} style={{ width: 80, height: 100, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: colors.borderLight }}>
+          <SkeletonPulse style={{ width: 40, height: 40, borderRadius: 8 }} />
+          <SkeletonPulse style={{ height: 8, borderRadius: 4, width: 50 }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function SkeletonRecentJobsRow() {
+  return (
+    <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 20 }}>
+      {[1, 2, 3].map(i => (
+        <View key={i} style={{ width: 180, borderRadius: 16, padding: 16, backgroundColor: 'slategray' }}>
+          <SkeletonPulse style={{ width: 48, height: 48, borderRadius: 12, marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <SkeletonPulse style={{ height: 14, borderRadius: 6, width: '90%', marginBottom: 6, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <SkeletonPulse style={{ height: 14, borderRadius: 6, width: '60%', marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <SkeletonPulse style={{ height: 10, borderRadius: 5, width: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function SkeletonFavCompanies() {
   const colors = useColors();
   return (

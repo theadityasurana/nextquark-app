@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Linking
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Shield, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, Twitter, Instagram, Linkedin, Globe, BookOpen, Crown, Zap } from '@/components/ProfileIcons';
+import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, Twitter, Instagram, Linkedin, Globe, BookOpen, Crown, Zap } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { darkColors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -43,7 +43,7 @@ export default function SettingsScreen() {
     { icon: Zap, label: 'Upgrade to Premium', route: '/premium', highlight: true },
     { icon: BookOpen, label: 'How to Use', action: () => setShowTutorial(true) },
     { icon: Lightbulb, label: 'Quick Tips', route: '/quick-tips' },
-    { icon: Shield, label: 'Privacy Policy', route: '/privacy-policy' },
+    { icon: ShieldCheck, label: 'Privacy Policy', route: '/privacy-policy' },
     { icon: HelpCircle, label: 'Help & Support', route: '/help-support' },
     { icon: MessageSquareMore, label: 'FAQs', route: '/faq' },
     { icon: Info, label: 'About Us', route: '/about-us' },

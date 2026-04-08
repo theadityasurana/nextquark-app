@@ -280,6 +280,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 34,
     fontWeight: '800' as const,
+    fontFamily: 'Lora_700Bold',
   },
   fixedContent: {
     paddingHorizontal: 16,

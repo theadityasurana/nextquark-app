@@ -1158,7 +1158,7 @@ const MAJOR_CITIES = [
         largeTitle="Profile"
         backgroundColor={colors.background}
         largeTitleColor={colors.secondary}
-        largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
+        largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800', fontFamily: 'Lora_700Bold' }}
         rightComponent={
           <View style={styles.headerActions}>
             <Pressable

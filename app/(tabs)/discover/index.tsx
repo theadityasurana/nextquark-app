@@ -270,7 +270,7 @@ export default function DiscoverScreen() {
           largeTitle="Discover"
           backgroundColor={colors.background}
           largeTitleColor={colors.secondary}
-          largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800' }}
+          largeHeaderTitleStyle={{ fontSize: 34, fontWeight: '800', fontFamily: 'Lora_700Bold' }}
         >
 
 

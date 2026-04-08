@@ -15,7 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.nextquark.hireswipe"
+      "bundleIdentifier": "app.nextquark.hireswipe",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to let you take profile photos.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to let you choose a profile picture.",
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show relevant jobs near you.",
+        "NSDocumentPickerUsageDescription": "This app accesses documents to let you upload your resume."
+      }
     },
     "android": {
       "adaptiveIcon": {

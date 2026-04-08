@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Image, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Eye, EyeOff, ChevronLeft, Quote, Star } from 'lucide-react-native';
+import { Eye, Star } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -73,7 +74,7 @@ export default function SignInScreen() {
           <Image source={require('@/assets/images/image.png')} style={styles.headerImage} resizeMode="cover" />
           <LinearGradient colors={['transparent', '#111111']} style={styles.headerGradient} />
           <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-            <ChevronLeft size={28} color="#FFF" />
+            <Ionicons name="chevron-back" size={28} color="#FFF" />
           </Pressable>
         </View>
 
@@ -120,7 +121,7 @@ export default function SignInScreen() {
                 returnKeyType="done"
               />
               <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-                {showPassword ? <EyeOff size={18} color="#555" /> : <Eye size={18} color="#555" />}
+                {showPassword ? <Ionicons name="eye-off-outline" size={18} color="#555" /> : <Eye size={18} color="#555" />}
               </Pressable>
             </View>
           </View>
@@ -153,7 +154,7 @@ export default function SignInScreen() {
             <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
               {[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => (
                 <View key={idx} style={styles.tCard}>
-                  <Quote size={16} color="rgba(255,255,255,0.15)" style={styles.tQuoteIcon} />
+                  <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.15)" style={styles.tQuoteIcon} />
                   <Text style={styles.tQuote} numberOfLines={2}>"{t.quote}"</Text>
                   <View style={styles.tFooter}>
                     <Image source={t.avatar} style={styles.tAvatar} />

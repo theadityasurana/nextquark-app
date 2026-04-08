@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Linkedin, Github, Link2 } from 'lucide-react-native';
+import { Linkedin, Github, Link2 } from '@/components/ProfileIcons';
 import { StepProps } from '@/types/onboarding';
 
 export default function StepLinkedIn({ data, onUpdate, onNext }: StepProps) {

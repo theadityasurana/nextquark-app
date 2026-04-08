@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Linking } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, MapPin, Users, Briefcase, Building2, ExternalLink, ChevronRight, Clock, Globe } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Users, Briefcase, Building2, ExternalLink, ChevronRight, Clock, Globe } from '@/components/ProfileIcons';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { Job } from '@/types';

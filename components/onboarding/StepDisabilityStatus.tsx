@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform, ScrollView } from 'react-native';
-import { Check } from 'lucide-react-native';
+import { Check } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
 

@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { X, Trophy, Crown, TrendingUp } from 'lucide-react-native';
+import { X, Trophy, Crown, TrendingUp } from '@/components/ProfileIcons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import { useTheme } from '@/contexts/ThemeContext';

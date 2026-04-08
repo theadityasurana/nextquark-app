@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, FlatList, ScrollView, Platform } from 'react-native';
-import { Check, X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react-native';
+import { Check, X, ChevronRight, Sparkles } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
 import { ROLE_CATEGORIES as CATEGORIES, CATEGORY_ROLES } from '@/constants/roles';
@@ -62,7 +63,7 @@ export default function StepDesiredRoles({ data, onUpdate, onNext }: StepProps) 
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
         <View style={styles.header}>
           <Pressable onPress={() => setActiveCategory(null)} style={styles.backRow}>
-            <ChevronLeft size={20} color="#007AFF" />
+            <Ionicons name="chevron-back" size={20} color="#007AFF" />
             <Text style={styles.backText}>Categories</Text>
           </Pressable>
           <Text style={styles.title}>{cat?.emoji} {cat?.label}</Text>

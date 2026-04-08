@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, ScrollView } from 'react-native';
-import { Rocket, Search, Brain, Shield, Sparkles } from 'lucide-react-native';
+import { Rocket, Search, Sparkles } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { StepProps } from '@/types/onboarding';
 
 const EXPERIENCE_LABELS: Record<string, string> = {
@@ -47,7 +48,7 @@ export default function StepPersonalizedWelcome({ data, onNext }: StepProps) {
   const cards = [
     { icon: Rocket, color: '#007AFF', title: 'Apply More, Faster', desc: `Swipe Right to apply instantly to ${rolesSample} roles. ${goalLabel}!` },
     { icon: Search, color: '#34C759', title: 'Find Meaningful Roles', desc: `We match your ${expLabel} skills with companies offering meaningful work.` },
-    { icon: Brain, color: '#AF52DE', title: 'AI-Powered Matching', desc: 'Our algorithm learns your preferences with every swipe.' },
+    { icon: ({ size, color }: any) => <Ionicons name="bulb-outline" size={size} color={color} />, color: '#AF52DE', title: 'AI-Powered Matching', desc: 'Our algorithm learns your preferences with every swipe.' },
     { icon: Shield, color: '#FF9500', title: 'Track Everything', desc: 'Never lose track of an application. We organize your pipeline.' },
     { icon: Sparkles, color: '#FF2D55', title: 'Stand Out', desc: 'Your profile is optimized to catch recruiters\' attention.' },
   ];

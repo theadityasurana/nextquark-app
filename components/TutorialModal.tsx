@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, Image, Animated, Dimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { X, ChevronRight } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MODAL_WIDTH = SCREEN_WIDTH * 0.9;
@@ -92,7 +93,7 @@ export default function TutorialModal({ visible, onClose }: TutorialModalProps) 
               style={[styles.navButton, currentIndex === 0 && styles.navButtonDisabled]}
               disabled={currentIndex === 0}
             >
-              <ChevronLeft size={24} color={currentIndex === 0 ? '#666666' : '#FFFFFF'} />
+              <Ionicons name="chevron-back" size={24} color={currentIndex === 0 ? '#666666' : '#FFFFFF'} />
               <Text style={[styles.navButtonText, currentIndex === 0 && styles.navButtonTextDisabled]}>
                 Back
               </Text>

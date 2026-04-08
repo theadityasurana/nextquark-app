@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, Platform, Modal, FlatList, Dimensions, PanResponder } from 'react-native';
-import { Search, X, MapPin, Check } from 'lucide-react-native';
+import { Search, X, MapPin, Check } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { suggestedRoles, currencies, majorCities } from '@/constants/onboarding';
 import { StepProps } from '@/types/onboarding';

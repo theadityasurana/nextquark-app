@@ -17,7 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { ArrowLeft, Reply, Forward, Paperclip, Send, ImageIcon, FileText, File, X, Bold, Italic, Underline, Type, ChevronDown, AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Reply, Forward, Paperclip, Send, FileText, X, ChevronDown, AlertCircle } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAvatarUrl, fetchThreadMessages, sendEmailViaResend, getOrCreateProxyEmail, type InboundEmail, type SentEmail } from '@/lib/resend';
@@ -332,17 +333,17 @@ function ChatScreen() {
 
                   <View style={styles.formatBar}>
                     <Pressable style={[styles.formatBtn, isBold && styles.formatBtnActive]} onPress={() => setIsBold(!isBold)}>
-                      <Bold size={16} color={isBold ? '#FFFFFF' : Colors.textTertiary} />
+                      <Ionicons name="text" size={16} color={isBold ? "#FFFFFF" : Colors.textTertiary} />
                     </Pressable>
                     <Pressable style={[styles.formatBtn, isItalic && styles.formatBtnActive]} onPress={() => setIsItalic(!isItalic)}>
-                      <Italic size={16} color={isItalic ? '#FFFFFF' : Colors.textTertiary} />
+                      <Ionicons name="text-outline" size={16} color={isItalic ? '#FFFFFF' : Colors.textTertiary} />
                     </Pressable>
                     <Pressable style={[styles.formatBtn, isUnderline && styles.formatBtnActive]} onPress={() => setIsUnderline(!isUnderline)}>
-                      <Underline size={16} color={isUnderline ? '#FFFFFF' : Colors.textTertiary} />
+                      <Ionicons name="remove-outline" size={16} color={isUnderline ? '#FFFFFF' : Colors.textTertiary} />
                     </Pressable>
                     <View style={styles.formatDividerV} />
                     <Pressable style={styles.textSizeBtn} onPress={() => setShowTextSize(!showTextSize)}>
-                      <Type size={14} color={Colors.textTertiary} />
+                      <Ionicons name="text-outline" size={14} color={Colors.textTertiary} />
                       <Text style={styles.textSizeLabel}>{selectedTextSize}px</Text>
                       <ChevronDown size={12} color={Colors.textTertiary} />
                     </Pressable>
@@ -409,13 +410,13 @@ function ChatScreen() {
             <View style={styles.attachOptions}>
               <Pressable style={styles.attachOption} onPress={() => handleAttachment('photo')}>
                 <View style={[styles.attachOptionIcon, { backgroundColor: '#E3F2FD' }]}>
-                  <ImageIcon size={22} color="#1565C0" />
+                  <Ionicons name="image-outline" size={22} color="#1565C0" />
                 </View>
                 <Text style={styles.attachOptionText}>Photo</Text>
               </Pressable>
               <Pressable style={styles.attachOption} onPress={() => handleAttachment('file')}>
                 <View style={[styles.attachOptionIcon, { backgroundColor: '#FFF3E0' }]}>
-                  <File size={22} color="#E65100" />
+                  <Ionicons name="document-outline" size={22} color="#E65100" />
                 </View>
                 <Text style={styles.attachOptionText}>File</Text>
               </Pressable>

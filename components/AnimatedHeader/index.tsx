@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { memo, useRef } from "react";
+import React, { memo, useRef, useImperativeHandle, forwardRef } from "react";
 import {
   Animated,
   Platform,
@@ -11,6 +11,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const HEADER_HEIGHT = 60;
+
+export interface AnimatedHeaderScrollViewRef {
+  scrollToTop: () => void;
+}
 
 interface Props {
   largeTitle: string;
@@ -27,6 +31,7 @@ interface Props {
   smallHeaderSubtitleStyle?: any;
   contentContainerStyle?: any;
   refreshControl?: React.ReactElement;
+  scrollRef?: React.Ref<AnimatedHeaderScrollViewRef>;
 }
 
 export const AnimatedHeaderScrollView = memo<Props>(
@@ -45,9 +50,18 @@ export const AnimatedHeaderScrollView = memo<Props>(
     smallHeaderSubtitleStyle,
     contentContainerStyle,
     refreshControl,
+    scrollRef,
   }) => {
     const scrollY = useRef(new Animated.Value(0)).current;
+    const innerScrollRef = useRef<any>(null);
     const insets = useSafeAreaInsets();
+
+    useImperativeHandle(scrollRef, () => ({
+      scrollToTop: () => {
+        innerScrollRef.current?.scrollTo?.({ y: 0, animated: true });
+        innerScrollRef.current?.getNode?.()?.scrollTo?.({ y: 0, animated: true });
+      },
+    }));
     const totalHeader = HEADER_HEIGHT + insets.top;
 
     // Large title: fade out 0→60, scale up on overscroll
@@ -173,6 +187,7 @@ export const AnimatedHeaderScrollView = memo<Props>(
 
         {/* Scrollable content */}
         <Animated.ScrollView
+          ref={innerScrollRef}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: true }

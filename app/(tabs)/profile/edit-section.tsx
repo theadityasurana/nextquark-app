@@ -10,7 +10,7 @@ const animateChip = () => { LayoutAnimation.configureNext(LayoutAnimation.Preset
 const haptic = () => { if (Platform.OS !== 'web') Haptics.selectionAsync(); };
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Check, Star, X, Search, MapPin, Plus, ChevronRight, Briefcase, Wifi, Building2, Globe, Shield, Heart, Users, AlertCircle } from '@/components/ProfileIcons';
+import { ArrowLeft, Check, Star, X, Search, MapPin, Plus, ChevronRight, Briefcase, Wifi, Building2, Globe, ShieldCheck, Heart, Users, AlertCircle } from '@/components/ProfileIcons';
 import { Image } from 'expo-image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -26,7 +26,7 @@ const JOB_TYPE_OPTIONS = [
   { key: 'Full-time', label: 'Full-time', icon: Briefcase, color: '#1E88E5' },
   { key: 'Part-time', label: 'Part-time', icon: Globe, color: '#7C4DFF' },
   { key: 'Internship', label: 'Internship', icon: Star, color: '#F59E0B' },
-  { key: 'Contract', label: 'Contract', icon: Shield, color: '#EF4444' },
+  { key: 'Contract', label: 'Contract', icon: ShieldCheck, color: '#EF4444' },
   { key: 'Freelance', label: 'Freelance', icon: Globe, color: '#10B981' },
 ];
 const WORK_MODE_OPTIONS = [
@@ -262,7 +262,7 @@ export default function EditSectionScreen() {
         );
       case 'equalopportunity':
         const EO_TABS = [
-          { key: 'veteran' as const, label: 'Veteran', icon: Shield, color: '#8B5CF6' },
+          { key: 'veteran' as const, label: 'Veteran', icon: ShieldCheck, color: '#8B5CF6' },
           { key: 'disability' as const, label: 'Disability', icon: Heart, color: '#EF4444' },
           { key: 'ethnicity' as const, label: 'Ethnicity', icon: Users, color: '#3B82F6' },
           { key: 'race' as const, label: 'Race', icon: Globe, color: '#10B981' },

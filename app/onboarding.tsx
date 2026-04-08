@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-nat
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { ChevronLeft } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
@@ -123,7 +123,7 @@ export default function OnboardingScreen() {
             <View style={styles.headerRow}>
               {showBackButton ? (
                 <Pressable onPress={handleBack} style={styles.backButton} testID="back-button">
-                  <ChevronLeft size={28} color={isComplete ? '#000000' : '#FFFFFF'} />
+                  <Ionicons name="chevron-back" size={28} color={isComplete ? '#000000' : '#FFFFFF'} />
                 </Pressable>
               ) : (
                 <View style={styles.backPlaceholder} />

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
-import { Camera, ImageIcon } from 'lucide-react-native';
+import { Camera } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
@@ -74,7 +75,7 @@ export default function StepPhoto({ data, onUpdate, onNext }: StepProps) {
             <Text style={styles.actionButtonText}>Take Photo</Text>
           </Pressable>
           <Pressable style={styles.actionButton} onPress={() => pickImage(false)}>
-            <ImageIcon size={18} color="#111111" />
+            <Ionicons name="image-outline" size={18} color="#111111" />
             <Text style={styles.actionButtonText}>Choose from Gallery</Text>
           </Pressable>
         </View>

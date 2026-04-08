@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform, Alert, ScrollView } from 'react-native';
-import { Upload, FileText } from 'lucide-react-native';
+import { Upload, FileText } from '@/components/ProfileIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';

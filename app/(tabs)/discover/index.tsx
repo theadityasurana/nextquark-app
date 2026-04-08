@@ -13,11 +13,11 @@ import { fetchJobsByCompany } from '@/lib/jobs';
 import { Job } from '@/types';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { supabase } from '@/lib/supabase';
-import { SkeletonFriendCircle } from '@/components/Skeleton';
+import { SkeletonFriendCircle, SkeletonFavCompanies } from '@/components/Skeleton';
 
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share } from 'react-native';
-import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
+import { AnimatedHeaderScrollView, AnimatedHeaderScrollViewRef } from '@/components/AnimatedHeader';
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
@@ -39,11 +39,14 @@ export default function DiscoverScreen() {
   const [visibleFriends, setVisibleFriends] = useState(10);
   const [showFriendSearch, setShowFriendSearch] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  useScrollToTop(scrollRef);
+  const animatedScrollRef = useRef<AnimatedHeaderScrollViewRef>(null);
+  const scrollToTopRef = useRef({ scrollToOffset: () => { animatedScrollRef.current?.scrollToTop(); } });
+  useScrollToTop(scrollToTopRef as any);
 
   useFocusEffect(
     useCallback(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
+      animatedScrollRef.current?.scrollToTop();
       queryClient.invalidateQueries({ queryKey: ['jobs-by-favorite-companies'] });
       queryClient.invalidateQueries({ queryKey: ['recent-jobs'] });
       queryClient.invalidateQueries({ queryKey: ['all-profiles'] });
@@ -230,7 +233,7 @@ export default function DiscoverScreen() {
     return map;
   }, [topCompanies]);
 
-  const { data: jobsByCompany = {}, refetch: refetchJobs } = useQuery({
+  const { data: jobsByCompany = {}, refetch: refetchJobs, isLoading: isLoadingFavJobs } = useQuery({
     queryKey: ['jobs-by-favorite-companies', favoriteCompanies],
     queryFn: async () => {
       const results: Record<string, Job[]> = {};
@@ -263,6 +266,7 @@ export default function DiscoverScreen() {
     <TabTransitionWrapper routeName="discover">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <AnimatedHeaderScrollView
+          scrollRef={animatedScrollRef}
           largeTitle="Discover"
           backgroundColor={colors.background}
           largeTitleColor={colors.secondary}
@@ -298,16 +302,23 @@ export default function DiscoverScreen() {
               </Pressable>
             </View>
             {showFriendSearch && (
-              <View style={styles.searchBar}>
-                <Search size={16} color={Colors.textTertiary} />
-                <TextInput style={styles.searchInput} placeholder="Search friends..." placeholderTextColor={Colors.textTertiary} value={friendSearch} onChangeText={setFriendSearch} autoFocus />
-                <Pressable onPress={() => { setShowFriendSearch(false); setFriendSearch(''); }}>
-                  <X size={18} color={Colors.textSecondary} />
+              <View style={[styles.searchBar, { backgroundColor: isLight ? 'rgba(118,118,128,0.12)' : '#2C2C2E' }]}>
+                <Search size={16} color="#8E8E93" />
+                <TextInput style={[styles.searchInput, { color: isLight ? '#000000' : '#FFFFFF' }]} placeholder="Search friends..." placeholderTextColor="#8E8E93" value={friendSearch} onChangeText={setFriendSearch} autoFocus />
+                {friendSearch.length > 0 && (
+                  <Pressable onPress={() => setFriendSearch('')} hitSlop={8}>
+                    <View style={styles.searchClearBtn}>
+                      <X size={10} color={isLight ? '#FFFFFF' : '#2C2C2E'} strokeWidth={3} />
+                    </View>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => { setShowFriendSearch(false); setFriendSearch(''); }} hitSlop={8}>
+                  <Text style={styles.searchCancelText}>Cancel</Text>
                 </Pressable>
               </View>
             )}
             {isLoadingProfiles ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
                 {[1,2,3,4,5].map(i => <SkeletonFriendCircle key={i} />)}
               </ScrollView>
             ) : filteredProfiles.length === 0 ? (
@@ -540,6 +551,8 @@ export default function DiscoverScreen() {
                 <Text style={[styles.addButtonText, { color: colors.surface }]}>Add Favorite Companies</Text>
               </Pressable>
             </View>
+          ) : isLoadingFavJobs ? (
+            <SkeletonFavCompanies />
           ) : (
             <FavCompaniesTabbed
               companies={favoriteCompanies}
@@ -655,37 +668,39 @@ const styles = StyleSheet.create({
   loadMoreFriend: { width: 76, height: 76, borderRadius: 38, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 2, marginLeft: -20 },
   loadMoreText: { fontSize: 13, fontWeight: '700' },
   addCompanyBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  friendsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
-  friendsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
+  friendsSection: { marginBottom: 12, marginHorizontal: -16, paddingVertical: 16, borderRadius: 16 },
+  friendsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 20 },
   friendsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000", flex: 1 },
   iconButton: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#DDD", position: 'relative' },
   iconBadge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   iconBadgeText: { fontSize: 9, fontWeight: '700', color: "#000" },
   inviteButton: { backgroundColor: "#FFF", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   inviteButtonText: { fontSize: 12, fontWeight: '700', color: "#000" },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, marginRight: 20, marginBottom: 12, borderWidth: 1, borderColor: "#DDD" },
-  searchInput: { flex: 1, fontSize: 15, color: "#000" },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, paddingHorizontal: 10, height: 36, marginHorizontal: 20, marginBottom: 12 },
+  searchInput: { flex: 1, fontSize: 17, padding: 0 },
+  searchClearBtn: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#8E8E93', justifyContent: 'center', alignItems: 'center' },
+  searchCancelText: { fontSize: 17, color: '#007AFF', marginLeft: 4 },
 
-  friendsRow: { paddingRight: 20, flexDirection: 'row', alignItems: 'center' },
+  friendsRow: { paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' },
   friendBlock: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
   friendAvatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: "#FFF", borderWidth: 3, borderColor: '#DDD' },
   loadingText: { fontSize: 13, color: "#000", paddingVertical: 20 },
   emptyFriendsText: { fontSize: 13, color: "#000", fontStyle: 'italic', paddingVertical: 20 },
-  topCompaniesSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
-  topCompaniesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
+  topCompaniesSection: { marginBottom: 12, marginHorizontal: -16, paddingVertical: 16, borderRadius: 16 },
+  topCompaniesHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 20 },
   topCompaniesSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
-  topCompaniesRow: { gap: 12, paddingRight: 20 },
+  topCompaniesRow: { gap: 12, paddingHorizontal: 20 },
   companyLogoTile: { width: 80, height: 100, borderRadius: 12, padding: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, position: 'relative' as const },
   companyLogoImage: { width: 40, height: 40, borderRadius: 8, marginBottom: 4 },
   companyTileName: { fontSize: 10, fontWeight: '600', textAlign: 'center' as const },
   companyTileBadge: { position: 'absolute' as const, top: 4, right: 4, backgroundColor: '#22c55e', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 5 },
   companyTileBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
-  analyticsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
-  analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingRight: 20 },
+  analyticsSection: { marginBottom: 12, marginHorizontal: -16, paddingVertical: 16, borderRadius: 16 },
+  analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 20 },
   analyticsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
-  timeRangeSelector: { flexDirection: 'row', gap: 6, paddingRight: 20, marginBottom: 12 },
+  timeRangeSelector: { flexDirection: 'row', gap: 6, paddingHorizontal: 20, marginBottom: 12 },
   timeRangeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  analyticsRow: { gap: 12, paddingRight: 20 },
+  analyticsRow: { gap: 12, paddingHorizontal: 20 },
   analyticsCard: { width: 280, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#DDD" },
   analyticsCardTitle: { fontSize: 16, fontWeight: '700', color: "#000", marginBottom: 4 },
   analyticsCardSubtitle: { fontSize: 12, color: "#000", marginBottom: 8 },
@@ -695,13 +710,13 @@ const styles = StyleSheet.create({
   barContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 6, height: 24, position: 'relative' },
   barFill: { height: '100%', borderRadius: 6, minWidth: 30 },
   barValue: { position: 'absolute', right: 8, fontSize: 11, fontWeight: '700', color: "#000" },
-  recentJobsSection: { marginBottom: 12, paddingLeft: 20, paddingVertical: 16, borderRadius: 16 },
-  recentJobsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingRight: 20 },
+  recentJobsSection: { marginBottom: 12, marginHorizontal: -16, paddingVertical: 16, borderRadius: 16 },
+  recentJobsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 20 },
   recentJobsSectionTitle: { fontSize: 18, fontWeight: '700', color: "#000" },
-  recentTimeSelector: { flexDirection: 'row', gap: 6, paddingRight: 20, marginBottom: 12 },
+  recentTimeSelector: { flexDirection: 'row', gap: 6, paddingHorizontal: 20, marginBottom: 12 },
   recentTimeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   recentTimeText: { fontSize: 11, fontWeight: '600' },
-  recentJobsRow: { gap: 12, paddingRight: 20 },
+  recentJobsRow: { gap: 12, paddingHorizontal: 20 },
   recentJobCard: { width: 180, backgroundColor: 'slategray', borderRadius: 16, padding: 16 },
   recentJobLogo: { width: 48, height: 48, borderRadius: 12, marginBottom: 10, backgroundColor: "#FFF" },
   recentJobTitle: { fontSize: 15, fontWeight: '700', color: "#FFF", marginBottom: 6, lineHeight: 20 },

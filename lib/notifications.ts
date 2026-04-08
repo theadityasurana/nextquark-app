@@ -6,7 +6,11 @@ let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
 
 try {
-  Notifications = require('expo-notifications');
+  const NotifModule = require('expo-notifications');
+  // Check if the module actually works (fails in Expo Go SDK 53+)
+  if (NotifModule && typeof NotifModule.getPermissionsAsync === 'function') {
+    Notifications = NotifModule;
+  }
   Device = require('expo-device');
 
   if (Notifications) {
@@ -69,7 +73,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: 'e12076d8-bcb8-48be-af09-72bfab77d937',
+      projectId: '639de0ac-5a11-423c-ac9f-526386ac19f0',
     });
     return token.data;
   } catch (error) {

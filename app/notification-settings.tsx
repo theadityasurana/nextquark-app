@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Bell, Briefcase, MessageCircle, Calendar, Star, Zap, Mail } from 'lucide-react-native';
+import { ArrowLeft, Briefcase, Star, Zap, Mail } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
 interface NotificationSetting {
@@ -23,7 +24,7 @@ export default function NotificationSettingsScreen() {
       key: 'push_all',
       title: 'Push Notifications',
       description: 'Enable or disable all push notifications',
-      icon: Bell,
+      icon: ({ size, color }: any) => <Ionicons name="notifications-outline" size={size} color={color} />,
       iconColor: Colors.accent,
       enabled: true,
     },
@@ -39,7 +40,7 @@ export default function NotificationSettingsScreen() {
       key: 'interview_reminders',
       title: 'Interview Reminders',
       description: 'Reminders for upcoming interviews',
-      icon: Calendar,
+      icon: ({ size, color }: any) => <Ionicons name="calendar-outline" size={size} color={color} />,
       iconColor: '#E65100',
       enabled: true,
     },

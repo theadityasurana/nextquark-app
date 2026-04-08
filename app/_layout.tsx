@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -108,7 +109,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const opened = await AsyncStorage.getItem(APP_OPENED_KEY);
       setAppOpenedChecked(true);
       if (isAuthenticated && isOnboardingComplete && !opened) {
-        router.replace('/welcome-back' as any);
+        // Use setTimeout to avoid navigation race condition
+        setTimeout(() => router.replace('/welcome-back' as any), 100);
       }
     } catch (e) {
       console.log('Error checking app opened status:', e);
@@ -296,8 +298,13 @@ function RootLayoutNav() {
 }
 
 function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    'Lora_600SemiBold': require('@expo-google-fonts/lora/600SemiBold/Lora_600SemiBold.ttf'),
+    'Lora_700Bold': require('@expo-google-fonts/lora/700Bold/Lora_700Bold.ttf'),
+  });
+
   useEffect(() => {
-    SplashScreen.hideAsync();
+    if (fontsLoaded) SplashScreen.hideAsync();
 
     // Catch unhandled refresh token errors globally
     const originalHandler = ErrorUtils.getGlobalHandler();
@@ -309,7 +316,9 @@ function RootLayout() {
       }
       originalHandler(error, isFatal);
     });
-  }, []);
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
 
   return (
     <ErrorBoundary fallbackMessage="The app encountered an error. Tap below to restart.">

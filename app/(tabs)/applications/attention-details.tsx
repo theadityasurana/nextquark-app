@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, PartyPopper } from 'lucide-react-native';
+import { ArrowLeft } from '@/components/ProfileIcons';
 import { useColors } from '@/contexts/useColors';
 
 export default function AttentionDetailsScreen() {

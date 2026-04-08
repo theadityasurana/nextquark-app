@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
-import { Plus, Briefcase, MapPin, ChevronDown, Check, X } from 'lucide-react-native';
+import { Plus, Briefcase, MapPin, ChevronDown, Check, X } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { employmentTypes, months, years } from '@/constants/onboarding';
 import { StepProps, OnboardingWorkExp } from '@/types/onboarding';

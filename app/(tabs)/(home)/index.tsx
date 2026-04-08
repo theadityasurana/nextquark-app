@@ -13,10 +13,12 @@ import {
   TextInput,
   Image,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, SlidersHorizontal, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, BarChart3, ShieldCheck, Building2, UserRound, FileText, Plus, Crown } from 'lucide-react-native';
+import { X, Heart, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, ShieldCheck, Building2, FileText, Plus, Crown } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors, { darkColors } from '@/constants/colors';
@@ -1291,7 +1293,7 @@ export default function HomeScreen() {
               <Search size={20} color={colors.textPrimary} />
             </Pressable>
             <Pressable style={[styles.headerButton, { borderColor: colors.textPrimary }]} onPress={handleOpenFilters}>
-              <SlidersHorizontal size={20} color={colors.textPrimary} />
+              <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
               {activeFilterCount > 0 && (
                 <View style={styles.filterBadge}>
                   <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
@@ -1489,425 +1491,473 @@ export default function HomeScreen() {
 
       {showResumeSheet && (
         <View style={styles.resumeSheetOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeResumeSheet} />
-          <Animated.View style={[styles.resumeSheetContainer, { transform: [{ translateY: resumeSheetAnim }] }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeResumeSheet}>
+            <BlurView intensity={40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          </Pressable>
+          <Animated.View style={[styles.resumeSheetContainer, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7', transform: [{ translateY: resumeSheetAnim }] }]}>
             <View style={styles.resumeSheetHandle} />
-            <View style={styles.resumeSheetHeader}>
-              <Text style={styles.resumeSheetTitle}>My Resumes</Text>
-              <Pressable onPress={closeResumeSheet}>
-                <X size={22} color="#000" />
+            <View style={[styles.resumeSheetHeader, !isDark && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#C6C6C8' }]}>
+              <View style={{ width: 50 }} />
+              <Text style={[styles.resumeSheetTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Resumes</Text>
+              <Pressable onPress={closeResumeSheet} hitSlop={8}>
+                <Text style={styles.resumeSheetDoneText}>Done</Text>
               </Pressable>
             </View>
 
             {loadingResumes ? (
               <View style={styles.resumeSheetLoading}>
-                <Text style={styles.resumeSheetLoadingText}>Loading resumes...</Text>
+                <Text style={[styles.resumeSheetLoadingText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>Loading resumes...</Text>
               </View>
             ) : resumes.length === 0 ? (
               <View style={styles.resumeSheetEmpty}>
-                <FileText size={40} color="#CCC" />
-                <Text style={styles.resumeSheetEmptyText}>No resumes uploaded yet</Text>
+                <FileText size={36} color="#C7C7CC" />
+                <Text style={[styles.resumeSheetEmptyText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>No resumes uploaded yet</Text>
                 <Pressable style={styles.resumeSheetUploadBtn} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
-                  <Plus size={16} color="#FFF" />
                   <Text style={styles.resumeSheetUploadBtnText}>Upload Resume</Text>
                 </Pressable>
               </View>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.resumeSheetScroll}>
-                {resumes.map((resume) => {
-                  const url = resumeSignedUrls[resume.id];
-                  const previewUrl = url ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}` : null;
-                  return (
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.resumeSheetScroll} contentContainerStyle={{ paddingBottom: 30 }}>
+                {(() => {
+                  const activeResume = resumes.find(r => r.isActive);
+                  const activeUrl = activeResume ? resumeSignedUrls[activeResume.id] : null;
+                  if (activeResume && activeUrl && Platform.OS !== 'web') {
+                    const previewUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(activeUrl)}`;
+                    return (
+                      <View style={[styles.iosResumePreview, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                        <WebView source={{ uri: previewUrl }} style={{ flex: 1, borderRadius: 10 }} scalesPageToFit scrollEnabled={false} />
+                      </View>
+                    );
+                  } else if (activeResume && activeUrl) {
+                    return (
+                      <View style={[styles.iosResumePreviewFallback, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                        <FileText size={28} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                        <Text style={{ fontSize: 13, color: '#8E8E93', marginTop: 6 }}>Active Resume</Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+                <View style={[styles.iosGroupedSection, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                  {resumes.map((resume, idx) => (
                     <Pressable
                       key={resume.id}
-                      style={[styles.resumeSheetItem, resume.isActive && styles.resumeSheetItemActive]}
+                      style={[styles.iosGroupedRow, idx < resumes.length - 1 && styles.iosGroupedRowBorder]}
                       onPress={() => setActiveResume(resume.id)}
                     >
-                      {resume.isActive && previewUrl && Platform.OS !== 'web' ? (
-                        <View style={styles.resumeSheetPreview}>
-                          <WebView source={{ uri: previewUrl }} style={{ flex: 1 }} scalesPageToFit scrollEnabled={false} />
-                        </View>
-                      ) : resume.isActive && url ? (
-                        <View style={styles.resumeSheetPreviewFallback}>
-                          <FileText size={32} color="#999" />
-                          <Text style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Active Resume</Text>
-                        </View>
-                      ) : null}
-                      <View style={styles.resumeSheetItemRow}>
-                        <View style={[styles.resumeSheetRadio, resume.isActive && styles.resumeSheetRadioActive]}>
-                          {resume.isActive && <View style={styles.resumeSheetRadioDot} />}
-                        </View>
+                      <View style={styles.iosGroupedRowContent}>
+                        <FileText size={20} color={resume.isActive ? '#007AFF' : (isDark ? '#8E8E93' : '#C7C7CC')} />
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.resumeSheetItemName, resume.isActive && { fontWeight: '800' }]} numberOfLines={1}>{resume.name}</Text>
-                          <Text style={styles.resumeSheetItemDate}>{new Date(resume.uploadDate).toLocaleDateString()}</Text>
+                          <Text style={[styles.iosGroupedRowTitle, { color: isDark ? '#FFFFFF' : '#000000' }]} numberOfLines={1}>{resume.name}</Text>
+                          <Text style={[styles.iosGroupedRowSubtitle, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>{new Date(resume.uploadDate).toLocaleDateString()}</Text>
                         </View>
-                        {resume.isActive && <Text style={styles.resumeSheetActiveBadge}>Active</Text>}
+                        {resume.isActive && <Check size={20} color="#007AFF" strokeWidth={3} />}
                       </View>
                     </Pressable>
-                  );
-                })}
+                  ))}
+                </View>
 
-                {(subscriptionData?.subscription_type === 'pro' || subscriptionData?.subscription_type === 'premium') ? (
-                  <Pressable style={styles.resumeSheetAddBtn} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
-                    <Plus size={18} color="#FFF" />
-                    <Text style={styles.resumeSheetAddBtnText}>Add New Resume</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable style={styles.resumeSheetUpgradeBtn} onPress={() => { closeResumeSheet(); router.push('/premium' as any); }}>
-                    <Crown size={16} color="#FFD700" />
-                    <Text style={styles.resumeSheetUpgradeBtnText}>Upgrade to add more resumes</Text>
-                  </Pressable>
-                )}
-                <View style={{ height: 20 }} />
               </ScrollView>
             )}
+            <View style={[styles.iosResumeActions, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+              {(subscriptionData?.subscription_type === 'pro' || subscriptionData?.subscription_type === 'premium') ? (
+                <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
+                  <Plus size={15} color="#007AFF" strokeWidth={2.5} />
+                  <Text style={styles.iosResumeActionText}>Add New</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => { closeResumeSheet(); router.push('/premium' as any); }}>
+                  <Crown size={15} color="#FFD700" />
+                  <Text style={[styles.iosResumeActionText, { color: '#FFD700' }]}>Upgrade</Text>
+                </Pressable>
+              )}
+              <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
+                <FileText size={15} color="#007AFF" />
+                <Text style={styles.iosResumeActionText}>Manage</Text>
+              </Pressable>
+            </View>
           </Animated.View>
         </View>
       )}
 
       <Modal visible={showFilters} animationType="slide" transparent>
         <View style={styles.filterOverlay}>
-          <Animated.View style={[styles.filterContent, { transform: [{ translateY: filterSlideAnim }] }]}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Filter Jobs</Text>
-              <Pressable onPress={() => setShowFilters(false)} style={styles.filterCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilters(false)}>
+            <BlurView intensity={40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          </Pressable>
+          <Animated.View style={[styles.filterContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7', transform: [{ translateY: filterSlideAnim }] }]}>
+            <View style={styles.iosFilterHandle} />
+            <View style={[styles.iosFilterNav, !isDark && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#C6C6C8' }]}>
+              <Pressable onPress={handleResetFilters} hitSlop={8}>
+                <Text style={styles.iosFilterReset}>Reset</Text>
+              </Pressable>
+              <Text style={[styles.iosFilterTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Filter Jobs</Text>
+              <Pressable onPress={handleApplyFilters} hitSlop={8}>
+                <Text style={styles.iosFilterApply}>Apply</Text>
               </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.filterScroll}>
 
 
-              <View style={styles.filterSectionRow}><Clock size={15} color="#7C4DFF" /><Text style={styles.filterSectionTitle}>Posted Within</Text></View>
-              <View style={styles.chipGrid}>
-                {POSTED_OPTIONS.map((opt) => {
-                  const selected = tempFilters.postedWithin.includes(opt.value);
-                  return (
-                    <Pressable key={opt.value} style={[styles.filterChip, selected ? { backgroundColor: '#7C4DFF28', borderColor: '#7C4DFF50' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => togglePostedWithin(opt.value)}>
-                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{opt.label}</Text>
-                    </Pressable>
-                  );
-                })}
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>POSTED WITHIN</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {POSTED_OPTIONS.map((opt) => {
+                    const selected = tempFilters.postedWithin.includes(opt.value);
+                    return (
+                      <Pressable key={opt.value} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => togglePostedWithin(opt.value)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{opt.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><Wifi size={15} color="#F4511E" /><Text style={styles.filterSectionTitle}>Work Mode</Text></View>
-              <View style={styles.chipGrid}>
-                {WORK_MODES.map((mode) => {
-                  const selected = tempFilters.workModes.includes(mode);
-                  return (
-                    <Pressable key={mode} style={[styles.filterChip, selected ? { backgroundColor: '#F4511E28', borderColor: '#F4511E50' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleWorkMode(mode)}>
-                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{mode}</Text>
-                    </Pressable>
-                  );
-                })}
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>WORK MODE</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {WORK_MODES.map((mode) => {
+                    const selected = tempFilters.workModes.includes(mode);
+                    return (
+                      <Pressable key={mode} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleWorkMode(mode)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{mode}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><Briefcase size={15} color="#1E88E5" /><Text style={styles.filterSectionTitle}>Job Type</Text></View>
-              <View style={styles.chipGrid}>
-                {JOB_TYPES.map((type) => {
-                  const selected = tempFilters.jobTypes.includes(type);
-                  return (
-                    <Pressable key={type} style={[styles.filterChip, selected ? { backgroundColor: '#1E88E528', borderColor: '#1E88E550' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleJobType(type)}>
-                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{type}</Text>
-                    </Pressable>
-                  );
-                })}
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB TYPE</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {JOB_TYPES.map((type) => {
+                    const selected = tempFilters.jobTypes.includes(type);
+                    return (
+                      <Pressable key={type} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobType(type)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{type}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><BarChart3 size={15} color="#00897B" /><Text style={styles.filterSectionTitle}>Job Level</Text></View>
-              <View style={styles.chipGrid}>
-                {JOB_LEVELS.map((level) => {
-                  const selected = tempFilters.jobLevels.includes(level);
-                  return (
-                    <Pressable key={level} style={[styles.filterChip, selected ? { backgroundColor: '#00897B28', borderColor: '#00897B50' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleJobLevel(level)}>
-                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{level}</Text>
-                    </Pressable>
-                  );
-                })}
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB LEVEL</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {JOB_LEVELS.map((level) => {
+                    const selected = tempFilters.jobLevels.includes(level);
+                    return (
+                      <Pressable key={level} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobLevel(level)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{level}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><ShieldCheck size={15} color="#D4A017" /><Text style={styles.filterSectionTitle}>Job Requirements</Text></View>
-              <View style={styles.chipGrid}>
-                {JOB_REQUIREMENTS.map((req) => {
-                  const selected = tempFilters.jobRequirements.includes(req);
-                  return (
-                    <Pressable key={req} style={[styles.filterChip, selected ? { backgroundColor: '#D4A01728', borderColor: '#D4A01750' } : { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' }]} onPress={() => toggleJobRequirement(req)}>
-                      <Text style={[styles.filterChipText, { color: '#000000' }]}>{req}</Text>
-                    </Pressable>
-                  );
-                })}
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB REQUIREMENTS</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {JOB_REQUIREMENTS.map((req) => {
+                    const selected = tempFilters.jobRequirements.includes(req);
+                    return (
+                      <Pressable key={req} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobRequirement(req)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{req}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><Building2 size={15} color="#E91E63" /><Text style={styles.filterSectionTitle}>Company</Text></View>
-              <Pressable style={styles.cityPickerBtn} onPress={() => setShowCompanyPicker(true)}>
-                <Search size={18} color={Colors.textTertiary} />
-                <Text style={styles.cityPickerBtnText}>
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>COMPANY</Text>
+              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowCompanyPicker(true)}>
+                <Building2 size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                <Text style={[styles.iosFilterPickerText, { color: tempFilters.companies.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
                   {tempFilters.companies.length > 0 ? `${tempFilters.companies.length} companies selected` : 'Select companies...'}
                 </Text>
-                <ChevronDown size={18} color={Colors.textTertiary} />
+                <ChevronDown size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
               </Pressable>
               {tempFilters.companies.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.companies.map((company) => (
-                    <Pressable key={company} style={[styles.filterChip, { backgroundColor: '#E91E6328', borderColor: '#E91E6350' }]} onPress={() => toggleCompany(company)}>
-                      <Text style={[styles.filterChipText, { color: '#E91E63' }]}>{company}</Text>
-                      <X size={10} color="#E91E63" />
+                    <Pressable key={company} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleCompany(company)}>
+                      <Text style={styles.iosFilterChipTextActive}>{company}</Text>
+                      <X size={10} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
               )}
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><UserRound size={15} color="#9C27B0" /><Text style={styles.filterSectionTitle}>Role</Text></View>
-              <Pressable style={styles.cityPickerBtn} onPress={() => setShowRolePicker(true)}>
-                <Search size={18} color={Colors.textTertiary} />
-                <Text style={styles.cityPickerBtnText}>
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>ROLE</Text>
+              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowRolePicker(true)}>
+                <Ionicons name="person-outline" size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                <Text style={[styles.iosFilterPickerText, { color: tempFilters.roles.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
                   {tempFilters.roles.length > 0 ? `${tempFilters.roles.length} roles selected` : 'Select roles...'}
                 </Text>
-                <ChevronDown size={18} color={Colors.textTertiary} />
+                <ChevronDown size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
               </Pressable>
               {tempFilters.roles.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.roles.map((role) => (
-                    <Pressable key={role} style={[styles.filterChip, { backgroundColor: '#9C27B028', borderColor: '#9C27B050' }]} onPress={() => toggleRole(role)}>
-                      <Text style={[styles.filterChipText, { color: '#9C27B0' }]}>{role}</Text>
-                      <X size={10} color="#9C27B0" />
+                    <Pressable key={role} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleRole(role)}>
+                      <Text style={styles.iosFilterChipTextActive}>{role}</Text>
+                      <X size={10} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
               )}
+            </View>
 
-              <View style={styles.filterDivider} />
-
-              <View style={styles.filterSectionRow}><MapPin size={15} color="#FF5722" /><Text style={styles.filterSectionTitle}>Location</Text></View>
-              <Pressable style={styles.cityPickerBtn} onPress={() => setShowLocationPicker(true)}>
-                <MapPin size={18} color={Colors.textTertiary} />
-                <Text style={styles.cityPickerBtnText}>
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>LOCATION</Text>
+              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowLocationPicker(true)}>
+                <MapPin size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                <Text style={[styles.iosFilterPickerText, { color: tempFilters.locations.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
                   {tempFilters.locations.length > 0 ? `${tempFilters.locations.length} locations selected` : 'Select locations...'}
                 </Text>
-                <ChevronDown size={18} color={Colors.textTertiary} />
+                <ChevronDown size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
               </Pressable>
               {tempFilters.locations.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
                   {tempFilters.locations.map((location) => (
-                    <Pressable key={location} style={[styles.filterChip, { backgroundColor: '#FF572228', borderColor: '#FF572250' }]} onPress={() => toggleLocation(location)}>
-                      <Text style={[styles.filterChipText, { color: '#FF5722' }]}>{location}</Text>
-                      <X size={10} color="#FF5722" />
+                    <Pressable key={location} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleLocation(location)}>
+                      <Text style={styles.iosFilterChipTextActive}>{location}</Text>
+                      <X size={10} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
               )}
+            </View>
 
               <View style={{ height: 20 }} />
             </ScrollView>
-
-            <View style={styles.filterFooter}>
-              <Pressable style={styles.resetFilterBtn} onPress={handleResetFilters}>
-                <Text style={styles.resetFilterBtnText}>Reset</Text>
-              </Pressable>
-              <Pressable style={[styles.applyFilterBtn, { backgroundColor: '#000000' }]} onPress={handleApplyFilters}>
-                <Text style={[styles.applyFilterBtnText, { color: '#FFFFFF' }]}>Apply Filters</Text>
-              </Pressable>
-            </View>
           </Animated.View>
         </View>
       </Modal>
 
       <Modal visible={showCityPicker} animationType="slide" transparent>
-        <View style={styles.filterOverlay}>
-          <View style={styles.filterContent}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Select Cities</Text>
-              <Pressable onPress={() => setShowCityPicker(false)} style={styles.filterCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.iosPickerNav}>
+              <View style={{ width: 50 }} />
+              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Cities</Text>
+              <Pressable onPress={() => setShowCityPicker(false)} hitSlop={8}>
+                <Text style={styles.iosPickerDone}>Done</Text>
               </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cityList}>
-              {MAJOR_CITIES.map((city) => {
-                const selected = tempFilters.cities.includes(city);
-                return (
-                  <Pressable key={city} style={[styles.cityOption, selected && styles.cityOptionActive]} onPress={() => toggleCity(city)}>
-                    <Text style={[styles.cityOptionText, selected && styles.cityOptionTextActive]}>{city}</Text>
-                    {selected && <Check size={18} color={Colors.surface} />}
-                  </Pressable>
-                );
-              })}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosPickerList}>
+              <View style={[styles.iosPickerGroup, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                {MAJOR_CITIES.map((city, idx) => {
+                  const selected = tempFilters.cities.includes(city);
+                  return (
+                    <Pressable key={city} style={[styles.iosPickerRow, idx < MAJOR_CITIES.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleCity(city)}>
+                      <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{city}</Text>
+                      {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={{ height: 20 }} />
             </ScrollView>
-            <Pressable style={styles.cityDoneBtn} onPress={() => setShowCityPicker(false)}>
-              <Text style={styles.cityDoneBtnText}>Done ({tempFilters.cities.length} selected)</Text>
-            </Pressable>
           </View>
         </View>
       </Modal>
 
       <Modal visible={showCompanyPicker} animationType="slide" transparent>
-        <View style={styles.filterOverlay}>
-          <View style={styles.filterContent}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Select Companies</Text>
-              <Pressable onPress={() => setShowCompanyPicker(false)} style={styles.filterCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.iosPickerNav}>
+              <View style={{ width: 50 }} />
+              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Companies</Text>
+              <Pressable onPress={() => setShowCompanyPicker(false)} hitSlop={8}>
+                <Text style={styles.iosPickerDone}>Done</Text>
               </Pressable>
             </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search companies..."
-                placeholderTextColor={Colors.textTertiary}
-                value={companySearch}
-                onChangeText={setCompanySearch}
-              />
+            <View style={styles.iosPickerSearchWrap}>
+              <View style={[styles.iosPickerSearchBar, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(118,118,128,0.12)' }]}>
+                <Search size={16} color="#8E8E93" />
+                <TextInput
+                  style={[styles.iosPickerSearchInput, { color: isDark ? '#FFFFFF' : '#000000' }]}
+                  placeholder="Search companies..."
+                  placeholderTextColor="#8E8E93"
+                  value={companySearch}
+                  onChangeText={setCompanySearch}
+                />
+                {companySearch.length > 0 && (
+                  <Pressable onPress={() => setCompanySearch('')} hitSlop={8}>
+                    <View style={styles.iosPickerSearchClear}><X size={10} color={isDark ? '#2C2C2E' : '#FFFFFF'} strokeWidth={3} /></View>
+                  </Pressable>
+                )}
+              </View>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cityList}>
-              {filteredCompanies.length === 0 ? (
-                <Text style={styles.emptyText}>No companies found</Text>
-              ) : (
-                filteredCompanies.map((company: any) => {
-                  const selected = tempFilters.companies.includes(company.name);
-                  const logoUrl = company.logo_url 
-                    ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${company.logo_url}`
-                    : null;
-                  return (
-                    <Pressable key={company.name} style={[styles.cityOption, selected && { borderColor: '#22c55e', borderWidth: 2 }]} onPress={() => toggleCompany(company.name)}>
-                      <View style={styles.companyOptionContent}>
-                        {logoUrl && <Image source={{ uri: logoUrl }} style={styles.companyLogo} />}
-                        <Text style={[styles.cityOptionText, selected && { color: '#22c55e' }]}>{company.name}</Text>
-                      </View>
-                      {selected && <Check size={18} color="#22c55e" />}
-                    </Pressable>
-                  );
-                })
-              )}
-            </ScrollView>
             {tempFilters.companies.length > 0 && (
-              <View style={styles.pickerSelectedWrap}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerSelectedScroll}>
+              <View style={styles.iosPickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iosPickerSelectedScroll}>
                   {tempFilters.companies.map((company) => (
-                    <Pressable key={company} style={styles.selectedItemChip} onPress={() => toggleCompany(company)}>
-                      <Text style={styles.selectedItemText}>{company}</Text>
-                      <X size={12} color="#FFFFFF" />
+                    <Pressable key={company} style={styles.iosPickerSelectedChip} onPress={() => toggleCompany(company)}>
+                      <Text style={styles.iosPickerSelectedText}>{company}</Text>
+                      <X size={12} color="#FFFFFF" strokeWidth={2.5} />
                     </Pressable>
                   ))}
                 </ScrollView>
               </View>
             )}
-            <Pressable style={styles.companyDoneBtn} onPress={() => setShowCompanyPicker(false)}>
-              <Text style={styles.companyDoneBtnText}>Done ({tempFilters.companies.length} selected)</Text>
-            </Pressable>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosPickerList}>
+              {filteredCompanies.length === 0 ? (
+                <Text style={[styles.iosPickerEmpty, { color: '#8E8E93' }]}>No companies found</Text>
+              ) : (
+                <View style={[styles.iosPickerGroup, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                  {filteredCompanies.map((company: any, idx: number) => {
+                    const selected = tempFilters.companies.includes(company.name);
+                    const logoUrl = company.logo_url
+                      ? `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/${company.logo_url}`
+                      : null;
+                    return (
+                      <Pressable key={company.name} style={[styles.iosPickerRow, idx < filteredCompanies.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleCompany(company.name)}>
+                        <View style={styles.iosPickerRowLeft}>
+                          {logoUrl && <Image source={{ uri: logoUrl }} style={styles.iosPickerLogo} />}
+                          <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{company.name}</Text>
+                        </View>
+                        {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
       <Modal visible={showLocationPicker} animationType="slide" transparent>
-        <View style={styles.filterOverlay}>
-          <View style={styles.filterContent}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Select Locations</Text>
-              <Pressable onPress={() => setShowLocationPicker(false)} style={styles.filterCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.iosPickerNav}>
+              <View style={{ width: 50 }} />
+              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Locations</Text>
+              <Pressable onPress={() => setShowLocationPicker(false)} hitSlop={8}>
+                <Text style={styles.iosPickerDone}>Done</Text>
               </Pressable>
             </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search locations..."
-                placeholderTextColor={Colors.textTertiary}
-                value={locationSearch}
-                onChangeText={setLocationSearch}
-                onSubmitEditing={handleLocationSearchSubmit}
-                returnKeyType="done"
-              />
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cityList}>
-              {filteredLocations.map((location) => {
-                const selected = tempFilters.locations.includes(location);
-                return (
-                  <Pressable key={location} style={[styles.cityOption, selected && { borderColor: '#22c55e', borderWidth: 2 }]} onPress={() => toggleLocation(location)}>
-                    <Text style={[styles.cityOptionText, selected && { color: '#22c55e' }]}>{location}</Text>
-                    {selected && <Check size={18} color="#22c55e" />}
+            <View style={styles.iosPickerSearchWrap}>
+              <View style={[styles.iosPickerSearchBar, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(118,118,128,0.12)' }]}>
+                <Search size={16} color="#8E8E93" />
+                <TextInput
+                  style={[styles.iosPickerSearchInput, { color: isDark ? '#FFFFFF' : '#000000' }]}
+                  placeholder="Search locations..."
+                  placeholderTextColor="#8E8E93"
+                  value={locationSearch}
+                  onChangeText={setLocationSearch}
+                  onSubmitEditing={handleLocationSearchSubmit}
+                  returnKeyType="done"
+                />
+                {locationSearch.length > 0 && (
+                  <Pressable onPress={() => setLocationSearch('')} hitSlop={8}>
+                    <View style={styles.iosPickerSearchClear}><X size={10} color={isDark ? '#2C2C2E' : '#FFFFFF'} strokeWidth={3} /></View>
                   </Pressable>
-                );
-              })}
-            </ScrollView>
+                )}
+              </View>
+            </View>
             {tempFilters.locations.length > 0 && (
-              <View style={styles.pickerSelectedWrap}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerSelectedScroll}>
+              <View style={styles.iosPickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iosPickerSelectedScroll}>
                   {tempFilters.locations.map((location) => (
-                    <Pressable key={location} style={styles.selectedItemChip} onPress={() => toggleLocation(location)}>
-                      <Text style={styles.selectedItemText}>{location}</Text>
-                      <X size={12} color="#FFFFFF" />
+                    <Pressable key={location} style={styles.iosPickerSelectedChip} onPress={() => toggleLocation(location)}>
+                      <Text style={styles.iosPickerSelectedText}>{location}</Text>
+                      <X size={12} color="#FFFFFF" strokeWidth={2.5} />
                     </Pressable>
                   ))}
                 </ScrollView>
               </View>
             )}
-            <Pressable style={styles.locationDoneBtn} onPress={() => setShowLocationPicker(false)}>
-              <Text style={styles.locationDoneBtnText}>Done ({tempFilters.locations.length} selected)</Text>
-            </Pressable>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosPickerList}>
+              <View style={[styles.iosPickerGroup, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                {filteredLocations.map((location, idx) => {
+                  const selected = tempFilters.locations.includes(location);
+                  return (
+                    <Pressable key={location} style={[styles.iosPickerRow, idx < filteredLocations.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleLocation(location)}>
+                      <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{location}</Text>
+                      {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
       <Modal visible={showRolePicker} animationType="slide" transparent>
-        <View style={styles.filterOverlay}>
-          <View style={styles.filterContent}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Select Roles</Text>
-              <Pressable onPress={() => setShowRolePicker(false)} style={styles.filterCloseBtn}>
-                <X size={22} color={Colors.textPrimary} />
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.iosPickerNav}>
+              <View style={{ width: 50 }} />
+              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Roles</Text>
+              <Pressable onPress={() => setShowRolePicker(false)} hitSlop={8}>
+                <Text style={styles.iosPickerDone}>Done</Text>
               </Pressable>
             </View>
-            <View style={styles.roleSearchContainer}>
-              <Search size={16} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.roleSearchInput}
-                placeholder="Search roles..."
-                placeholderTextColor={Colors.textTertiary}
-                value={roleSearch}
-                onChangeText={setRoleSearch}
-                onSubmitEditing={handleRoleSearchSubmit}
-                returnKeyType="done"
-              />
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.cityList}>
-              {filteredRoles.map((role) => {
-                const selected = tempFilters.roles.includes(role);
-                return (
-                  <Pressable key={role} style={[styles.cityOption, selected && { borderColor: '#22c55e', borderWidth: 2 }]} onPress={() => toggleRole(role)}>
-                    <Text style={[styles.cityOptionText, selected && { color: '#22c55e' }]}>{role}</Text>
-                    {selected && <Check size={18} color="#22c55e" />}
+            <View style={styles.iosPickerSearchWrap}>
+              <View style={[styles.iosPickerSearchBar, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(118,118,128,0.12)' }]}>
+                <Search size={16} color="#8E8E93" />
+                <TextInput
+                  style={[styles.iosPickerSearchInput, { color: isDark ? '#FFFFFF' : '#000000' }]}
+                  placeholder="Search roles..."
+                  placeholderTextColor="#8E8E93"
+                  value={roleSearch}
+                  onChangeText={setRoleSearch}
+                  onSubmitEditing={handleRoleSearchSubmit}
+                  returnKeyType="done"
+                />
+                {roleSearch.length > 0 && (
+                  <Pressable onPress={() => setRoleSearch('')} hitSlop={8}>
+                    <View style={styles.iosPickerSearchClear}><X size={10} color={isDark ? '#2C2C2E' : '#FFFFFF'} strokeWidth={3} /></View>
                   </Pressable>
-                );
-              })}
-            </ScrollView>
+                )}
+              </View>
+            </View>
             {tempFilters.roles.length > 0 && (
-              <View style={styles.pickerSelectedWrap}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerSelectedScroll}>
+              <View style={styles.iosPickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iosPickerSelectedScroll}>
                   {tempFilters.roles.map((role) => (
-                    <Pressable key={role} style={styles.selectedItemChip} onPress={() => toggleRole(role)}>
-                      <Text style={styles.selectedItemText}>{role}</Text>
-                      <X size={12} color="#FFFFFF" />
+                    <Pressable key={role} style={styles.iosPickerSelectedChip} onPress={() => toggleRole(role)}>
+                      <Text style={styles.iosPickerSelectedText}>{role}</Text>
+                      <X size={12} color="#FFFFFF" strokeWidth={2.5} />
                     </Pressable>
                   ))}
                 </ScrollView>
               </View>
             )}
-            <Pressable style={styles.roleDoneBtn} onPress={() => setShowRolePicker(false)}>
-              <Text style={styles.roleDoneBtnText}>Done ({tempFilters.roles.length} selected)</Text>
-            </Pressable>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosPickerList}>
+              <View style={[styles.iosPickerGroup, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                {filteredRoles.map((role, idx) => {
+                  const selected = tempFilters.roles.includes(role);
+                  return (
+                    <Pressable key={role} style={[styles.iosPickerRow, idx < filteredRoles.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleRole(role)}>
+                      <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{role}</Text>
+                      {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1947,7 +1997,7 @@ const styles = StyleSheet.create({
   activeSearchTagText: { fontSize: 13, fontWeight: '600' as const, color: '#000000' },
   clearSearchButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#000000', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#FFFFFF' },
   clearSearchText: { fontSize: 12, fontWeight: '600' as const, color: '#FFFFFF' },
-  cardsContainer: { flex: 1 },
+  cardsContainer: { flex: 1, marginBottom: Platform.OS === 'ios' ? 88 : 64 },
   cardWrapper: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
   overlayLabel: { position: 'absolute' as const, zIndex: 10, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
   likeLabel: { top: 40, left: 24, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#16a34a' },
@@ -1975,15 +2025,50 @@ const styles = StyleSheet.create({
   upgradeButtonText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
   shareButton: { backgroundColor: '#43A047', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
   shareButtonText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
-  filterOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  filterContent: { backgroundColor: "#FFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  filterOverlay: { flex: 1, justifyContent: 'flex-end' },
+  filterContent: { borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '90%' },
   filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
   filterTitle: { fontSize: 26, fontWeight: '800' as const, color: "#000" },
   filterCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   filterDivider: { height: 1, backgroundColor: '#E0E0E0', marginVertical: 6 },
-  filterScroll: { paddingHorizontal: 20 },
+  filterScroll: { paddingHorizontal: 16 },
   filterSectionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7, marginBottom: 4 },
   filterSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: "#000" },
+  iosFilterHandle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: '#C7C7CC', alignSelf: 'center', marginTop: 8, marginBottom: 6 },
+  iosFilterNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
+  iosFilterReset: { fontSize: 17, fontWeight: '400' as const, color: '#FF3B30' },
+  iosFilterTitle: { fontSize: 17, fontWeight: '600' as const },
+  iosFilterApply: { fontSize: 17, fontWeight: '600' as const, color: '#007AFF' },
+  iosFilterSection: { marginBottom: 4 },
+  iosFilterSectionLabel: { fontSize: 13, fontWeight: '400' as const, letterSpacing: -0.08, marginTop: 12, marginBottom: 6, marginLeft: 16 },
+  iosFilterGroupBox: { borderRadius: 10, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  iosFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#E5E5EA', marginRight: 6, marginBottom: 6 },
+  iosFilterChipActive: { backgroundColor: '#007AFF' },
+  iosFilterChipText: { fontSize: 14, fontWeight: '500' as const, color: '#000000' },
+  iosFilterChipTextActive: { fontSize: 14, fontWeight: '600' as const, color: '#FFFFFF' },
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  pickerContent: { borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '90%', paddingBottom: 34 },
+  iosPickerNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#C6C6C8' },
+  iosPickerTitle: { fontSize: 17, fontWeight: '600' as const, flex: 1, textAlign: 'center' },
+  iosPickerDone: { fontSize: 17, fontWeight: '600' as const, color: '#007AFF' },
+  iosPickerSearchWrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  iosPickerSearchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, height: 36, gap: 6 },
+  iosPickerSearchInput: { flex: 1, fontSize: 17, padding: 0 },
+  iosPickerSearchClear: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#8E8E93', justifyContent: 'center', alignItems: 'center' },
+  iosPickerList: { paddingHorizontal: 16, maxHeight: 420 },
+  iosPickerGroup: { borderRadius: 10, overflow: 'hidden' as const },
+  iosPickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, minHeight: 44 },
+  iosPickerRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#C6C6C8' },
+  iosPickerRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  iosPickerRowText: { fontSize: 17, fontWeight: '400' as const },
+  iosPickerLogo: { width: 24, height: 24, borderRadius: 6 },
+  iosPickerEmpty: { fontSize: 15, textAlign: 'center', paddingVertical: 30 },
+  iosPickerSelectedWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  iosPickerSelectedScroll: { flexDirection: 'row', gap: 8 },
+  iosPickerSelectedChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#007AFF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  iosPickerSelectedText: { fontSize: 13, fontWeight: '500' as const, color: '#FFFFFF' },
+  iosFilterPickerRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, gap: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  iosFilterPickerText: { flex: 1, fontSize: 17 },
 
   cityPickerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, borderWidth: 1, borderColor: "#DDD", gap: 10 },
   cityPickerBtnText: { flex: 1, fontSize: 15, color: "#000" },
@@ -1998,10 +2083,10 @@ const styles = StyleSheet.create({
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   filterChipText: { fontSize: 14, fontWeight: '600' as const },
-  filterFooter: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  resetFilterBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: "#DDD", alignItems: 'center' },
+  filterFooter: { display: 'none' as any },
+  resetFilterBtn: { display: 'none' as any },
   resetFilterBtnText: { fontSize: 16, fontWeight: '700' as const, color: "#000" },
-  applyFilterBtn: { flex: 2, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  applyFilterBtn: { display: 'none' as any },
   applyFilterBtnText: { fontSize: 16, fontWeight: '700' as const },
   cityList: { paddingHorizontal: 20, maxHeight: 400 },
   cityOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, marginBottom: 6, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD" },
@@ -2052,31 +2137,28 @@ const styles = StyleSheet.create({
   floatChip: { width: 60, height: 22, borderRadius: 6 },
   floatShadow: { width: 200, height: 16, borderRadius: 100, backgroundColor: '#000' },
   liveCounterText: { fontSize: 13, fontWeight: '400' as const, marginTop: 12, opacity: 0.7 },
-  resumeSheetOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999, justifyContent: 'flex-end' },
-  resumeSheetContainer: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', paddingBottom: 20 },
-  resumeSheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginTop: 10, marginBottom: 8 },
-  resumeSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 },
-  resumeSheetTitle: { fontSize: 20, fontWeight: '800' as const, color: '#000' },
-  resumeSheetScroll: { paddingHorizontal: 20 },
+  resumeSheetOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, justifyContent: 'flex-end' },
+  resumeSheetContainer: { borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '75%', paddingBottom: 34 },
+  resumeSheetHandle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: '#C7C7CC', alignSelf: 'center', marginTop: 8, marginBottom: 6 },
+  resumeSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, paddingTop: 4, marginBottom: 4 },
+  resumeSheetTitle: { fontSize: 17, fontWeight: '600' as const, textAlign: 'center', flex: 1 },
+  resumeSheetDoneText: { fontSize: 17, fontWeight: '600' as const, color: '#007AFF' },
+  resumeSheetScroll: { paddingHorizontal: 16 },
   resumeSheetLoading: { padding: 40, alignItems: 'center' },
-  resumeSheetLoadingText: { fontSize: 14, color: '#999' },
-  resumeSheetEmpty: { padding: 40, alignItems: 'center', gap: 12 },
-  resumeSheetEmptyText: { fontSize: 14, color: '#999' },
-  resumeSheetUploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#111', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
-  resumeSheetUploadBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
-  resumeSheetItem: { borderRadius: 14, borderWidth: 1, borderColor: '#E0E0E0', marginBottom: 12, overflow: 'hidden' as const },
-  resumeSheetItemActive: { borderColor: '#22c55e', borderWidth: 2 },
-  resumeSheetPreview: { height: 200, backgroundColor: '#F5F5F5' },
-  resumeSheetPreviewFallback: { height: 100, backgroundColor: '#F9F9F9', justifyContent: 'center', alignItems: 'center' },
-  resumeSheetItemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  resumeSheetRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
-  resumeSheetRadioActive: { borderColor: '#22c55e' },
-  resumeSheetRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e' },
-  resumeSheetItemName: { fontSize: 14, fontWeight: '600' as const, color: '#000' },
-  resumeSheetItemDate: { fontSize: 11, color: '#999', marginTop: 2 },
-  resumeSheetActiveBadge: { fontSize: 11, fontWeight: '700' as const, color: '#22c55e', backgroundColor: '#22c55e15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  resumeSheetAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#111', borderRadius: 14, paddingVertical: 14, marginTop: 4 },
-  resumeSheetAddBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
-  resumeSheetUpgradeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1A1A2E', borderRadius: 14, paddingVertical: 14, marginTop: 4 },
-  resumeSheetUpgradeBtnText: { fontSize: 14, fontWeight: '600' as const, color: '#FFD700' },
+  resumeSheetLoadingText: { fontSize: 15, color: '#8E8E93' },
+  resumeSheetEmpty: { padding: 40, alignItems: 'center', gap: 10 },
+  resumeSheetEmptyText: { fontSize: 15, color: '#8E8E93' },
+  resumeSheetUploadBtn: { marginTop: 8 },
+  resumeSheetUploadBtnText: { fontSize: 17, fontWeight: '400' as const, color: '#007AFF' },
+  iosGroupedSection: { borderRadius: 10, overflow: 'hidden' as const, marginBottom: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  iosResumePreview: { height: 300, borderRadius: 10, overflow: 'hidden' as const, marginBottom: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  iosResumePreviewFallback: { height: 120, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  iosGroupedRow: { paddingHorizontal: 16, paddingVertical: 12 },
+  iosGroupedRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#C6C6C8' },
+  iosGroupedRowContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iosGroupedRowTitle: { fontSize: 17, fontWeight: '400' as const },
+  iosGroupedRowSubtitle: { fontSize: 13, marginTop: 2 },
+  iosResumeActions: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10 },
+  iosResumeActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  iosResumeActionText: { fontSize: 15, fontWeight: '500' as const, color: '#007AFF' },
 });

@@ -222,6 +222,32 @@ export function SkeletonJobDetails() {
   );
 }
 
+export function SkeletonFavCompanies() {
+  const colors = useColors();
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <SkeletonPulse style={{ width: 20, height: 20, borderRadius: 6 }} />
+        <SkeletonPulse style={{ height: 16, borderRadius: 6, width: 160 }} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+        {[90, 80, 70, 60].map((w, i) => (
+          <SkeletonPulse key={i} style={{ height: 34, borderRadius: 20, width: w }} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {[1, 2, 3, 4, 5, 6].map(i => (
+          <View key={i} style={[sk.profileCard, { backgroundColor: colors.surface, width: '31%' as any, padding: 10, gap: 6 }]}>
+            <SkeletonPulse style={{ width: 28, height: 28, borderRadius: 8 }} />
+            <SkeletonPulse style={{ height: 11, borderRadius: 5, width: '90%' }} />
+            <SkeletonPulse style={{ height: 10, borderRadius: 5, width: '60%' }} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function SkeletonCompanyProfile() {
   const colors = useColors();
   return (

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, FileText } from 'lucide-react-native';
+import { ArrowLeft, FileText } from '@/components/ProfileIcons';
 import Colors from '@/constants/colors';
 
 export default function TermsOfServiceScreen() {

@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, FileText, Check, Upload, Trash2, Eye, ExternalLink, ChevronLeft, ChevronRight, Pencil } from 'lucide-react-native';
+import { ArrowLeft, FileText, Check, Upload, Trash2, Eye, ExternalLink, ChevronRight, Pencil } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 
 const CARD_WIDTH = Dimensions.get('window').width * 0.75;
 const CARD_GAP = 12;

@@ -16,6 +16,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -84,7 +85,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
-import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
+import { AnimatedHeaderScrollView, AnimatedHeaderScrollViewRef } from '@/components/AnimatedHeader';
 import { fetchUserApplications } from '@/lib/jobs';
 import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
 import { supabase, SUPABASE_URL, getProfilePictureUrl, getCompanyLogoStorageUrl, getStorageUploadUrl } from '@/lib/supabase';
@@ -187,7 +188,10 @@ export default function ProfileScreen() {
   const colors = theme === 'dark' ? darkColors : lightColors;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
-  useScrollToTop(scrollViewRef);
+  const animatedScrollRef = useRef<AnimatedHeaderScrollViewRef>(null);
+  // Create a fake scrollable ref for useScrollToTop
+  const scrollToTopRef = useRef({ scrollToOffset: ({ offset }: { offset: number; animated?: boolean }) => { animatedScrollRef.current?.scrollToTop(); } });
+  useScrollToTop(scrollToTopRef as any);
   useFocusEffect(
     useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -1149,6 +1153,7 @@ const MAJOR_CITIES = [
     <TabTransitionWrapper routeName="profile">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
       <AnimatedHeaderScrollView
+        scrollRef={animatedScrollRef}
         largeTitle="Profile"
         backgroundColor={colors.background}
         largeTitleColor={colors.secondary}
@@ -1427,29 +1432,29 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'preferences' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#7C4DFF60' }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <TrendingUp size={16} color={colors.textSecondary} strokeWidth={2.5} />
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Experience Level</Text>
+              <TrendingUp size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,255,255,0.6)'} strokeWidth={2.5} />
+              <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Experience Level</Text>
             </View>
-            <ChevronRight size={18} color={colors.textTertiary} />
+            <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {user.experienceLevel ? (
-            <View style={[styles.prefChip, { backgroundColor: '#7C4DFF28', borderColor: '#7C4DFF50', alignSelf: 'flex-start' }]}>
-              <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>
+            <View style={[styles.prefChip, { backgroundColor: 'rgba(124,77,255,0.15)', borderColor: 'rgba(124,77,255,0.3)', alignSelf: 'flex-start' }]}>
+              <Text style={[styles.prefChipText, { color: '#FFFFFF' }]}>
                 {user.experienceLevel === 'internship' ? 'Internship' : user.experienceLevel === 'entry_level' ? 'Entry Level & Graduate' : user.experienceLevel === 'junior' ? 'Junior (1-2 years)' : user.experienceLevel === 'mid' ? 'Mid Level (3-5 years)' : user.experienceLevel === 'senior' ? 'Senior (6-9 years)' : user.experienceLevel === 'expert' ? 'Expert & Leadership (10+ years)' : user.experienceLevel}
               </Text>
             </View>
           ) : (
-            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No experience level set</Text>
+            <Text style={[styles.emptyFavoriteText, { color: 'rgba(255,255,255,0.35)' }]}>No experience level set</Text>
           )}
         </Pressable>
 
         )}
 
         {profileTab === 'personal' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={openContactModal}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, borderLeftColor: '#1E88E5' }]} onPress={openContactModal}>
           <View style={styles.contactCardHeader}>
             <View style={styles.sectionTitleRow}>
               <Contact size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1458,31 +1463,51 @@ const MAJOR_CITIES = [
             <Pencil size={14} color={colors.textTertiary} />
           </View>
           <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
-            <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
-              <Phone size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user.phone}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.contactIconBox, { backgroundColor: '#10B98118' }]}>
+                  <Phone size={14} color="#10B981" />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Phone</Text>
+              </View>
             </View>
-            <Text style={[styles.contactText, { color: colors.textPrimary }]}>{user.phone}</Text>
           </View>
           <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
-            <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
-              <Mail size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user.email}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.contactIconBox, { backgroundColor: '#3B82F618' }]}>
+                  <Mail size={14} color="#3B82F6" />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Email</Text>
+              </View>
             </View>
-            <Text style={[styles.contactText, { color: colors.textPrimary }]}>{user.email}</Text>
           </View>
           {user.linkedinUrl ? (
             <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
-              <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
-                <Linkedin size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={1}>{user.linkedinUrl}</Text>
+                <View style={styles.infoLabelRow}>
+                  <View style={[styles.contactIconBox, { backgroundColor: '#0A66C218' }]}>
+                    <Linkedin size={14} color="#0A66C2" />
+                  </View>
+                  <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>LinkedIn</Text>
+                </View>
               </View>
-              <Text style={[styles.contactText, { color: colors.textPrimary }]} numberOfLines={1}>{user.linkedinUrl}</Text>
             </View>
           ) : null}
           {user.githubUrl ? (
             <View style={[styles.contactItem, { borderBottomColor: colors.borderLight }]}>
-              <View style={[styles.contactIconBox, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#F5F5F5' }]}>
-                <Github size={16} color={theme === 'dark' ? colors.textPrimary : '#111111'} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={1}>{user.githubUrl}</Text>
+                <View style={styles.infoLabelRow}>
+                  <View style={[styles.contactIconBox, { backgroundColor: '#8B5CF618' }]}>
+                    <Github size={14} color="#8B5CF6" />
+                  </View>
+                  <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>GitHub</Text>
+                </View>
               </View>
-              <Text style={[styles.contactText, { color: colors.textPrimary }]} numberOfLines={1}>{user.githubUrl}</Text>
             </View>
           ) : null}
         </Pressable>
@@ -1490,7 +1515,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'preferences' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'desiredroles' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, borderLeftColor: '#E91E63' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'desiredroles' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Target size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1524,32 +1549,32 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'preferences' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'preferredcities' } } as any)}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#00897B60' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'preferredcities' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <MapPin size={16} color={colors.textSecondary} strokeWidth={2.5} />
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Preferred Cities to Work</Text>
+              <MapPin size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,255,255,0.6)'} strokeWidth={2.5} />
+              <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Preferred Cities to Work</Text>
             </View>
-            <ChevronRight size={18} color={colors.textTertiary} />
+            <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {(user.preferredCities && user.preferredCities.length > 0) ? (
             <View style={styles.chipGrid}>
               {user.preferredCities.map((city, idx) => (
-                <View key={idx} style={[styles.prefChip, { backgroundColor: '#00897B28', borderColor: '#00897B50' }]}>
+                <View key={idx} style={[styles.prefChip, { backgroundColor: 'rgba(0,137,123,0.15)', borderColor: 'rgba(0,137,123,0.3)' }]}>
                   <MapPin size={12} color="#00897B" />
-                  <Text style={[styles.prefChipText, { color: colors.textPrimary }]}>{city}</Text>
+                  <Text style={[styles.prefChipText, { color: '#FFFFFF' }]}>{city}</Text>
                 </View>
               ))}
             </View>
           ) : (
-            <Text style={[styles.emptyFavoriteText, { color: colors.textTertiary }]}>No preferred cities added yet</Text>
+            <Text style={[styles.emptyFavoriteText, { color: 'rgba(255,255,255,0.35)' }]}>No preferred cities added yet</Text>
           )}
         </Pressable>
 
         )}
 
         {profileTab === 'preferences' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobtypeprefs' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, borderLeftColor: '#1E88E5' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobtypeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Briefcase size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1580,7 +1605,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'preferences' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'workmodeprefs' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, borderLeftColor: '#F4511E' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'workmodeprefs' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Laptop size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1611,7 +1636,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'workexperience' && (
-        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'topskills' } } as any)}>
+        <Pressable style={[styles.contactCard, { backgroundColor: colors.surface, borderLeftColor: '#D4A017' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'topskills' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1638,7 +1663,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'workexperience' && (
-        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]} onPress={() => router.push('/(tabs)/profile/edit-experience' as any)}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#FFFFFF30' }]} onPress={() => router.push('/(tabs)/profile/edit-experience' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Briefcase size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,255,255,0.6)'} strokeWidth={2.5} />
@@ -1661,8 +1686,11 @@ const MAJOR_CITIES = [
                 )}
               </View>
               <View style={styles.timelineContent}>
-                <Text style={[styles.expTitle, { color: '#FFFFFF' }]}>{exp.title}</Text>
-                <Text style={[styles.expCompany, { color: 'rgba(255,255,255,0.6)' }]}>{exp.company}</Text>
+                <Text style={[styles.infoValue, { color: '#FFFFFF' }]}>{exp.title}</Text>
+                <View style={styles.infoLabelRow}>
+                  <Briefcase size={12} color="rgba(255,255,255,0.5)" />
+                  <Text style={[styles.infoLabel, { color: 'rgba(255,255,255,0.6)' }]}>{exp.company}</Text>
+                </View>
                 <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>
                   {exp.startDate} — {exp.isCurrent ? 'Present' : exp.endDate}
                 </Text>
@@ -1691,26 +1719,29 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'education' && (
-        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-education' as any)}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#10B98160' }]} onPress={() => router.push('/(tabs)/profile/edit-education' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <GraduationCap size={16} color={colors.textSecondary} strokeWidth={2.5} />
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Education</Text>
+              <GraduationCap size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,255,255,0.6)'} strokeWidth={2.5} />
+              <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Education</Text>
             </View>
-            <ChevronRight size={18} color={colors.textTertiary} />
+            <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {user.education.map((edu, idx) => (
             <View key={edu.id} style={styles.timelineRow}>
               <View style={styles.timelineTrack}>
-                <View style={[styles.timelineDot, { backgroundColor: colors.accent }]} />
+                <View style={[styles.timelineDot, { backgroundColor: '#10B981' }]} />
                 {idx < user.education.length - 1 && (
-                  <View style={[styles.timelineLine, { backgroundColor: colors.borderLight }]} />
+                  <View style={[styles.timelineLine, { backgroundColor: 'rgba(255,255,255,0.15)' }]} />
                 )}
               </View>
               <View style={styles.timelineContent}>
-                <Text style={[styles.expTitle, { color: colors.secondary }]}>{edu.degree} in {edu.field}</Text>
-                <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{edu.institution}</Text>
-                <Text style={[styles.expDate, { color: colors.textTertiary }]}>{edu.startDate} — {edu.endDate}</Text>
+                <Text style={[styles.infoValue, { color: '#FFFFFF' }]}>{edu.degree} in {edu.field}</Text>
+                <View style={styles.infoLabelRow}>
+                  <GraduationCap size={12} color="rgba(255,255,255,0.5)" />
+                  <Text style={[styles.infoLabel, { color: 'rgba(255,255,255,0.6)' }]}>{edu.institution}</Text>
+                </View>
+                <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>{edu.startDate} — {edu.endDate}</Text>
               </View>
             </View>
           ))}
@@ -1719,7 +1750,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'projects' && (
-        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-projects' as any)}>
+        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight, borderLeftColor: '#F59E0B' }]} onPress={() => router.push('/(tabs)/profile/edit-projects' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <FolderOpen size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1737,14 +1768,17 @@ const MAJOR_CITIES = [
               </View>
               <View style={styles.expContent}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.expTitle, { color: colors.secondary, flex: 1 }]}>{proj.title}</Text>
+                  <Text style={[styles.infoValue, { color: colors.secondary, flex: 1 }]}>{proj.title}</Text>
                   {proj.link ? (
                     <Pressable onPress={() => Linking.openURL(proj.link!)}>
                       <ExternalLink size={14} color={colors.accent} />
                     </Pressable>
                   ) : null}
                 </View>
-                <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{proj.organization}</Text>
+                <View style={styles.infoLabelRow}>
+                  <FolderOpen size={12} color={colors.textTertiary} />
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{proj.organization}</Text>
+                </View>
                 <Text style={[styles.expDate, { color: colors.textTertiary }]}>{proj.date}</Text>
                 {proj.exposure.length > 0 && (
                   <View style={[styles.expTagsRow, { flexWrap: 'wrap' }]}>
@@ -1855,7 +1889,7 @@ const MAJOR_CITIES = [
                     </View>
                     <View style={[styles.expContent, { flexDirection: 'row', alignItems: 'center' }]}>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.expTitle, { color: colors.secondary }]}>{doc.name}</Text>
+                        <Text style={[styles.infoValue, { color: colors.secondary, fontSize: 14 }]}>{doc.name}</Text>
                         <Text style={[styles.expDate, { color: colors.textTertiary }]}>{new Date(doc.uploadedAt).toLocaleDateString()}</Text>
                       </View>
                       <Pressable onPress={() => setPreviewingDocId(isPreviewing ? null : doc.id)} style={{ marginRight: 12 }}>
@@ -1899,7 +1933,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'workexperience' && (
-        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111' }]} onPress={() => router.push('/(tabs)/profile/edit-achievements' as any)}>
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#FFD70060' }]} onPress={() => router.push('/(tabs)/profile/edit-achievements' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Trophy size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,215,0,0.8)'} strokeWidth={2.5} />
@@ -1908,14 +1942,16 @@ const MAJOR_CITIES = [
             <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {user.achievements.map((ach) => (
-            <View key={ach.id} style={styles.experienceItem}>
-              <View style={[styles.expIcon, { backgroundColor: 'rgba(255,215,0,0.15)' }]}>
-                <Trophy size={18} color="#FFD700" />
-              </View>
-              <View style={styles.expContent}>
-                <Text style={[styles.expTitle, { color: '#FFFFFF' }]}>{ach.title}</Text>
-                <Text style={[styles.expCompany, { color: 'rgba(255,255,255,0.6)' }]}>{ach.issuer}</Text>
-                <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>{ach.date}</Text>
+            <View key={ach.id} style={{ marginBottom: 16 }}>
+              <Text style={[styles.infoValue, { color: '#FFFFFF' }]}>{ach.title}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.expIcon, { backgroundColor: 'rgba(255,215,0,0.15)', width: 28, height: 28, borderRadius: 8 }]}>
+                  <Trophy size={14} color="#FFD700" />
+                </View>
+                <View>
+                  <Text style={[styles.infoLabel, { color: 'rgba(255,255,255,0.6)' }]}>{ach.issuer}</Text>
+                  <Text style={[styles.expDate, { color: 'rgba(255,255,255,0.4)' }]}>{ach.date}</Text>
+                </View>
               </View>
             </View>
           ))}
@@ -1924,7 +1960,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'workexperience' && (
-        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push('/(tabs)/profile/edit-certifications' as any)}>
+        <Pressable style={[styles.section, styles.borderedSection, { backgroundColor: colors.surface, borderColor: colors.borderLight, borderLeftColor: '#F4511E' }]} onPress={() => router.push('/(tabs)/profile/edit-certifications' as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <BadgeCheck size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1933,13 +1969,13 @@ const MAJOR_CITIES = [
             <ChevronRight size={18} color={colors.textTertiary} />
           </View>
           {user.certifications.map((cert) => (
-            <View key={cert.id} style={styles.experienceItem}>
-              <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.warningSoft : '#FFF3E0' }]}>
-                <Award size={18} color={colors.warning} />
-              </View>
-              <View style={styles.expContent}>
-                <Text style={[styles.expTitle, { color: colors.secondary }]}>{cert.name}</Text>
-                <Text style={[styles.expCompany, { color: colors.textSecondary }]}>{cert.issuingOrganization}</Text>
+            <View key={cert.id} style={{ marginBottom: 16 }}>
+              <Text style={[styles.infoValue, { color: colors.secondary }]}>{cert.name}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.expIcon, { backgroundColor: theme === 'dark' ? colors.warningSoft : '#FFF3E0', width: 28, height: 28, borderRadius: 8 }]}>
+                  <Award size={14} color={colors.warning} />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{cert.issuingOrganization}</Text>
               </View>
             </View>
           ))}
@@ -1949,23 +1985,25 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'coverletter' && (
-        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'coverletter' } } as any)}>
-          <View style={styles.demoHeader}>
-            <ScrollText size={16} color={colors.textSecondary} strokeWidth={2.5} />
-            <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Cover Letter</Text>
-            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
+        <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#7C4DFF60' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'coverletter' } } as any)}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <ScrollText size={16} color={theme === 'dark' ? colors.textSecondary : 'rgba(255,255,255,0.6)'} strokeWidth={2.5} />
+              <Text style={[styles.darkSectionTitle, { color: theme === 'dark' ? colors.textPrimary : '#FFFFFF' }]}>Cover Letter</Text>
+            </View>
+            <ChevronRight size={18} color={theme === 'dark' ? colors.textTertiary : 'rgba(255,255,255,0.4)'} />
           </View>
           {user.coverLetter ? (
-            <Text style={[styles.coverLetterText, { color: colors.textSecondary }]} numberOfLines={4}>{user.coverLetter}</Text>
+            <Text style={[styles.coverLetterText, { color: 'rgba(255,255,255,0.7)' }]} numberOfLines={4}>{user.coverLetter}</Text>
           ) : (
-            <Text style={[styles.coverLetterPlaceholder, { color: colors.textTertiary }]}>Add a cover letter to personalize your applications...</Text>
+            <Text style={[styles.coverLetterPlaceholder, { color: 'rgba(255,255,255,0.35)' }]}>Add a cover letter to personalize your applications...</Text>
           )}
         </Pressable>
 
         )}
 
         {profileTab === 'personal' && (
-        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobrequirements' } } as any)}>
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight, borderLeftColor: '#00897B' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'jobrequirements' } } as any)}>
           <View style={styles.demoHeader}>
             <ShieldCheck size={16} color={colors.textSecondary} strokeWidth={2.5} />
             <Text style={[styles.demoHeaderTitle, { color: colors.secondary }]}>Job Requirements</Text>
@@ -1974,8 +2012,11 @@ const MAJOR_CITIES = [
           <Text style={[styles.demoNote, { color: colors.textSecondary }]}>Your work authorization and visa status</Text>
           {user.workAuthorizationStatus ? (
             <View style={[styles.demoItem, { borderBottomColor: colors.borderLight }]}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Work Authorization</Text>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.workAuthorizationStatus}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user.workAuthorizationStatus}</Text>
+              <View style={styles.infoLabelRow}>
+                <ShieldCheck size={14} color={colors.textTertiary} />
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Work Authorization</Text>
+              </View>
             </View>
           ) : (
             <Text style={[styles.coverLetterPlaceholder, { color: colors.textTertiary }]}>Add work authorization status...</Text>
@@ -1987,7 +2028,7 @@ const MAJOR_CITIES = [
         )}
 
         {profileTab === 'personal' && (
-        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'equalopportunity' } } as any)}>
+        <Pressable style={[styles.demoSection, { backgroundColor: colors.surface, borderColor: colors.borderLight, borderLeftColor: '#8B5CF6' }]} onPress={() => router.push({ pathname: '/(tabs)/profile/edit-section', params: { section: 'equalopportunity' } } as any)}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Scale size={16} color={colors.textSecondary} strokeWidth={2.5} />
@@ -1998,53 +2039,63 @@ const MAJOR_CITIES = [
           <Text style={[styles.demoNote, { color: colors.textSecondary }]}>This information is confidential and voluntary</Text>
           
           <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
-            <View style={[styles.eeoIconWrap, { backgroundColor: '#8B5CF620' }]}>
-              <ShieldCheck size={16} color="#8B5CF6" />
-            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Veteran Status</Text>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.veteranStatus || 'Not specified'}</Text>
+              <Text style={user.veteranStatus ? [styles.infoValue, { color: colors.textPrimary }] : [styles.infoValueEmpty, { color: colors.textTertiary }]}>{user.veteranStatus || 'Not specified'}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.eeoIconWrap, { backgroundColor: '#8B5CF620' }]}>
+                  <ShieldCheck size={14} color="#8B5CF6" />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Veteran Status</Text>
+              </View>
             </View>
           </View>
 
           <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
-            <View style={[styles.eeoIconWrap, { backgroundColor: '#EF444420' }]}>
-              <Heart size={16} color="#EF4444" />
-            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Disability Status</Text>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.disabilityStatus || 'Not specified'}</Text>
+              <Text style={user.disabilityStatus ? [styles.infoValue, { color: colors.textPrimary }] : [styles.infoValueEmpty, { color: colors.textTertiary }]}>{user.disabilityStatus || 'Not specified'}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.eeoIconWrap, { backgroundColor: '#EF444420' }]}>
+                  <Heart size={14} color="#EF4444" />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Disability Status</Text>
+              </View>
             </View>
           </View>
 
           <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
-            <View style={[styles.eeoIconWrap, { backgroundColor: '#3B82F620' }]}>
-              <Laptop size={16} color="#3B82F6" />
-            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Ethnicity</Text>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.ethnicity || 'Not specified'}</Text>
+              <Text style={user.ethnicity ? [styles.infoValue, { color: colors.textPrimary }] : [styles.infoValueEmpty, { color: colors.textTertiary }]}>{user.ethnicity || 'Not specified'}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.eeoIconWrap, { backgroundColor: '#3B82F620' }]}>
+                  <Laptop size={14} color="#3B82F6" />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Ethnicity</Text>
+              </View>
             </View>
           </View>
 
           <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
-            <View style={[styles.eeoIconWrap, { backgroundColor: '#10B98120' }]}>
-              <Target size={16} color="#10B981" />
-            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Race</Text>
-              <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.race || 'Not specified'}</Text>
+              <Text style={user.race ? [styles.infoValue, { color: colors.textPrimary }] : [styles.infoValueEmpty, { color: colors.textTertiary }]}>{user.race || 'Not specified'}</Text>
+              <View style={styles.infoLabelRow}>
+                <View style={[styles.eeoIconWrap, { backgroundColor: '#10B98120' }]}>
+                  <Target size={14} color="#10B981" />
+                </View>
+                <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Race</Text>
+              </View>
             </View>
           </View>
 
           {user.gender ? (
             <View style={[styles.eeoRow, { borderBottomColor: colors.borderLight }]}>
-              <View style={[styles.eeoIconWrap, { backgroundColor: '#F59E0B20' }]}>
-                <Star size={16} color="#F59E0B" />
-              </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.demoLabel, { color: colors.textTertiary }]}>Gender</Text>
-                <Text style={[styles.demoValue, { color: colors.textPrimary }]}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user.gender === 'prefer_not_to_say' ? 'Prefer not to say' : user.gender === 'male' ? 'Male' : 'Female'}</Text>
+                <View style={styles.infoLabelRow}>
+                  <View style={[styles.eeoIconWrap, { backgroundColor: '#F59E0B20' }]}>
+                    <Star size={14} color="#F59E0B" />
+                  </View>
+                  <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Gender</Text>
+                </View>
               </View>
             </View>
           ) : null}
@@ -2203,29 +2254,75 @@ const MAJOR_CITIES = [
       </Modal>
 
       <Modal visible={activeModal === 'contact'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Contact Info</Text>
-              <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
+        <View style={styles.iosSheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeModal}>
+            <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          </Pressable>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.iosSheetContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.iosSheetHandle} />
+            <View style={styles.iosSheetNav}>
+              <Pressable onPress={closeModal} hitSlop={8}>
+                <Text style={styles.iosNavCancel}>Cancel</Text>
+              </Pressable>
+              <Text style={[styles.iosNavTitle, { color: theme === 'dark' ? '#FFFFFF' : '#000000' }]}>Contact Info</Text>
+              <Pressable onPress={handleSaveContact} hitSlop={8}>
+                <Text style={styles.iosNavSave}>Save</Text>
+              </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-              <Text style={styles.fieldLabel}>Phone Number</Text>
-              <TextInput style={styles.modalInput} placeholder="+1 (555) 123-4567" placeholderTextColor={Colors.textTertiary} value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
-              <Text style={styles.fieldLabel}>Email Address</Text>
-              <View style={[styles.modalInput, { backgroundColor: '#F0F0F0', flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
-                <Lock size={14} color={Colors.textTertiary} />
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, flex: 1 }} numberOfLines={1}>{user.email}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosSheetScroll} contentContainerStyle={{ paddingBottom: 30 }}>
+              <Text style={[styles.iosGroupLabel, { color: theme === 'dark' ? '#8E8E93' : '#6D6D72' }]}>PHONE</Text>
+              <View style={[styles.iosFormGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.iosFormRow}>
+                  <Phone size={18} color="#10B981" style={{ marginRight: 12 }} />
+                  <TextInput
+                    style={[styles.iosFormInput, { color: theme === 'dark' ? '#FFFFFF' : '#000000' }]}
+                    placeholder="+1 (555) 123-4567"
+                    placeholderTextColor="#C7C7CC"
+                    value={contactPhone}
+                    onChangeText={setContactPhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
               </View>
-              <Text style={{ fontSize: 11, color: Colors.textTertiary, marginTop: -8, marginBottom: 12 }}>Email is auto-generated and cannot be changed</Text>
-              <Text style={styles.fieldLabel}>LinkedIn Profile</Text>
-              <TextInput style={styles.modalInput} placeholder="https://linkedin.com/in/..." placeholderTextColor={Colors.textTertiary} value={contactLinkedin} onChangeText={setContactLinkedin} autoCapitalize="none" />
-              <Text style={styles.fieldLabel}>GitHub Profile</Text>
-              <TextInput style={styles.modalInput} placeholder="https://github.com/..." placeholderTextColor={Colors.textTertiary} value={contactGithub} onChangeText={setContactGithub} autoCapitalize="none" />
+
+              <Text style={[styles.iosGroupLabel, { color: theme === 'dark' ? '#8E8E93' : '#6D6D72' }]}>EMAIL</Text>
+              <View style={[styles.iosFormGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.iosFormRow}>
+                  <Mail size={18} color="#3B82F6" style={{ marginRight: 12 }} />
+                  <Text style={[styles.iosFormInputDisabled, { color: theme === 'dark' ? '#8E8E93' : '#8E8E93' }]} numberOfLines={1}>{user.email}</Text>
+                  <Lock size={14} color="#C7C7CC" />
+                </View>
+              </View>
+              <Text style={[styles.iosGroupFooter, { color: theme === 'dark' ? '#8E8E93' : '#6D6D72' }]}>Email is auto-generated and cannot be changed.</Text>
+
+              <Text style={[styles.iosGroupLabel, { color: theme === 'dark' ? '#8E8E93' : '#6D6D72' }]}>SOCIAL PROFILES</Text>
+              <View style={[styles.iosFormGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={[styles.iosFormRow, styles.iosFormRowBorder]}>
+                  <Linkedin size={18} color="#0A66C2" style={{ marginRight: 12 }} />
+                  <TextInput
+                    style={[styles.iosFormInput, { color: theme === 'dark' ? '#FFFFFF' : '#000000' }]}
+                    placeholder="linkedin.com/in/..."
+                    placeholderTextColor="#C7C7CC"
+                    value={contactLinkedin}
+                    onChangeText={setContactLinkedin}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={styles.iosFormRow}>
+                  <Github size={18} color={theme === 'dark' ? '#FFFFFF' : '#333333'} style={{ marginRight: 12 }} />
+                  <TextInput
+                    style={[styles.iosFormInput, { color: theme === 'dark' ? '#FFFFFF' : '#000000' }]}
+                    placeholder="github.com/..."
+                    placeholderTextColor="#C7C7CC"
+                    value={contactGithub}
+                    onChangeText={setContactGithub}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
             </ScrollView>
-            <Pressable style={styles.modalSaveBtn} onPress={handleSaveContact}>
-              <Check size={18} color={Colors.surface} /><Text style={styles.modalSaveBtnText}>Save Contact Info</Text>
-            </Pressable>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -2369,8 +2466,13 @@ const styles = StyleSheet.create({
   profileInfo: { flex: 1, marginLeft: 16 },
   profileName: { fontSize: 20, fontWeight: '800' as const, color: '#FFFFFF' },
   editableRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  contactItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  contactIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  contactItem: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderLight },
+  contactIconBox: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  infoValue: { fontSize: 19, fontFamily: 'Lora_600SemiBold', marginBottom: 4 },
+  infoValueEmpty: { fontSize: 14, fontStyle: 'italic' as const, opacity: 0.5, marginBottom: 4 },
+  infoLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  infoLabel: { fontSize: 12, fontWeight: '500' as const },
+  eeoRowVertical: { paddingVertical: 10, borderBottomWidth: 1 },
   profileHeadline: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: '600' as const, flex: 1 },
   profileLocation: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
   bioSection: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, marginBottom: 14, gap: 8 },
@@ -2393,14 +2495,14 @@ const styles = StyleSheet.create({
   quickActionBox: { width: 110, height: 110, borderRadius: 18, overflow: 'hidden' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
   quickActionGradient: { flex: 1, borderRadius: 18, padding: 12, alignItems: 'center', justifyContent: 'center' },
   quickActionImpact: { fontSize: 30, fontWeight: '900' as const, fontFamily: Platform.OS === 'ios' ? 'Impact' : 'sans-serif-black', textAlign: 'center' as const, color: '#FFFFFF' },
-  quickActionLabel: { fontSize: 10, fontWeight: '600' as const, textAlign: 'center' as const, marginTop: 2 },
-  quickActionSub: { fontSize: 8, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 3 },
+  quickActionLabel: { fontSize: 13, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 2 },
+  quickActionSub: { fontSize: 9, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 3 },
   resumeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginTop: 8, backgroundColor: '#F4511E' },
   resumeBannerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   resumeBannerTitle: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
   resumeBannerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  eeoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1 },
-  eeoIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  eeoRow: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  eeoIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   statsGrid: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1565C0', borderRadius: 16, padding: 16, marginTop: 4, gap: 12 },
   statsIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center' },
@@ -2414,17 +2516,17 @@ const styles = StyleSheet.create({
   aiCardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
   aiOptimizeButton: { marginTop: 12, paddingVertical: 10, backgroundColor: Colors.secondary, borderRadius: 10, alignItems: 'center' },
   aiOptimizeText: { fontSize: 14, fontWeight: '700' as const, color: Colors.textInverse },
-  contactCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 4 },
+  contactCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 4, borderLeftWidth: 4, borderLeftColor: 'transparent', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   contactCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   contactRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   contactText: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const, flex: 1 },
   section: { marginTop: 4 },
-  borderedSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
-  darkSection: { backgroundColor: '#111111', borderRadius: 16, padding: 16, borderWidth: 0, borderColor: 'transparent' },
-  darkSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
+  borderedSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight, borderLeftWidth: 4, borderLeftColor: 'transparent', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  darkSection: { backgroundColor: '#111111', borderRadius: 16, padding: 16, borderWidth: 0, borderColor: 'transparent', borderLeftWidth: 4, borderLeftColor: 'transparent', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 },
+  darkSectionTitle: { fontSize: 15, fontFamily: 'Lora_700Bold', color: '#FFFFFF' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { fontSize: 17, fontWeight: '700' as const, color: Colors.secondary },
+  sectionTitle: { fontSize: 15, fontFamily: 'Lora_700Bold', color: Colors.secondary },
   addButton: { width: 30, height: 30, borderRadius: 10, backgroundColor: Colors.secondary, justifyContent: 'center', alignItems: 'center' },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   prefChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight },
@@ -2519,11 +2621,11 @@ const styles = StyleSheet.create({
   shareSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   shareBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   shareBadgeText: { fontSize: 11, fontWeight: '800' as const, color: '#FFFFFF' },
-  demoSection: { marginTop: 4, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight },
+  demoSection: { marginTop: 4, backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderLight, borderLeftWidth: 4, borderLeftColor: 'transparent', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   demoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  demoHeaderTitle: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
+  demoHeaderTitle: { fontSize: 15, fontFamily: 'Lora_700Bold', color: Colors.secondary },
   demoNote: { fontSize: 13, fontWeight: '500' as const, marginBottom: 12 },
-  demoItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  demoItem: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderLight },
   demoLabel: { fontSize: 11, fontWeight: '600' as const, color: Colors.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 2 },
   demoValue: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' as const },
   demoValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
@@ -2585,5 +2687,20 @@ const styles = StyleSheet.create({
   universityDropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   universityDropdownItemText: { fontSize: 15, color: Colors.textPrimary },
   universityDropdownItemTextAdd: { fontSize: 15, color: Colors.primary, fontWeight: '600' as const },
+  iosSheetOverlay: { flex: 1, justifyContent: 'flex-end' },
+  iosSheetContainer: { borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '80%', paddingBottom: 34 },
+  iosSheetHandle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: '#C7C7CC', alignSelf: 'center', marginTop: 8, marginBottom: 6 },
+  iosSheetNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
+  iosNavCancel: { fontSize: 17, fontWeight: '400' as const, color: '#007AFF' },
+  iosNavTitle: { fontSize: 17, fontWeight: '600' as const },
+  iosNavSave: { fontSize: 17, fontWeight: '600' as const, color: '#007AFF' },
+  iosSheetScroll: { paddingHorizontal: 16 },
+  iosGroupLabel: { fontSize: 13, fontWeight: '400' as const, letterSpacing: -0.08, marginTop: 20, marginBottom: 6, marginLeft: 16 },
+  iosFormGroup: { borderRadius: 10, overflow: 'hidden' as const },
+  iosFormRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, minHeight: 44 },
+  iosFormRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#C6C6C8' },
+  iosFormInput: { flex: 1, fontSize: 17, padding: 0 },
+  iosFormInputDisabled: { flex: 1, fontSize: 17 },
+  iosGroupFooter: { fontSize: 13, fontWeight: '400' as const, marginTop: 6, marginLeft: 16, marginBottom: 4 },
 });
 

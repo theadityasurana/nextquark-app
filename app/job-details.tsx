@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Alert, Linking
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { X, MapPin, Briefcase, Clock, Users, Heart, Bookmark, Share2, Wifi, Building2, Camera, ExternalLink, Globe } from 'lucide-react-native';
+import { X, MapPin, Briefcase, Clock, Users, Heart, Bookmark, Share2, Wifi, Building2, Camera, ExternalLink, Globe } from '@/components/ProfileIcons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';

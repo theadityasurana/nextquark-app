@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Calendar, Clock, AlertTriangle, KeyRound } from 'lucide-react-native';
+import { ChevronRight, Clock } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/contexts/useColors';
 import { Application } from '@/types';
 import * as Clipboard from 'expo-clipboard';
@@ -74,19 +75,19 @@ export default function ApplicationItem({ application }: ApplicationItemProps) {
             </View>
             {(application.status === 'applied' || application.status === 'under_review') && (
               <View style={styles.alertRow}>
-                <AlertTriangle size={12} color="#E65100" />
+                <Ionicons name="warning-outline" size={12} color="#E65100" />
                 <Text style={styles.alertText}>Action needed</Text>
               </View>
             )}
             {otp && (
               <Pressable style={styles.otpRow} onPress={copyOtp}>
-                <KeyRound size={12} color="#4F46E5" />
+                <Ionicons name="key-outline" size={12} color="#4F46E5" />
                 <Text style={styles.otpText}>OTP: {otp}</Text>
               </Pressable>
             )}
             {application.interviewDate && (
               <View style={styles.dateRow}>
-                <Calendar size={11} color={colors.statusInterview} />
+                <Ionicons name="calendar-outline" size={11} color={colors.statusInterview} />
                 <Text style={[styles.dateText, { color: colors.textSecondary }]}>{application.interviewDate}</Text>
               </View>
             )}

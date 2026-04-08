@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronRight } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 
@@ -104,7 +105,7 @@ export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps
       <View style={styles.buttonRow}>
         {!isFirst ? (
           <Pressable style={[styles.prevBtn, { borderColor: colors.borderLight }]} onPress={handlePrevious}>
-            <ChevronLeft size={16} color={colors.textSecondary} />
+            <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
             <Text style={[styles.prevBtnText, { color: colors.textSecondary }]}>Previous</Text>
           </Pressable>
         ) : (

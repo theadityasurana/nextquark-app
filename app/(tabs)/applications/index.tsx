@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl, TextInput, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, X, ChevronRight } from 'lucide-react-native';
+import { Search, X, ChevronRight } from '@/components/ProfileIcons';
 import Svg, { Polyline, Line, Text as SvgText, Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,7 +16,7 @@ import { useScrollToTop } from '@react-navigation/native';
 import { fetchUserApplications, scanEmailsForOtp, scanEmailsForInterviews, getCompanyLogoUrl, updateApplicationProgress } from '@/lib/jobs';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { Image } from 'expo-image';
-import { AnimatedHeaderScrollView } from '@/components/AnimatedHeader';
+import { AnimatedHeaderScrollView, AnimatedHeaderScrollViewRef } from '@/components/AnimatedHeader';
 import { SkeletonAppCard } from '@/components/Skeleton';
 
 export default function ApplicationsScreen() {
@@ -30,8 +30,10 @@ export default function ApplicationsScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const flatListRef = useRef<FlatList>(null);
+  const animatedScrollRef = useRef<AnimatedHeaderScrollViewRef>(null);
+  const scrollToTopRef = useRef({ scrollToOffset: () => { animatedScrollRef.current?.scrollToTop(); } });
   const router = useRouter();
-  useScrollToTop(flatListRef);
+  useScrollToTop(scrollToTopRef as any);
 
   useFocusEffect(
     useCallback(() => {
@@ -146,6 +148,7 @@ export default function ApplicationsScreen() {
       ) : (
         <>
         <AnimatedHeaderScrollView
+          scrollRef={animatedScrollRef}
           largeTitle="Applications"
           backgroundColor={colors.background}
           largeTitleColor={colors.secondary}
@@ -355,7 +358,7 @@ const styles = StyleSheet.create({
   },
   searchFab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: Platform.OS === 'ios' ? 100 : 80,
     right: 20,
     width: 52,
     height: 52,

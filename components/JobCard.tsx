@@ -2,8 +2,9 @@ import React, { useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Animated, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Factory, Shield, Camera, Globe, ExternalLink, Share2 } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import { MapPin, Clock, Users, Briefcase, Wifi, Building2, Linkedin, GraduationCap, Globe, ExternalLink, Share2 } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
+import Colors, { darkColors } from '@/constants/colors';
 import { useColors } from '@/contexts/useColors';
 import { Job } from '@/types';
 import MatchScoreBadge from './MatchScoreBadge';
@@ -34,6 +35,7 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
   const colors = useColors();
   const LocationIcon = getLocationIcon(job.locationType);
   const expBanner = getExperienceBanner(job.experienceLevel);
+  const isDark = colors.background === darkColors.background;
   const cardBg = backgroundColor || colors.surfaceElevated;
 
   const [isFlipped, setIsFlipped] = useState(false);
@@ -76,13 +78,12 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
 
   const renderFront = () => (
     <Animated.View
-      style={[styles.card, { backgroundColor: cardBg, borderColor: colors.border, transform: [{ perspective: 1000 }, { rotateY: frontRotate }], opacity: frontOpacity }, styles.cardFace]}
+      style={[styles.card, { backgroundColor: cardBg, transform: [{ perspective: 1000 }, { rotateY: frontRotate }], opacity: frontOpacity }, styles.cardFace]}
       pointerEvents={isFlipped ? 'none' : 'auto'}
     >
-      {/* Single ScrollView — header tappable to flip, content scrollable */}
-      <ScrollView style={styles.frontScrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-        <Pressable onPress={handleFlip}>
-        <View style={[styles.fixedHeader, { backgroundColor: cardBg }]}>
+      {/* Sticky front header */}
+      <Pressable onPress={handleFlip}>
+        <View style={[styles.fixedHeader, { backgroundColor: cardBg, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' }]}>
           {showMatchBadge && (
             <View style={styles.matchBadgeRow}>
               <MatchScoreBadge score={job.matchScore} />
@@ -106,8 +107,15 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
             <LocationIcon size={13} color={colors.textSecondary} />
             <Text style={[styles.locationText, { color: colors.textSecondary }]}>{job.location}</Text>
           </View>
+        </View>
+      </Pressable>
+
+      {/* Scrollable content below sticky header */}
+      <ScrollView style={styles.frontScrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+        <Pressable onPress={handleFlip}>
+        <View style={styles.frontInnerPadding}>
           <View style={styles.chipsContainer}>
-            {job.industry && (<View style={[styles.metaChip, { backgroundColor: '#E8EAF6' }]}><Factory size={12} color="#3F51B5" /><Text style={[styles.metaText, { color: '#3F51B5' }]}>{job.industry}</Text></View>)}
+            {job.industry && (<View style={[styles.metaChip, { backgroundColor: '#E8EAF6' }]}><Ionicons name="construct-outline" size={12} color="#3F51B5" /><Text style={[styles.metaText, { color: '#3F51B5' }]}>{job.industry}</Text></View>)}
             {job.companyType && (<View style={[styles.metaChip, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.metaText, { color: '#2E7D32' }]}>{job.companyType}</Text></View>)}
             <View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}><Briefcase size={12} color="#E65100" /><Text style={[styles.metaText, { color: '#E65100' }]}>{job.employmentType}</Text></View>
             <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}><LocationIcon size={12} color={Colors.primary} /><Text style={[styles.metaText, { color: Colors.primary }]}>{job.locationType}</Text></View>
@@ -118,12 +126,8 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
             {job.jobLevel && (<View style={[styles.metaChip, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.metaText, { color: '#2E7D32' }]}>{job.jobLevel}</Text></View>)}
             {job.jobRequirements?.map((req, i) => (<View key={i} style={[styles.metaChip, { backgroundColor: '#FFF9C4' }]}><Text style={[styles.metaText, { color: '#F57F17' }]}>{req}</Text></View>))}
             {job.educationLevel && (<View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}><GraduationCap size={12} color="#1565C0" /><Text style={[styles.metaText, { color: '#1565C0' }]}>{job.educationLevel}</Text></View>)}
-            {job.workAuthorization && (<View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}><Shield size={12} color="#E65100" /><Text style={[styles.metaText, { color: '#E65100' }]}>{job.workAuthorization}</Text></View>)}
+            {job.workAuthorization && (<View style={[styles.metaChip, { backgroundColor: '#FFF3E0' }]}><Ionicons name="shield-outline" size={12} color="#E65100" /><Text style={[styles.metaText, { color: '#E65100' }]}>{job.workAuthorization}</Text></View>)}
           </View>
-        </View>
-        </Pressable>
-
-        <View style={styles.frontInnerPadding}>
         {job.requirements && job.requirements.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.secondary }]}>Requirements</Text>
@@ -159,23 +163,23 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
         )}
         <View style={{ height: 50 }} />
         </View>
+        </Pressable>
       </ScrollView>
 
       <Pressable onPress={handleFlip} style={[styles.frontHintBar, { backgroundColor: cardBg }]}>
-        <Text style={styles.tapHintText}>Tap to see full details</Text>
+        <Text style={[styles.tapHintText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#000000' }]}>Tap to see full details</Text>
       </Pressable>
     </Animated.View>
   );
 
   const renderBack = () => (
     <Animated.View
-      style={[styles.card, { backgroundColor: cardBg, borderColor: colors.border, transform: [{ perspective: 1000 }, { rotateY: backRotate }], opacity: backOpacity }, styles.cardFace, styles.cardBack]}
+      style={[styles.card, { backgroundColor: cardBg, transform: [{ perspective: 1000 }, { rotateY: backRotate }], opacity: backOpacity }, styles.cardFace, styles.cardBack]}
       pointerEvents={isFlipped ? 'auto' : 'none'}
     >
-      {/* Scrollable detail content — tap anywhere to flip back */}
-      <ScrollView style={styles.backScrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-        <Pressable onPress={handleFlip}>
-        <View style={[styles.backHeader, { backgroundColor: cardBg }]}>
+      {/* Sticky header */}
+      <Pressable onPress={handleFlip}>
+        <View style={[styles.backHeader, { backgroundColor: cardBg, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' }]}>
           <Image source={{ uri: job.companyLogo }} style={styles.backLogo} contentFit="contain" />
           <View style={{ flex: 1 }}>
             <Text style={[styles.backCompanyName, { color: colors.textPrimary }]}>{job.companyName}</Text>
@@ -189,7 +193,11 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
             <Share2 size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
+      </Pressable>
 
+      {/* Scrollable content below sticky header */}
+      <ScrollView style={styles.backScrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+        <Pressable onPress={handleFlip}>
         <View style={styles.backInnerPadding}>
         <View style={styles.infoCards}>
           <View style={[styles.infoCard, { backgroundColor: '#FFF8F0' }]}><Briefcase size={16} color="#E65100" /><Text style={styles.infoLabel}>Type</Text><Text style={styles.infoValue}>{job.employmentType}</Text></View>
@@ -227,7 +235,7 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
 
         {job.culturePhotos && job.culturePhotos.length > 0 && (
           <View style={styles.backSection}>
-            <View style={styles.cultureHeader}><Camera size={16} color={Colors.secondary} /><Text style={[styles.backSectionTitle, { color: colors.secondary, marginBottom: 0 }]}>Work Culture</Text></View>
+            <View style={styles.cultureHeader}><Ionicons name="camera-outline" size={16} color={Colors.secondary} /><Text style={[styles.backSectionTitle, { color: colors.secondary, marginBottom: 0 }]}>Work Culture</Text></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
               {job.culturePhotos.map((p, i) => (<Image key={i} source={{ uri: p }} style={styles.culturePhoto} contentFit="cover" />))}
             </ScrollView>
@@ -275,7 +283,7 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
       </ScrollView>
 
       <Pressable onPress={handleFlip} style={[styles.backHintBar, { backgroundColor: cardBg }]}>
-        <Text style={styles.tapHintText}>Tap anywhere to go back</Text>
+        <Text style={[styles.tapHintText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#000000' }]}>Tap to go back</Text>
       </Pressable>
     </Animated.View>
   );
@@ -289,7 +297,7 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
 }
 
 const styles = StyleSheet.create({
-  flipContainer: { flex: 1, margin: 10 },
+  flipContainer: { flex: 1, marginHorizontal: 10, marginTop: 10, marginBottom: 16 },
   cardFace: { backfaceVisibility: 'hidden' },
   cardBack: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   card: {
@@ -305,20 +313,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#000000',
   },
-  fixedHeader: { padding: 20, paddingBottom: 12, zIndex: 10, alignItems: 'center' as const },
+  fixedHeader: { padding: 16, paddingBottom: 12, zIndex: 10, alignItems: 'center' as const },
   matchBadgeRow: { position: 'absolute' as const, top: 16, right: 16, zIndex: 20 },
   logoWrapper: { alignItems: 'center' as const, marginBottom: 10 },
   companyLogo: { width: 144, height: 144, borderRadius: 36, backgroundColor: Colors.borderLight },
   companyNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   companyName: { fontSize: 17, fontWeight: '700' as const, textAlign: 'center' as const },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 0 },
   locationText: { fontSize: 13 },
   jobTitle: { fontSize: 24, fontWeight: '800' as const, lineHeight: 30, textAlign: 'center' as const, marginBottom: 4 },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' as const, marginTop: 4 },
   scrollContent: { flex: 1, paddingHorizontal: 20, paddingTop: 8 },
-  frontScrollContent: { flex: 1 },
+  frontScrollContent: { flex: 1, marginBottom: 40 },
   frontInnerPadding: { paddingHorizontal: 20, paddingTop: 8 },
-  backScrollContent: { flex: 1 },
+  backScrollContent: { flex: 1, marginBottom: 40 },
   backInnerPadding: { paddingHorizontal: 20, paddingTop: 8 },
   metaChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, gap: 5 },
   metaText: { fontSize: 12, fontWeight: '500' as const },
@@ -334,9 +342,9 @@ const styles = StyleSheet.create({
   benefitText: { fontSize: 12, color: Colors.accent, fontWeight: '600' as const },
   aboutRoleText: { fontSize: 13, lineHeight: 20 },
   tapHintBar: { paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.05)' },
-  frontHintBar: { paddingVertical: 10, alignItems: 'center', position: 'absolute' as const, bottom: 0, left: 0, right: 0 },
-  backHintBar: { paddingVertical: 10, alignItems: 'center', position: 'absolute' as const, bottom: 0, left: 0, right: 0 },
-  tapHintText: { fontSize: 12, fontWeight: '600' as const, color: '#888', letterSpacing: 0.3 },
+  frontHintBar: { paddingVertical: 12, alignItems: 'center', position: 'absolute' as const, bottom: 0, left: 0, right: 0, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.2)' },
+  backHintBar: { paddingVertical: 12, alignItems: 'center', position: 'absolute' as const, bottom: 0, left: 0, right: 0, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.2)' },
+  tapHintText: { fontSize: 13, fontWeight: '700' as const, letterSpacing: 0.3 },
   backHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: 8 },
   backLogo: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.borderLight },
   backShareBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },

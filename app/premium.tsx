@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import SmoothSlider from '@/components/SmoothSlider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Crown, Check, X as XIcon, Zap, Star, Tag, Quote, Calendar, CreditCard, AlertTriangle, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, Crown, Check, X as XIcon, Zap, Star } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { initiatePayment, initiateSubscriptionPayment, checkPaymentLinkStatus, cancelRazorpaySubscription } from '@/lib/razorpay';
@@ -570,7 +571,7 @@ export default function PremiumScreen() {
         {selectedPlan !== 'custom' && effectivePlan !== 'premium' && (
           <View style={[styles.couponSection, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }]}>
             <View style={styles.couponInputRow}>
-              <Tag size={20} color={themeColors.textSecondary} style={styles.couponIcon} />
+              <Ionicons name="pricetag-outline" size={20} color={themeColors.textSecondary} style={styles.couponIcon} />
               <TextInput
                 style={styles.couponInput}
                 placeholder="Enter coupon code"
@@ -666,7 +667,7 @@ export default function PremiumScreen() {
           <Animated.View style={{ transform: [{ translateY: testimonialScrollY }] }}>
             {[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => (
               <View key={idx} style={styles.testimonialCard}>
-                <Quote size={18} color="rgba(255,255,255,0.2)" style={styles.testimonialQuoteIcon} />
+                <Ionicons name="chatbubble-outline" size={18} color="rgba(255,255,255,0.2)" style={styles.testimonialQuoteIcon} />
                 <Text style={styles.testimonialQuote} numberOfLines={2}>"{t.quote}"</Text>
                 <View style={styles.testimonialFooter}>
                   <Image source={t.avatar} style={styles.testimonialAvatar} />
@@ -701,7 +702,7 @@ export default function PremiumScreen() {
 
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
-                <RefreshCw size={16} color={getStatusColor(subscriptionStatus)} />
+                <Ionicons name="refresh" size={16} color={getStatusColor(subscriptionStatus)} />
                 <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Status</Text>
               </View>
               <View style={[styles.subStatusBadge, { backgroundColor: getStatusColor(subscriptionStatus) + '20' }]}>
@@ -720,7 +721,7 @@ export default function PremiumScreen() {
 
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
-                <Calendar size={16} color={themeColors.textSecondary} />
+                <Ionicons name="calendar-outline" size={16} color={themeColors.textSecondary} />
                 <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Billing Cycle</Text>
               </View>
               <Text style={[styles.subMgmtValue, { color: themeColors.textPrimary }]}>Monthly</Text>
@@ -728,7 +729,7 @@ export default function PremiumScreen() {
 
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
-                <CreditCard size={16} color={themeColors.textSecondary} />
+                <Ionicons name="card-outline" size={16} color={themeColors.textSecondary} />
                 <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>{subscriptionStatus === 'cancelled' ? 'Expires On' : 'Next Billing'}</Text>
               </View>
               <Text style={[styles.subMgmtValue, { color: themeColors.textPrimary }]}>{formatDate(subscriptionData?.subscription_end_date ?? null)}</Text>
@@ -736,7 +737,7 @@ export default function PremiumScreen() {
 
             {subscriptionStatus === 'payment_failed' && (
               <View style={styles.subWarningBanner}>
-                <AlertTriangle size={16} color="#EF4444" />
+                <Ionicons name="warning-outline" size={16} color="#EF4444" />
                 <Text style={styles.subWarningText}>Your last payment failed. You've been downgraded to Free but your remaining swipes are preserved.</Text>
               </View>
             )}
@@ -761,13 +762,13 @@ export default function PremiumScreen() {
               {isRefreshingTx ? (
                 <ActivityIndicator size="small" color="#B0B0B0" />
               ) : (
-                <RefreshCw size={16} color="#B0B0B0" />
+                <Ionicons name="refresh" size={16} color="#B0B0B0" />
               )}
             </Pressable>
           </View>
           {transactions.length === 0 ? (
             <View style={styles.subTxEmpty}>
-              <CreditCard size={24} color="#808080" />
+              <Ionicons name="card-outline" size={24} color="#808080" />
               <Text style={styles.subTxEmptyText}>No transactions yet</Text>
               <Text style={styles.subTxEmptySubtext}>Your payment history will appear here</Text>
             </View>

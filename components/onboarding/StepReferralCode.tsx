@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, Alert, Platform } from 'react-native';
-import { Gift, Check, X } from 'lucide-react-native';
+import { Gift, Check, X } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
 import { useAuth } from '@/contexts/AuthContext';

@@ -2001,7 +2001,7 @@ const styles = StyleSheet.create({
 
   composeFab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: Platform.OS === 'ios' ? 100 : 80,
     right: 20,
     height: 56,
     borderRadius: 28,

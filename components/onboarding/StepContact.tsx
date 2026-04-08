@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList } from 'react-native';
-import { MapPin, Phone, ChevronDown, Search, X, Navigation } from 'lucide-react-native';
+import { MapPin, Phone, ChevronDown, Search, X } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { countryCodes, majorCities, findNearestIndianCity } from '@/constants/onboarding';
@@ -176,7 +177,7 @@ export default function StepContact({ data, onUpdate, onNext }: StepProps) {
                 editable={!detectingLocation}
               />
               <Pressable onPress={handleDetectLocation} disabled={detectingLocation} hitSlop={8}>
-                <Navigation size={18} color={detectingLocation ? '#9E9E9E' : '#111111'} />
+                <Ionicons name="navigate-outline" size={18} color={detectingLocation ? '#9E9E9E' : '#111111'} />
               </Pressable>
             </View>
             <FlatList

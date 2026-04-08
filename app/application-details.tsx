@@ -22,26 +22,17 @@ import {
   MapPin,
   Briefcase,
   Clock,
-  Video,
   ExternalLink,
-  Bell,
-  Calendar,
-  CheckCircle2,
-  Circle,
-  XCircle,
   Wifi,
   Building2,
   Users,
   Sparkles,
-  Key,
   Eye,
-  EyeOff,
-  Bot,
   ChevronRight,
   X,
   Check,
-
-} from 'lucide-react-native';
+} from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
@@ -285,7 +276,7 @@ export default function ApplicationDetailsScreen() {
 
           <View style={styles.appliedRow}>
             <View style={styles.appliedDateBox}>
-              <Calendar size={14} color="#065F46" />
+              <Ionicons name="calendar-outline" size={14} color="#065F46" />
               <Text style={styles.appliedDateText}>Applied on {application.appliedDate}</Text>
             </View>
             {application.jobId && (
@@ -331,11 +322,11 @@ export default function ApplicationDetailsScreen() {
               <View key={idx} style={styles.flowStep}>
                 <View style={styles.flowIndicator}>
                   {isCompleted ? (
-                    <CheckCircle2 size={20} color="#10B981" />
+                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                   ) : isCurrent ? (
                     <Animated.View style={[styles.flowDotCurrent, { opacity: pulseAnim }]} />
                   ) : (
-                    <Circle size={20} color="rgba(255,255,255,0.2)" />
+                    <Ionicons name="ellipse-outline" size={20} color="rgba(255,255,255,0.2)" />
                   )}
                   {!isLastVisible && (
                     <View style={[styles.flowLine, isCompleted && styles.flowLineCompleted]} />
@@ -360,7 +351,7 @@ export default function ApplicationDetailsScreen() {
         {application.verificationOtp && (
           <View style={styles.otpCard}>
             <View style={styles.otpIcon}>
-              <Key size={18} color="#7B1FA2" />
+              <Ionicons name="key-outline" size={18} color="#7B1FA2" />
             </View>
             <View style={styles.otpContent}>
               <Text style={styles.otpTitle}>OTP Received</Text>
@@ -380,7 +371,7 @@ export default function ApplicationDetailsScreen() {
             style={styles.watchVideoBtn} 
             onPress={() => setShowVideoModal(true)}
           >
-            <Video size={18} color="#FFFFFF" />
+            <Ionicons name="videocam-outline" size={18} color="#FFFFFF" />
             <Text style={styles.watchVideoBtnText}>Watch the AI Apply Live</Text>
           </Pressable>
         )}

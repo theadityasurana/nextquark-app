@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, Platform } from 'react-native';
-import { Search, X, Plus } from 'lucide-react-native';
+import { Search, X, Plus } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { suggestedSkills } from '@/constants/onboarding';
 import { StepProps, OnboardingSkill } from '@/types/onboarding';

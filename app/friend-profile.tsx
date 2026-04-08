@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
-import { X, MapPin, Briefcase, GraduationCap, Trophy, Award, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { X, MapPin, Briefcase, GraduationCap, Trophy, Award, ChevronRight } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import { supabase, getProfilePictureUrl, getCompanyLogoStorageUrl } from '@/lib/supabase';
@@ -217,7 +218,7 @@ export default function FriendProfileScreen() {
             {totalPages > 1 && (
               <View style={styles.pagination}>
                 <Pressable style={[styles.pageBtn, jobsPage === 0 && styles.pageBtnDisabled]} onPress={() => setJobsPage(p => Math.max(0, p - 1))} disabled={jobsPage === 0}>
-                  <ChevronLeft size={16} color={jobsPage === 0 ? colors.textTertiary : colors.secondary} />
+                  <Ionicons name="chevron-back" size={16} color={jobsPage === 0 ? colors.textTertiary : colors.secondary} />
                 </Pressable>
                 <Text style={styles.pageText}>Page {jobsPage + 1} of {totalPages}</Text>
                 <Pressable style={[styles.pageBtn, jobsPage === totalPages - 1 && styles.pageBtnDisabled]} onPress={() => setJobsPage(p => Math.min(totalPages - 1, p + 1))} disabled={jobsPage === totalPages - 1}>

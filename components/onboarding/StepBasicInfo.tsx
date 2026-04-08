@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList, Alert } from 'react-native';
-import { MapPin, ChevronRight, Search, X, Camera, Link2 } from 'lucide-react-native';
+import { MapPin, ChevronRight, Search, X, Camera, Link2 } from '@/components/ProfileIcons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';

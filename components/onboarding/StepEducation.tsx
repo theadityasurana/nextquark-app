@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
-import { Plus, GraduationCap, X, ChevronDown, Search, Check } from 'lucide-react-native';
+import { Plus, GraduationCap, X, ChevronDown, Search, Check } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { degreeTypes, years } from '@/constants/onboarding';
 import { universities } from '@/constants/universities';

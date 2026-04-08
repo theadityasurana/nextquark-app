@@ -5,7 +5,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, MapPin, Bookmark, Wifi, Building2, Check, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Bookmark, Wifi, Building2, Check, Trash2 } from '@/components/ProfileIcons';
 import { useQuery } from '@tanstack/react-query';
 import { Job } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';

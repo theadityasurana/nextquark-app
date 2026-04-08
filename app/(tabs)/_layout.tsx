@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Tabs } from 'expo-router';
-import { Home, Briefcase, MessageCircle, User, AlertCircle, Compass } from 'lucide-react-native';
-import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
@@ -16,7 +17,7 @@ function TabBarBadge({ count, type = 'count' }: { count: number; type?: 'count' 
   return (
     <View style={styles.badge}>
       {type === 'alert' ? (
-        <AlertCircle size={8} color="#FFFFFF" />
+        <Ionicons name="alert-circle" size={8} color="#FFFFFF" />
       ) : (
         <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
       )}
@@ -24,14 +25,13 @@ function TabBarBadge({ count, type = 'count' }: { count: number; type?: 'count' 
   );
 }
 
-function TabIcon({ icon: Icon, color, size, focused, colors, badgeCount, badgeType }: {
-  icon: any; color: string; size: number; focused: boolean; colors: any;
+function TabIcon({ name, color, focused, badgeCount, badgeType }: {
+  name: string; color: string; focused: boolean;
   badgeCount?: number; badgeType?: 'count' | 'alert';
 }) {
   return (
     <View style={styles.tabIconWrap}>
-      {focused && <View style={[styles.tabPillIndicator, { backgroundColor: colors.secondary + '22' }]} />}
-      <Icon size={size} color={color} fill={focused ? colors.surface : 'none'} strokeWidth={focused ? 2.5 : 2} />
+      <Ionicons name={(focused ? name : `${name}-outline`) as any} size={22} color={color} />
       {badgeCount != null && badgeCount > 0 && <TabBarBadge count={badgeCount} type={badgeType} />}
     </View>
   );
@@ -122,13 +122,32 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.secondary,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textTertiary,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '500',
+          marginTop: -2,
         },
+        tabBarStyle: {
+          position: 'absolute',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
+          backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.surface,
+          elevation: 0,
+          height: Platform.OS === 'ios' ? 88 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          paddingTop: 6,
+        },
+        tabBarBackground: () =>
+          Platform.OS === 'ios' ? (
+            <BlurView
+              tint={theme === 'dark' ? 'dark' : 'light'}
+              intensity={80}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : null,
       }}
     >
       <Tabs.Screen
@@ -136,7 +155,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon icon={User} color={color} size={size} focused={focused} colors={colors}
+            <TabIcon name="person" color={color} focused={focused}
               badgeCount={isProfileIncomplete ? 1 : 0} badgeType="alert" />
           ),
         }}
@@ -147,7 +166,7 @@ export default function TabLayout() {
         options={{
           title: 'Discover',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon icon={Compass} color={color} size={size} focused={focused} colors={colors}
+            <TabIcon name="compass" color={color} focused={focused}
               badgeCount={favoriteCompaniesCount} />
           ),
         }}
@@ -158,7 +177,7 @@ export default function TabLayout() {
         options={{
           title: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon icon={Home} color={color} size={size} focused={focused} colors={colors}
+            <TabIcon name="briefcase" color={color} focused={focused}
               badgeCount={forYouCount} />
           ),
         }}
@@ -169,7 +188,7 @@ export default function TabLayout() {
         options={{
           title: 'Applications',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon icon={Briefcase} color={color} size={size} focused={focused} colors={colors}
+            <TabIcon name="document-text" color={color} focused={focused}
               badgeCount={applicationsCount} />
           ),
         }}
@@ -180,7 +199,7 @@ export default function TabLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon icon={MessageCircle} color={color} size={size} focused={focused} colors={colors}
+            <TabIcon name="chatbubble" color={color} focused={focused}
               badgeCount={unreadMessages} />
           ),
         }}
@@ -194,33 +213,26 @@ const styles = StyleSheet.create({
   tabIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 32,
-    overflow: 'visible',
-  },
-  tabPillIndicator: {
-    position: 'absolute',
-    width: 56,
+    width: 28,
     height: 28,
-    borderRadius: 14,
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: 10,
-    backgroundColor: '#DC2626',
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
+    top: -4,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     zIndex: 10,
   },
   badgeText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700' as const,
-    lineHeight: 14,
+    fontWeight: '600',
+    lineHeight: 13,
   },
 });

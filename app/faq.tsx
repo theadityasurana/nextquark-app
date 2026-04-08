@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import Colors from '@/constants/colors';
 
@@ -74,7 +75,7 @@ export default function FAQScreen() {
             <View style={styles.faqHeader}>
               <Text style={styles.faqQuestion}>{faq.q}</Text>
               {expandedIdx === idx ? (
-                <ChevronUp size={20} color={Colors.textSecondary} />
+                <Ionicons name="chevron-up" size={20} color={Colors.textSecondary} />
               ) : (
                 <ChevronDown size={20} color={Colors.textTertiary} />
               )}

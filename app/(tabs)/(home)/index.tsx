@@ -188,14 +188,6 @@ export default function HomeScreen() {
     return Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE);
   });
 
-  useEffect(() => {
-    if (!isLoadingJobs) return;
-    const interval = setInterval(() => {
-      setLiveJobCount(Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE));
-    }, 50);
-    return () => clearInterval(interval);
-  }, [isLoadingJobs]);
-
   const loadingWords = [
     'Stalking Your Resume 👀',
     'Matching Your Vibe ✨',
@@ -237,6 +229,14 @@ export default function HomeScreen() {
     queryFn: fetchJobsFromSupabase,
     staleTime: 1000 * 60 * 5,
   });
+
+  useEffect(() => {
+    if (!isLoadingJobs) return;
+    const interval = setInterval(() => {
+      setLiveJobCount(Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isLoadingJobs]);
 
   const { data: remainingJobs } = useQuery({
     queryKey: ['supabase-jobs-remaining'],

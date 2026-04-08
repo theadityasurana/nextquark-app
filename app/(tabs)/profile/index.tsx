@@ -210,11 +210,11 @@ export default function ProfileScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const animatedScrollRef = useRef<AnimatedHeaderScrollViewRef>(null);
   // Create a fake scrollable ref for useScrollToTop
-  const scrollToTopRef = useRef({ scrollToOffset: ({ offset }: { offset: number; animated?: boolean }) => { animatedScrollRef.current?.scrollToTop(); } });
+  const scrollToTopRef = useRef({ scrollToOffset: ({ offset, animated }: { offset: number; animated?: boolean }) => { animatedScrollRef.current?.scrollToTop(animated); } });
   useScrollToTop(scrollToTopRef as any);
   useFocusEffect(
     useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      animatedScrollRef.current?.scrollToTop(false);
       setIsRefreshingSection(true);
       skeletonOpacity.setValue(0);
       Animated.timing(skeletonOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();

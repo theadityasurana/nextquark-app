@@ -29,9 +29,8 @@ export async function POST(request: Request) {
     // Extract text from PDF using pdf-parse
     let rawText = '';
     try {
-      // Dynamic import to keep pdf-parse server-only
-      const pdfParse = (await import('pdf-parse')).default;
-      const pdfData = await pdfParse(buffer);
+      const pdfParser = new (await import('pdf-parse')).PDFParse({ data: buffer });
+      const pdfData = await pdfParser.getText();
       rawText = pdfData.text;
     } catch (pdfError) {
       console.error('PDF parse error:', pdfError);

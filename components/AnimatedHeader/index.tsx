@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const HEADER_HEIGHT = 60;
 
 export interface AnimatedHeaderScrollViewRef {
-  scrollToTop: () => void;
+  scrollToTop: (animated?: boolean) => void;
 }
 
 interface Props {
@@ -57,9 +57,9 @@ export const AnimatedHeaderScrollView = memo<Props>(
     const insets = useSafeAreaInsets();
 
     useImperativeHandle(scrollRef, () => ({
-      scrollToTop: () => {
-        innerScrollRef.current?.scrollTo?.({ y: 0, animated: true });
-        innerScrollRef.current?.getNode?.()?.scrollTo?.({ y: 0, animated: true });
+      scrollToTop: (animated = true) => {
+        innerScrollRef.current?.scrollTo?.({ y: 0, animated });
+        innerScrollRef.current?.getNode?.()?.scrollTo?.({ y: 0, animated });
       },
     }));
     const totalHeader = HEADER_HEIGHT + insets.top;
@@ -194,7 +194,7 @@ export const AnimatedHeaderScrollView = memo<Props>(
           )}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={showsVerticalScrollIndicator}
-          refreshControl={refreshControl}
+          refreshControl={refreshControl as any}
           contentContainerStyle={[
             {
               paddingTop: insets.top + 16,

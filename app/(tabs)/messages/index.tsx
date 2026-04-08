@@ -395,7 +395,7 @@ function MessagesScreen() {
     const result: EmailAttachment[] = [];
     for (const asset of attachments) {
       try {
-        const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
         const ext = asset.uri.split('.').pop() || 'jpg';
         result.push({ filename: `image_${result.length + 1}.${ext}`, content: base64 });
       } catch (e) {
@@ -404,7 +404,7 @@ function MessagesScreen() {
     }
     for (const f of fileAttachments) {
       try {
-        const base64 = await FileSystem.readAsStringAsync(f.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const base64 = await FileSystem.readAsStringAsync(f.uri, { encoding: 'base64' });
         result.push({ filename: f.name, content: base64 });
       } catch (e) {
         if (__DEV__) console.log('Failed to read file:', e);

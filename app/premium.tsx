@@ -411,7 +411,7 @@ export default function PremiumScreen() {
   };
 
   const getCtaLabel = () => {
-    if (effectivePlan === selectedPlan && effectivePlan !== 'free') return 'Current Plan';
+    if (effectivePlan === selectedPlan && (effectivePlan as string) !== 'free') return 'Current Plan';
     if (isDowngrade) return `Already on ${effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1)}`;
     if (selectedPlan === 'custom') {
       return customSwipes === 0 ? 'Select swipes to buy' : `Buy ${customSwipes} swipe${customSwipes > 1 ? 's' : ''} for ₹${customSwipes * 15}`;
@@ -492,7 +492,7 @@ export default function PremiumScreen() {
               <Text style={[styles.planBoxLabel, { color: themeColors.textSecondary }, selectedPlan === plan.key && styles.planBoxLabelSelected]}>{plan.label}</Text>
               <Text style={[styles.planBoxApps, { color: themeColors.secondary }, selectedPlan === plan.key && styles.planBoxAppsSelected]}>{plan.apps}</Text>
               <Text style={[styles.planBoxSub, { color: themeColors.textTertiary }, selectedPlan === plan.key && styles.planBoxSubSelected]}>{plan.sub}</Text>
-              {effectivePlan === plan.key && effectivePlan !== 'free' && (
+              {effectivePlan === plan.key && (effectivePlan as string) !== 'free' && (
                 <View style={styles.planBoxCurrentBadge}>
                   <Text style={styles.planBoxCurrentText}>Current</Text>
                 </View>

@@ -72,7 +72,7 @@ export async function recordPaymentAttempt(
 
 export async function updatePaymentStatus(
   recordId: string,
-  status: 'completed' | 'failed' | 'abandoned',
+  status: 'completed' | 'failed' | 'abandoned' | 'pending',
   paymentId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {

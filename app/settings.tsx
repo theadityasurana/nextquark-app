@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Linking
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, BookOpen, Crown, Zap } from '@/components/ProfileIcons';
+import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, BookOpen, Crown, Zap, Trash2 } from '@/components/ProfileIcons';
 import { InstagramIcon, TwitterIcon, LinkedInIcon, WebsiteIcon } from '@/components/SocialIcons';
 import * as Haptics from 'expo-haptics';
 import { darkColors } from '@/constants/colors';
@@ -16,7 +16,8 @@ import { useQuery } from '@tanstack/react-query';
 export default function SettingsScreen() {
   const colors = darkColors;  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { logout, userProfile, supabaseUserId } = useAuth();
+  const { logout, deleteAccount, userProfile, supabaseUserId } = useAuth();
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
   const { data: subscriptionData } = useQuery({
@@ -25,6 +26,41 @@ export default function SettingsScreen() {
     enabled: !!supabaseUserId,
   });
   const subType = subscriptionData?.subscription_type || 'free';
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you sure?',
+              'All your profile data, applications, and preferences will be permanently removed.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete My Account',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeleting(true);
+                    const result = await deleteAccount();
+                    setIsDeleting(false);
+                    if (!result.success) {
+                      Alert.alert('Error', result.error || 'Failed to delete account. Please try again.');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -155,6 +191,17 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </Pressable>
 
+        <Pressable
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={isDeleting}
+        >
+          <Trash2 size={18} color="#FF3B30" />
+          <Text style={styles.deleteAccountText}>
+            {isDeleting ? 'Deleting...' : 'Delete Account'}
+          </Text>
+        </Pressable>
+
         <Text style={styles.versionText}>NextQuark v1.0.0</Text>
       </ScrollView>
 
@@ -210,6 +257,11 @@ const styles = StyleSheet.create({
     height: 56, marginTop: 24,
   },
   signOutText: { fontSize: 16, fontWeight: '700' as const, color: '#EF4444' },
+  deleteAccountButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 12, paddingVertical: 14,
+  },
+  deleteAccountText: { fontSize: 14, fontWeight: '500' as const, color: '#FF3B30' },
   versionText: {
     textAlign: 'center', color: 'rgba(255,255,255,0.4)',
     fontSize: 12, marginTop: 24,

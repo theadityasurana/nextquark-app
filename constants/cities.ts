@@ -1,14 +1,14 @@
 export const MAJOR_CITIES = [
   'Remote',
+  // India
+  'Bangalore, India', 'Hyderabad, India', 'Mumbai, India', 'Gurugram, India', 'Delhi NCR, India',
+  'Pune, India', 'Chennai, India', 'Noida, India', 'Kolkata, India', 'Ahmedabad, India',
+  'Jaipur, India', 'Chandigarh, India', 'Kochi, India', 'Indore, India', 'Coimbatore, India',
   // United States
   'San Francisco, CA', 'New York, NY', 'Seattle, WA', 'Austin, TX', 'Boston, MA',
   'Los Angeles, CA', 'Chicago, IL', 'Denver, CO', 'Miami, FL', 'Atlanta, GA',
   'Dallas, TX', 'Houston, TX', 'Phoenix, AZ', 'San Diego, CA', 'Philadelphia, PA',
   'Washington, DC', 'Portland, OR', 'Nashville, TN', 'Detroit, MI', 'Minneapolis, MN',
-  // India
-  'Bangalore, India', 'Mumbai, India', 'Delhi NCR, India', 'Hyderabad, India', 'Pune, India',
-  'Chennai, India', 'Kolkata, India', 'Gurugram, India', 'Noida, India', 'Ahmedabad, India',
-  'Jaipur, India', 'Chandigarh, India', 'Kochi, India', 'Indore, India', 'Coimbatore, India',
   // United Kingdom
   'London, UK', 'Manchester, UK', 'Birmingham, UK', 'Edinburgh, UK', 'Bristol, UK',
   'Leeds, UK', 'Glasgow, UK', 'Liverpool, UK', 'Cambridge, UK', 'Oxford, UK',

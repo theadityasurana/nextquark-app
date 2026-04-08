@@ -6,6 +6,21 @@
 
 const LOG = '[SANITY-CHECK]';
 
+/** Strip Unicode escape sequences that PostgreSQL JSONB rejects (e.g. \u0000) */
+function stripBadUnicode(value: unknown): unknown {
+  if (typeof value === 'string') {
+    // Remove null bytes and invalid Unicode escape sequences
+    return value.replace(/\u0000/g, '').replace(/\\u[0-9a-fA-F]{4}/g, '');
+  }
+  if (Array.isArray(value)) return value.map(stripBadUnicode);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = stripBadUnicode(v);
+    return out;
+  }
+  return value;
+}
+
 /** Check if a string looks like a real human name (not gibberish) */
 function isValidName(name: string): boolean {
   if (!name || name.trim().length < 2) return false;
@@ -323,5 +338,5 @@ export function sanitizeParsedData(data: Record<string, any>): Record<string, an
     console.log(LOG, '✅ All fields passed sanity check');
   }
 
-  return clean;
+  return stripBadUnicode(clean) as Record<string, any>;
 }

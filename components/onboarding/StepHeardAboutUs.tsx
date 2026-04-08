@@ -1,14 +1,19 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform, ScrollView } from 'react-native';
 import { Check } from '@/components/ProfileIcons';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
 
-const OPTIONS = [
-  { key: 'linkedin', label: 'LinkedIn', emoji: '💼' },
-  { key: 'twitter', label: 'Twitter / X', emoji: '🐦' },
-  { key: 'instagram', label: 'Instagram', emoji: '📸' },
-  { key: 'google', label: 'Google Search', emoji: '🔍' },
+type OptionItem =
+  | { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; emoji?: undefined }
+  | { key: string; label: string; emoji: string; icon?: undefined };
+
+const OPTIONS: OptionItem[] = [
+  { key: 'linkedin', label: 'LinkedIn', icon: 'logo-linkedin' },
+  { key: 'twitter', label: 'Twitter / X', icon: 'logo-twitter' },
+  { key: 'instagram', label: 'Instagram', icon: 'logo-instagram' },
+  { key: 'google', label: 'Google Search', icon: 'logo-google' },
   { key: 'friends_colleagues', label: 'Friends or Colleagues', emoji: '👥' },
   { key: 'advertisement', label: 'Advertisement', emoji: '📢' },
   { key: 'know_founder', label: 'Friends with the Founder', emoji: '🤝' },
@@ -46,17 +51,21 @@ export default function StepHeardAboutUs({ data, onUpdate, onNext }: StepProps) 
 
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.groupedCard}>
-          {OPTIONS.map(({ key, label, emoji }, idx) => {
-            const selected = data.heardAboutUs === key;
+          {OPTIONS.map((item, idx) => {
+            const selected = data.heardAboutUs === item.key;
             const isLast = idx === OPTIONS.length - 1;
             return (
               <Pressable
-                key={key}
+                key={item.key}
                 style={[styles.row, !isLast && styles.rowBorder]}
-                onPress={() => handleSelect(key)}
+                onPress={() => handleSelect(item.key)}
               >
-                <Text style={styles.rowEmoji}>{emoji}</Text>
-                <Text style={styles.rowLabel}>{label}</Text>
+                {item.icon ? (
+                  <Ionicons name={item.icon} size={22} color="#FFFFFF" style={styles.rowIcon} />
+                ) : (
+                  <Text style={styles.rowEmoji}>{item.emoji}</Text>
+                )}
+                <Text style={styles.rowLabel}>{item.label}</Text>
                 {selected && <Check size={20} color="#007AFF" strokeWidth={3} />}
               </Pressable>
             );
@@ -102,6 +111,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.12)',
   },
   rowEmoji: { fontSize: 22, marginRight: 14 },
+  rowIcon: { marginRight: 14, width: 24, textAlign: 'center' },
   rowLabel: { flex: 1, fontSize: 16, color: '#FFFFFF' },
   errorText: { color: '#FF453A', fontSize: 13, marginBottom: 8, textAlign: 'center' },
   footer: { paddingHorizontal: 20, paddingBottom: 16, gap: 12 },

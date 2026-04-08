@@ -215,7 +215,9 @@ export default function StepResume({ data, onUpdate, onNext }: StepProps) {
             if (profileCertifications.length > 0) profileUpdate.certifications = profileCertifications;
             if (profileAchievements.length > 0) profileUpdate.achievements = profileAchievements;
 
-            const { error: saveError } = await supabase.from('profiles').upsert(profileUpdate);
+            // Strip invalid Unicode escapes that PostgreSQL JSONB rejects
+            const cleanUpdate = JSON.parse(JSON.stringify(profileUpdate).replace(/\\u0000/g, ''));
+            const { error: saveError } = await supabase.from('profiles').upsert(cleanUpdate);
             if (saveError) {
               console.log(LOG_PREFIX, '⚠️ Supabase save error (non-fatal):', saveError.message);
             } else {

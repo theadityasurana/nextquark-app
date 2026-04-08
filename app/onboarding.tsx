@@ -46,12 +46,15 @@ export default function OnboardingScreen() {
       Animated.timing(blurAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
     ]).start(() => {
       callback();
+      fadeAnim.setValue(0);
       slideAnim.setValue(direction === 'forward' ? 30 : -30);
       blurAnim.setValue(0);
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
-      ]).start();
+      requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+        ]).start();
+      });
     });
   }, [fadeAnim, slideAnim, blurAnim]);
 

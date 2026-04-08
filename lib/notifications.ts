@@ -7,8 +7,10 @@ let Device: typeof import('expo-device') | null = null;
 
 try {
   const NotifModule = require('expo-notifications');
-  // Check if the module actually works (fails in Expo Go SDK 53+)
+  // Verify the module works — throws in Expo Go SDK 53+
   if (NotifModule && typeof NotifModule.getPermissionsAsync === 'function') {
+    // Probe with a harmless call to detect Expo Go SDK 53 runtime error
+    NotifModule.getPermissionsAsync().catch(() => {});
     Notifications = NotifModule;
   }
   Device = require('expo-device');
@@ -16,14 +18,17 @@ try {
   if (Notifications) {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
       }),
     });
   }
 } catch (error) {
-  if (__DEV__) console.log('Notifications not available:', error);
+  // expo-notifications not available (Expo Go SDK 53+, web, etc.)
+  Notifications = null;
+  if (__DEV__) console.log('Notifications not available, skipping');
 }
 
 // --- Keys ---

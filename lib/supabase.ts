@@ -28,8 +28,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export async function handleStaleSession(): Promise<void> {
   try {
     const { data: { session }, error } = await supabase.auth.getSession();
-    if (error || !session) {
-      console.log('[SUPABASE] Stale session detected, signing out');
+    // Only sign out on actual auth errors, not when session is simply null (still loading)
+    if (error) {
+      console.log('[SUPABASE] Stale session detected, signing out. Error:', error.message);
       await supabase.auth.signOut();
       await AsyncStorage.multiRemove(['nextquark_auth', 'nextquark_onboarding', 'nextquark_swiped_jobs']);
     }

@@ -64,9 +64,9 @@ function mapDbToUserProfile(profile: Record<string, any>, userId: string): UserP
     phone: profile.phone || '',
     headline: profile.headline || '',
     location: profile.location || '',
-    avatar: profile.avatar_url 
+    avatar: profile.avatar_url && !profile.avatar_url.includes('images.unsplash.com')
       ? getProfilePictureUrl(profile.avatar_url)
-      : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+      : `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(profile.full_name || profile.first_name || profile.email || 'user')}&size=200`,
     bio: profile.bio || '',
     profileCompletion: Math.round((completionScore / total) * 100),
     totalApplications: 0,
@@ -175,7 +175,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           updated_at: new Date().toISOString(),
         };
 
-        await supabase.from('profiles').upsert(newProfile);
+        const { error: upsertError } = await supabase.from('profiles').upsert(newProfile);
+
+        // If FK constraint fails, the auth user was deleted — force sign out
+        if (upsertError?.message?.includes('foreign key constraint')) {
+          if (__DEV__) console.log('[AUTH] FK constraint on profile create — auth user deleted, signing out');
+          try { await supabase.auth.signOut(); } catch (_) {}
+          await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]).catch(() => {});
+          setAuthState(defaultAuthState);
+          setUserProfile(null);
+          setSupabaseUserId(null);
+          return;
+        }
 
         const newAuthState: AuthState = {
           isAuthenticated: true,
@@ -565,11 +576,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase.from('profiles').upsert(profileData);
+        // Strip invalid Unicode escapes that PostgreSQL JSONB rejects
+        const safeProfileData = JSON.parse(JSON.stringify(profileData).replace(/\\u0000/g, ''));
+
+        const { error } = await supabase.from('profiles').upsert(safeProfileData);
         if (error) {
           if (__DEV__) console.log('Error saving onboarding to Supabase:', error.message);
           // Retry without new columns that may not exist yet in the DB
-          const { experience_level, desired_role_categories, ...fallbackData } = profileData as any;
+          const { experience_level, desired_role_categories, ...fallbackData } = safeProfileData as any;
           const { error: retryError } = await supabase.from('profiles').upsert(fallbackData);
           if (retryError) {
             if (__DEV__) console.log('Retry also failed:', retryError.message);
@@ -579,7 +593,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           }
         } else {
           if (__DEV__) console.log('Onboarding data saved to Supabase');
-          setUserProfile(mapDbToUserProfile(profileData, supabaseUserId));
+          setUserProfile(mapDbToUserProfile(safeProfileData, supabaseUserId));
         }
 
         // Send welcome email via Resend directly (works on all platforms)
@@ -833,25 +847,30 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
-  const deleteAccount = useCallback(async () => {
+  const deleteAccount = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     console.log('deleteAccount called');
     try {
-      // Delete profile data from Supabase (RLS allows users to delete their own row)
-      if (supabaseUserId) {
-        await supabase.from('profiles').delete().eq('id', supabaseUserId);
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (__DEV__) console.log('Delete account response:', JSON.stringify({ data, error: error?.message }));
+      if (error) {
+        if (__DEV__) console.log('Delete account edge function error:', error.message);
+      } else if (data?.error) {
+        if (__DEV__) console.log('Delete account server error:', data.error);
       }
-      // Sign out (admin.deleteUser doesn't work from client-side anon key)
-      await supabase.auth.signOut();
-    } catch (e) {
-      if (__DEV__) console.log('Delete account error:', e);
+    } catch (e: any) {
+      if (__DEV__) console.log('Delete account exception:', e);
     }
+    // Always clean up local state — even if edge function failed,
+    // the auth user may already be deleted (zombie session)
+    try { await supabase.auth.signOut(); } catch (_) {}
     await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]);
     setAuthState(defaultAuthState);
     setOnboardingData(defaultOnboardingData);
     setUserProfile(null);
     setSupabaseUserId(null);
     setSwipedJobIds([]);
-  }, [supabaseUserId]);
+    return { success: true };
+  }, []);
 
   const refetchProfile = useCallback(async () => {
     if (!supabaseUserId) return;

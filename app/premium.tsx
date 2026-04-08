@@ -19,6 +19,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COMPARISON_FEATURES = [
   { label: 'Job applications', free: '40/month', pro: '200', premium: '500' },
+  { label: 'Resume uploads', free: '1', pro: '3', premium: '5' },
   { label: 'AI auto-fill', free: false as const, pro: true, premium: true },
   { label: 'Priority support', free: false as const, pro: true, premium: true },
   { label: 'Profile visibility boost', free: false as const, pro: true, premium: true },
@@ -511,7 +512,7 @@ export default function PremiumScreen() {
                 </View>
               </View>
               <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹1,999</Text>
-              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>200 applications</Text>
+              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>200 applications · 3 resumes</Text>
               <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
             </>
           )}
@@ -524,7 +525,7 @@ export default function PremiumScreen() {
                 </View>
               </View>
               <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹7,599</Text>
-              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>500 applications</Text>
+              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>500 applications · 5 resumes</Text>
               <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
             </>
           )}
@@ -752,7 +753,6 @@ export default function PremiumScreen() {
               </Pressable>
             )}
           </View>
-        )}
 
         {/* ─── Transaction History (always visible, below subscription) ─── */}
         <View style={[styles.subMgmtCard, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }]}>

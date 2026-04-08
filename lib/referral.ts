@@ -1,6 +1,77 @@
 import { supabase } from './supabase';
 
 const SWIPES_PER_REFERRAL = 5;
+const SWIPES_PER_SOCIAL_FOLLOW = 2;
+
+export type SocialPlatform = 'instagram' | 'twitter' | 'linkedin';
+
+const SOCIAL_COLUMN_MAP: Record<SocialPlatform, string> = {
+  instagram: 'followed_instagram',
+  twitter: 'followed_twitter',
+  linkedin: 'followed_linkedin',
+};
+
+export const SOCIAL_URLS: Record<SocialPlatform, string> = {
+  instagram: 'https://www.instagram.com/nextquark',
+  twitter: 'https://x.com/nextquark',
+  linkedin: 'https://www.linkedin.com/company/nextquark',
+};
+
+// Check which social platforms user has already followed
+export async function getSocialFollowStatus(userId: string): Promise<Record<SocialPlatform, boolean>> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('followed_instagram, followed_twitter, followed_linkedin')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) return { instagram: false, twitter: false, linkedin: false };
+    return {
+      instagram: !!data.followed_instagram,
+      twitter: !!data.followed_twitter,
+      linkedin: !!data.followed_linkedin,
+    };
+  } catch {
+    return { instagram: false, twitter: false, linkedin: false };
+  }
+}
+
+// Claim free swipes for following a social platform
+export async function claimSocialFollow(
+  userId: string,
+  platform: SocialPlatform
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const col = SOCIAL_COLUMN_MAP[platform];
+
+    // Check if already claimed
+    const { data: profile, error: fetchErr } = await supabase
+      .from('profiles')
+      .select('followed_instagram, followed_twitter, followed_linkedin, applications_remaining')
+      .eq('id', userId)
+      .single();
+
+    if (fetchErr || !profile) return { success: false, error: 'Could not fetch profile' };
+    if ((profile as any)[col]) return { success: false, error: 'Already claimed' };
+
+    const newRemaining = (profile.applications_remaining || 0) + SWIPES_PER_SOCIAL_FOLLOW;
+
+    const { error: updateErr } = await supabase
+      .from('profiles')
+      .update({
+        [col]: true,
+        applications_remaining: newRemaining,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (updateErr) return { success: false, error: updateErr.message };
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Unknown error' };
+  }
+}
 
 // Generate unique 8-character referral code
 export function generateReferralCode(name: string): string {
@@ -199,7 +270,7 @@ export async function applyReferralCode(
   }
 }
 
-// Get referral stats for user
+// Get referral stats for user (includes social follow status)
 export async function getReferralStats(userId: string) {
   try {
     const { data: profile } = await supabase

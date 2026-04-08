@@ -2334,6 +2334,8 @@ const MAJOR_CITIES = [
         theme={theme}
         colors={colors}
         referralStats={referralStats}
+        userId={supabaseUserId}
+        onSwipesUpdated={() => refetchProfile()}
         onShare={async () => {
           if (referralStats?.referralCode) {
             try {

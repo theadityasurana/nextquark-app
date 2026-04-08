@@ -1,9 +1,17 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Animated, Platform } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Animated, Platform, Linking, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { X, Share2, Star } from '@/components/ProfileIcons';
+import { SocialPlatform, SOCIAL_URLS, getSocialFollowStatus, claimSocialFollow } from '@/lib/referral';
+import { InstagramIcon, TwitterIcon, LinkedInIcon } from '@/components/SocialIcons';
+
+const SOCIAL_ICON_MAP: Record<SocialPlatform, React.ReactNode> = {
+  instagram: <InstagramIcon size={28} />,
+  twitter: <TwitterIcon size={28} />,
+  linkedin: <LinkedInIcon size={28} />,
+};
 
 const TESTIMONIALS = [
   { quote: 'Got 3 interview calls in my first week. The auto-apply is a game changer!', name: 'Priya S.', role: 'Software Engineer', rating: 5, avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
@@ -24,6 +32,12 @@ const STEPS = [
   { emoji: '🎉', text: 'You both get 5 free swipes' },
 ];
 
+const SOCIAL_ITEMS: { platform: SocialPlatform; label: string }[] = [
+  { platform: 'instagram', label: 'Follow us on Instagram' },
+  { platform: 'twitter', label: 'Follow us on Twitter' },
+  { platform: 'linkedin', label: 'Follow us on LinkedIn' },
+];
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -32,11 +46,42 @@ interface Props {
   referralStats: any;
   onShare: () => void;
   onCopy: () => void;
+  userId?: string | null;
+  onSwipesUpdated?: () => void;
 }
 
-export default function FreeSwipesModal({ visible, onClose, theme, colors, referralStats, onShare, onCopy }: Props) {
+export default function FreeSwipesModal({ visible, onClose, theme, colors, referralStats, onShare, onCopy, userId, onSwipesUpdated }: Props) {
   const bg = '#0F0F0F';
   const cardBg = '#1A1A1A';
+
+  // Social follow state
+  const [followStatus, setFollowStatus] = useState<Record<SocialPlatform, boolean>>({ instagram: false, twitter: false, linkedin: false });
+  const [claimingPlatform, setClaimingPlatform] = useState<SocialPlatform | null>(null);
+
+  // Fetch social follow status when modal opens
+  useEffect(() => {
+    if (visible && userId) {
+      getSocialFollowStatus(userId).then(setFollowStatus);
+    }
+  }, [visible, userId]);
+
+  const handleSocialFollow = useCallback(async (platform: SocialPlatform) => {
+    if (!userId || followStatus[platform] || claimingPlatform) return;
+
+    setClaimingPlatform(platform);
+    // Open the social URL
+    try {
+      await Linking.openURL(SOCIAL_URLS[platform]);
+    } catch {}
+
+    // Claim the swipes in Supabase
+    const result = await claimSocialFollow(userId, platform);
+    if (result.success) {
+      setFollowStatus(prev => ({ ...prev, [platform]: true }));
+      onSwipesUpdated?.();
+    }
+    setClaimingPlatform(null);
+  }, [userId, followStatus, claimingPlatform, onSwipesUpdated]);
 
   // Testimonial auto-scroll
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -123,6 +168,38 @@ export default function FreeSwipesModal({ visible, onClose, theme, colors, refer
               ))}
             </View>
 
+            {/* ── SOCIAL FOLLOW FOR FREE SWIPES ── */}
+            <View style={s.socialSection}>
+              <Text style={s.stepsTitle}>Follow us for free swipes</Text>
+              <Text style={s.socialSubtitle}>Get 2 free swipes for each follow!</Text>
+              {SOCIAL_ITEMS.map(({ platform, label }) => {
+                const claimed = followStatus[platform];
+                const isClaiming = claimingPlatform === platform;
+                return (
+                  <Pressable
+                    key={platform}
+                    style={[s.socialBtn, { backgroundColor: cardBg }, claimed && s.socialBtnDisabled]}
+                    onPress={() => handleSocialFollow(platform)}
+                    disabled={claimed || !!claimingPlatform}
+                  >
+                    <View style={claimed ? { opacity: 0.4 } : undefined}>{SOCIAL_ICON_MAP[platform]}</View>
+                    <Text style={[s.socialBtnText, claimed && s.socialBtnTextDisabled]}>
+                      {claimed ? `${label} ✓` : label}
+                    </Text>
+                    {isClaiming ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <View style={[s.socialBadge, claimed && s.socialBadgeClaimed]}>
+                        <Text style={[s.socialBadgeText, claimed && s.socialBadgeTextClaimed]}>
+                          {claimed ? 'Claimed' : '+2 swipes'}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
             {/* Testimonial carousel */}
             <Text style={s.testimonialTitle}>Loved by thousands</Text>
             <View style={s.carouselWrap}>
@@ -191,6 +268,18 @@ const s = StyleSheet.create({
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
   stepEmoji: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center' },
   stepText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', flex: 1 },
+  // Social follow section
+  socialSection: { marginBottom: 24 },
+  socialSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 12, marginTop: -8 },
+  socialBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 14, padding: 14, marginBottom: 10 },
+  socialBtnDisabled: { opacity: 0.5 },
+  socialBtnText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', flex: 1 },
+  socialBtnTextDisabled: { color: 'rgba(255,255,255,0.4)' },
+  socialBadge: { backgroundColor: 'rgba(76,175,80,0.2)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  socialBadgeClaimed: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  socialBadgeText: { fontSize: 11, fontWeight: '700', color: '#4CAF50' },
+  socialBadgeTextClaimed: { color: 'rgba(255,255,255,0.3)' },
+  // Testimonials
   testimonialTitle: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.5)', marginBottom: 12 },
   carouselWrap: { height: (CARD_H + CARD_GAP) * VISIBLE_CARDS, overflow: 'hidden', position: 'relative', marginBottom: 8 },
   fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 24, zIndex: 2 },

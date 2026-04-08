@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Linkedin, Twitter, Github, Globe, Instagram } from '@/components/ProfileIcons';
+import { ArrowLeft } from '@/components/ProfileIcons';
+import { LinkedInIcon, TwitterIcon, GithubIcon, WebsiteIcon, InstagramIcon } from '@/components/SocialIcons';
 import { darkColors } from '@/constants/colors';
 import { Linking } from 'react-native';
 
@@ -81,19 +82,19 @@ export default function AboutUsScreen() {
             <Text style={styles.socialTitle}>Connect with the Founder</Text>
             <View style={styles.socialIcons}>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://linkedin.com/in/adityasurana7')}>
-                <Linkedin size={22} color="#FFFFFF" />
+                <LinkedInIcon size={22} />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://twitter.com/theadityasurana')}>
-                <Twitter size={22} color="#FFFFFF" />
+                <TwitterIcon size={22} />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://github.com/theadityasurana')}>
-                <Github size={22} color="#FFFFFF" />
+                <GithubIcon size={22} />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://nextquark.in')}>
-                <Globe size={22} color="#FFFFFF" />
+                <WebsiteIcon size={22} />
               </Pressable>
               <Pressable style={styles.socialBtn} onPress={() => openLink('https://www.instagram.com/adityasurana7/')}>
-                <Instagram size={22} color="#FFFFFF" />
+                <InstagramIcon size={22} />
               </Pressable>
             </View>
           </View>

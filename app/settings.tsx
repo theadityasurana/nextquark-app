@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Linking
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, Twitter, Instagram, Linkedin, Globe, BookOpen, Crown, Zap } from '@/components/ProfileIcons';
+import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, BookOpen, Crown, Zap } from '@/components/ProfileIcons';
+import { InstagramIcon, TwitterIcon, LinkedInIcon, WebsiteIcon } from '@/components/SocialIcons';
 import * as Haptics from 'expo-haptics';
 import { darkColors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,10 +66,10 @@ export default function SettingsScreen() {
   };
 
   const socialItems = [
-    { icon: Twitter, label: 'Twitter', url: 'https://twitter.com/nextquark', appUrl: 'twitter://user?screen_name=nextquark' },
-    { icon: Instagram, label: 'Instagram', url: 'https://instagram.com/nextquark', appUrl: 'instagram://user?username=nextquark' },
-    { icon: Linkedin, label: 'LinkedIn', url: 'https://linkedin.com/company/nextquark', appUrl: 'linkedin://company/nextquark' },
-    { icon: Globe, label: 'Website', url: 'https://nextquark.in' },
+    { icon: () => <TwitterIcon size={20} />, label: 'Twitter', url: 'https://twitter.com/nextquark', appUrl: 'twitter://user?screen_name=nextquark' },
+    { icon: () => <InstagramIcon size={20} />, label: 'Instagram', url: 'https://instagram.com/nextquark', appUrl: 'instagram://user?username=nextquark' },
+    { icon: () => <LinkedInIcon size={20} />, label: 'LinkedIn', url: 'https://linkedin.com/company/nextquark', appUrl: 'linkedin://company/nextquark' },
+    { icon: () => <WebsiteIcon size={20} />, label: 'Website', url: 'https://nextquark.in' },
   ];
 
   return (
@@ -139,8 +140,8 @@ export default function SettingsScreen() {
                   openSocialLink(item.url, item.appUrl);
                 }}
               >
-                <View style={[styles.menuIconContainer, { backgroundColor: colors.surfaceElevated || '#F5F5F5' }]}>
-                  <IconComp size={20} color={colors.textPrimary} />
+                <View style={[styles.menuIconContainer, { backgroundColor: 'transparent' }]}>
+                  <IconComp />
                 </View>
                 <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{item.label}</Text>
                 <ChevronRight size={18} color="#9E9E9E" />

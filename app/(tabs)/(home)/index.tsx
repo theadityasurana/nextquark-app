@@ -12,12 +12,17 @@ import {
   ScrollView,
   TextInput,
   Image,
+  BackHandler,
+  Alert,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { X, Heart, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, ShieldCheck, Building2, FileText, Plus, Crown, Gift } from '@/components/ProfileIcons';
+import { X, Heart, MapPin, Check, ChevronDown, Search, Globe, Clock, Wifi, Briefcase, ShieldCheck, Building2, FileText, Plus, Crown, Gift, Pencil, Upload } from '@/components/ProfileIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
@@ -29,7 +34,7 @@ import { MAJOR_CITIES } from '@/constants/cities';
 import { mockUser } from '@/mocks/user';
 import { fetchJobsFromSupabase, fetchRemainingJobs, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
 import { computeMatchScores } from '@/lib/match-scoring';
-import { supabase } from '@/lib/supabase';
+import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { getSubscriptionStatus, decrementApplicationCount, getSubscriptionDisplayName } from '@/lib/subscription';
@@ -126,7 +131,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile, isOnboardingComplete } = useAuth();
+  const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile, isOnboardingComplete, refetchProfile } = useAuth();
   const colors = useColors();
   const isDark = colors.background === darkColors.background;
   const CARD_COLORS = [colors.surfaceElevated];
@@ -156,6 +161,10 @@ export default function HomeScreen() {
   const [resumeSignedUrls, setResumeSignedUrls] = useState<Record<string, string>>({});
   const [loadingResumes, setLoadingResumes] = useState(false);
   const resumeSheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const [resumePendingFile, setResumePendingFile] = useState<{ uri: string; mimeType: string; ext: string; originalName: string } | null>(null);
+  const [resumeRenameText, setResumeRenameText] = useState('');
+  const [resumeRenamingResume, setResumeRenamingResume] = useState<Resume | null>(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
   const [showOutOfSwipes, setShowOutOfSwipes] = useState(false);
   const [showFreeSwipes, setShowFreeSwipes] = useState(false);
   const outOfSwipesAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -392,6 +401,97 @@ export default function HomeScreen() {
     setResumes(prev => prev.map(r => ({ ...r, isActive: r.id === id })));
     await AsyncStorage.setItem('active_resume_id', id);
   }, []);
+
+  const getResumeLimit = useCallback(() => {
+    if (!subscriptionData) return 1;
+    switch (subscriptionData.subscription_type) {
+      case 'premium': return 5;
+      case 'pro': return 3;
+      default: return 1;
+    }
+  }, [subscriptionData]);
+
+  const handleSheetUpload = useCallback(async () => {
+    if (!supabaseUserId) return;
+    const limit = getResumeLimit();
+    if (resumes.length >= limit) {
+      const planType = subscriptionData?.subscription_type || 'free';
+      const msg = planType === 'free'
+        ? 'Free users can have 1 resume. Upgrade to Pro (3 resumes) or Premium (5 resumes).'
+        : planType === 'pro'
+        ? 'Pro users can have up to 3 resumes. Upgrade to Premium for 5 resumes.'
+        : 'You have reached the maximum of 5 resumes.';
+      Alert.alert('Resume Limit Reached', msg,
+        planType !== 'premium'
+          ? [{ text: 'Cancel', style: 'cancel' }, { text: 'Upgrade', onPress: () => { closeResumeSheet(); router.push('/premium' as any); } }]
+          : [{ text: 'OK' }]
+      );
+      return;
+    }
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      if (file.size && file.size > 5 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Please select a file smaller than 5MB.');
+        return;
+      }
+      const fileExt = file.name.split('.').pop() || 'pdf';
+      const originalName = file.name.replace(/\.[^/.]+$/, '');
+      setResumePendingFile({ uri: file.uri, mimeType: file.mimeType || 'application/pdf', ext: fileExt, originalName });
+      setResumeRenameText(originalName);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick resume.');
+    }
+  }, [supabaseUserId, resumes.length, getResumeLimit, subscriptionData, closeResumeSheet, router]);
+
+  const handleSheetConfirmUpload = useCallback(async () => {
+    if (!resumePendingFile || !supabaseUserId || !resumeRenameText.trim()) return;
+    setResumeUploading(true);
+    try {
+      const fileName = `${Date.now()}.${resumePendingFile.ext}`;
+      const filePath = `${supabaseUserId}/${fileName}`;
+      const formData = new FormData();
+      formData.append('file', { uri: resumePendingFile.uri, type: resumePendingFile.mimeType, name: fileName } as any);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { Alert.alert('Error', 'Authentication required.'); setResumeUploading(false); return; }
+      const uploadUrl = getStorageUploadUrl('resumes', filePath);
+      const response = await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+      if (!response.ok) { Alert.alert('Upload Failed', 'Could not upload resume.'); setResumeUploading(false); return; }
+      const customName = resumeRenameText.trim();
+      const namesMap = JSON.parse(await AsyncStorage.getItem('resume_custom_names') || '{}');
+      namesMap[fileName] = customName;
+      await AsyncStorage.setItem('resume_custom_names', JSON.stringify(namesMap));
+      const newResume: Resume = { id: `r${Date.now()}`, name: customName, fileName, uploadDate: new Date().toISOString(), isActive: resumes.length === 0 };
+      setResumes(prev => [...prev, newResume]);
+      setResumePendingFile(null);
+      setResumeRenameText('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload resume.');
+    } finally {
+      setResumeUploading(false);
+    }
+  }, [resumePendingFile, supabaseUserId, resumeRenameText, resumes.length]);
+
+  const handleSheetRename = useCallback((resume: Resume) => {
+    setResumeRenamingResume(resume);
+    setResumeRenameText(resume.name);
+  }, []);
+
+  const handleSheetConfirmRename = useCallback(async () => {
+    if (!resumeRenamingResume || !resumeRenameText.trim()) return;
+    const newName = resumeRenameText.trim();
+    const namesMap = JSON.parse(await AsyncStorage.getItem('resume_custom_names') || '{}');
+    namesMap[resumeRenamingResume.fileName] = newName;
+    await AsyncStorage.setItem('resume_custom_names', JSON.stringify(namesMap));
+    setResumes(prev => prev.map(r => r.id === resumeRenamingResume.id ? { ...r, name: newName } : r));
+    setResumeRenamingResume(null);
+    setResumeRenameText('');
+  }, [resumeRenamingResume, resumeRenameText]);
 
   const allJobs: Job[] = useMemo(() => {
     let jobsList: Job[] = [];
@@ -978,6 +1078,18 @@ export default function HomeScreen() {
     }).start(() => setShowOutOfSwipes(false));
   }, [outOfSwipesAnim]);
 
+  // Handle Android back button for custom overlay pop-ups
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const onBack = () => {
+      if (showResumeSheet) { closeResumeSheet(); return true; }
+      if (showOutOfSwipes) { closeOutOfSwipesSheet(); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [showResumeSheet, showOutOfSwipes, closeResumeSheet, closeOutOfSwipesSheet]);
+
   const forceSwipe = useCallback((direction: string) => {
     if (!isSwipeEnabled) {
       console.log('🚫 forceSwipe blocked - isSwipeEnabled:', isSwipeEnabled);
@@ -1535,7 +1647,7 @@ export default function HomeScreen() {
               <View style={styles.resumeSheetEmpty}>
                 <FileText size={36} color="#C7C7CC" />
                 <Text style={[styles.resumeSheetEmptyText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>No resumes uploaded yet</Text>
-                <Pressable style={styles.resumeSheetUploadBtn} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
+                <Pressable style={styles.resumeSheetUploadBtn} onPress={handleSheetUpload}>
                   <Text style={styles.resumeSheetUploadBtnText}>Upload Resume</Text>
                 </Pressable>
               </View>
@@ -1574,6 +1686,9 @@ export default function HomeScreen() {
                           <Text style={[styles.iosGroupedRowTitle, { color: isDark ? '#FFFFFF' : '#000000' }]} numberOfLines={1}>{resume.name}</Text>
                           <Text style={[styles.iosGroupedRowSubtitle, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>{new Date(resume.uploadDate).toLocaleDateString()}</Text>
                         </View>
+                        <Pressable onPress={() => handleSheetRename(resume)} hitSlop={8} style={{ padding: 4 }}>
+                          <Pencil size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                        </Pressable>
                         {resume.isActive && <Check size={20} color="#007AFF" strokeWidth={3} />}
                       </View>
                     </Pressable>
@@ -1583,17 +1698,10 @@ export default function HomeScreen() {
               </ScrollView>
             )}
             <View style={[styles.iosResumeActions, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
-              {(subscriptionData?.subscription_type === 'pro' || subscriptionData?.subscription_type === 'premium') ? (
-                <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
-                  <Plus size={15} color="#007AFF" strokeWidth={2.5} />
-                  <Text style={styles.iosResumeActionText}>Add New</Text>
-                </Pressable>
-              ) : (
-                <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => { closeResumeSheet(); router.push('/premium' as any); }}>
-                  <Crown size={15} color="#FFD700" />
-                  <Text style={[styles.iosResumeActionText, { color: '#FFD700' }]}>Upgrade</Text>
-                </Pressable>
-              )}
+              <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={handleSheetUpload}>
+                <Plus size={15} color="#007AFF" strokeWidth={2.5} />
+                <Text style={styles.iosResumeActionText}>Add New</Text>
+              </Pressable>
               <Pressable style={[styles.iosResumeActionBtn, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => { closeResumeSheet(); router.push('/resume-management' as any); }}>
                 <FileText size={15} color="#007AFF" />
                 <Text style={styles.iosResumeActionText}>Manage</Text>
@@ -1602,6 +1710,39 @@ export default function HomeScreen() {
           </Animated.View>
         </View>
       )}
+
+      <Modal visible={!!resumePendingFile || !!resumeRenamingResume} animationType="slide" transparent onRequestClose={() => { setResumePendingFile(null); setResumeRenamingResume(null); setResumeRenameText(''); }}>
+        <View style={styles.resumeRenameOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.resumeRenameContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.resumeRenameHeader}>
+              <Text style={[styles.resumeRenameTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>{resumeRenamingResume ? 'Rename Resume' : 'Name Your Resume'}</Text>
+              <Pressable onPress={() => { setResumePendingFile(null); setResumeRenamingResume(null); setResumeRenameText(''); }} hitSlop={8}>
+                <Text style={{ fontSize: 17, color: '#007AFF' }}>Cancel</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={[styles.resumeRenameInput, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF', color: isDark ? '#FFFFFF' : '#000000', borderColor: isDark ? '#3A3A3C' : '#C6C6C8' }]}
+              value={resumeRenameText}
+              onChangeText={setResumeRenameText}
+              autoFocus
+              selectTextOnFocus
+              placeholder="e.g. Software Engineer Resume"
+              placeholderTextColor="#8E8E93"
+            />
+            <Pressable
+              style={[styles.resumeRenameConfirmBtn, (!resumeRenameText.trim() || resumeUploading) && { opacity: 0.4 }]}
+              onPress={resumeRenamingResume ? handleSheetConfirmRename : handleSheetConfirmUpload}
+              disabled={!resumeRenameText.trim() || (resumeUploading && !resumeRenamingResume)}
+            >
+              {resumeUploading && !resumeRenamingResume ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.resumeRenameConfirmBtnText}>{resumeRenamingResume ? 'Rename' : 'Upload'}</Text>
+              )}
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
         <View style={styles.filterOverlay}>
@@ -1992,6 +2133,8 @@ export default function HomeScreen() {
         theme={isDark ? 'dark' : 'light'}
         colors={colors}
         referralStats={referralStats}
+        userId={supabaseUserId}
+        onSwipesUpdated={() => refetchProfile()}
         onShare={async () => {
           if (referralStats?.referralCode) {
             try {
@@ -2181,7 +2324,7 @@ const styles = StyleSheet.create({
   floatShadow: { width: 200, height: 16, borderRadius: 100, backgroundColor: '#000' },
   liveCounterText: { fontSize: 13, fontWeight: '400' as const, marginTop: 12, opacity: 0.7 },
   resumeSheetOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, justifyContent: 'flex-end' },
-  resumeSheetContainer: { borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '75%', paddingBottom: 34 },
+  resumeSheetContainer: { borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '75%', paddingBottom: Platform.OS === 'ios' ? 100 : 80 },
   resumeSheetHandle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: '#C7C7CC', alignSelf: 'center', marginTop: 8, marginBottom: 6 },
   resumeSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, paddingTop: 4, marginBottom: 4 },
   resumeSheetTitle: { fontSize: 17, fontWeight: '600' as const, textAlign: 'center', flex: 1 },
@@ -2204,4 +2347,11 @@ const styles = StyleSheet.create({
   iosResumeActions: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10 },
   iosResumeActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
   iosResumeActionText: { fontSize: 15, fontWeight: '500' as const, color: '#007AFF' },
+  resumeRenameOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  resumeRenameContent: { borderTopLeftRadius: 14, borderTopRightRadius: 14, padding: 20 },
+  resumeRenameHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  resumeRenameTitle: { fontSize: 17, fontWeight: '600' as const },
+  resumeRenameInput: { borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 17, borderWidth: StyleSheet.hairlineWidth, marginBottom: 16 },
+  resumeRenameConfirmBtn: { backgroundColor: '#007AFF', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  resumeRenameConfirmBtnText: { fontSize: 17, fontWeight: '600' as const, color: '#FFFFFF' },
 });

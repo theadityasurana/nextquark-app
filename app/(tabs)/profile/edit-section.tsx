@@ -22,6 +22,8 @@ import { supabase, getCompanyLogoStorageUrl } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+
 const JOB_TYPE_OPTIONS = [
   { key: 'Full-time', label: 'Full-time', icon: Briefcase, color: '#1E88E5' },
   { key: 'Part-time', label: 'Part-time', icon: Globe, color: '#7C4DFF' },
@@ -68,6 +70,7 @@ export default function EditSectionScreen() {
   const [skills, setSkills] = useState<string[]>(supabaseProfile?.skills || []);
   const [topSkills, setTopSkills] = useState<string[]>(supabaseProfile?.topSkills || []);
   const [skillQuery, setSkillQuery] = useState('');
+  const [activeSkillCat, setActiveSkillCat] = useState(0);
   // Preferences
   const [jobPrefs, setJobPrefs] = useState<string[]>(supabaseProfile?.jobPreferences || []);
   const [workModePrefs, setWorkModePrefs] = useState<string[]>(supabaseProfile?.workModePreferences || []);
@@ -305,6 +308,29 @@ export default function EditSectionScreen() {
           const bTop = topSkills.includes(b) ? 0 : 1;
           return aTop - bTop;
         });
+        const SKILL_CATEGORIES: { label: string; skills: string[] }[] = [
+          { label: '💻 Programming Languages', skills: suggestedSkills.slice(0, 45) },
+          { label: '🎨 Frontend', skills: suggestedSkills.slice(45, 94) },
+          { label: '⚙️ Backend', skills: suggestedSkills.slice(94, 120) },
+          { label: '📱 Mobile', skills: suggestedSkills.slice(120, 131) },
+          { label: '🗄️ Databases', skills: suggestedSkills.slice(131, 161) },
+          { label: '☁️ Cloud & Infrastructure', skills: suggestedSkills.slice(161, 190) },
+          { label: '🔧 DevOps & Tools', skills: suggestedSkills.slice(190, 230) },
+          { label: '🔀 Version Control', skills: suggestedSkills.slice(230, 236) },
+          { label: '🔌 APIs & Protocols', skills: suggestedSkills.slice(236, 258) },
+          { label: '🤖 Data & AI/ML', skills: suggestedSkills.slice(258, 311) },
+          { label: '📊 Data Analytics & BI', skills: suggestedSkills.slice(311, 336) },
+          { label: '🔒 Security', skills: suggestedSkills.slice(336, 362) },
+          { label: '🧪 Testing & QA', skills: suggestedSkills.slice(362, 385) },
+          { label: '🎯 Design & UX', skills: suggestedSkills.slice(385, 416) },
+          { label: '📋 Project Management', skills: suggestedSkills.slice(416, 443) },
+          { label: '📈 Marketing & Growth', skills: suggestedSkills.slice(443, 466) },
+          { label: '💼 Sales & CRM', skills: suggestedSkills.slice(466, 479) },
+          { label: '💰 Business & Finance', skills: suggestedSkills.slice(479, 497) },
+          { label: '⛓️ Blockchain & Web3', skills: suggestedSkills.slice(497, 512) },
+          { label: '🤝 Soft Skills', skills: suggestedSkills.slice(512, 532) },
+          { label: '🖥️ Other Technical', skills: suggestedSkills.slice(532) },
+        ];
         return (
           <>
             {skillQuery ? (
@@ -321,19 +347,50 @@ export default function EditSectionScreen() {
                 )}
               </View>
             ) : null}
-            <Text style={[s.label, { color: colors.textTertiary }]}>Tap to toggle top skill (max 5). Long-press to remove. {topSkills.length}/5</Text>
-            <View style={s.chipGrid}>
-              {sortedSkills.map((sk, idx) => {
-                const isTop = topSkills.includes(sk);
-                const originalIdx = skills.indexOf(sk);
+            {skills.length > 0 && (
+              <>
+                <Text style={[s.label, { color: colors.textTertiary }]}>⭐ Your Skills — Tap to toggle top skill (max 5). Long-press to remove. {topSkills.length}/5</Text>
+                <View style={s.chipGrid}>
+                  {sortedSkills.map((sk) => {
+                    const isTop = topSkills.includes(sk);
+                    const originalIdx = skills.indexOf(sk);
+                    return (
+                      <Pressable key={sk} style={[s.chip, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary, borderColor: isTop ? '#D4A017' : colors.secondary, borderWidth: isTop ? 2 : 1 }]} onPress={() => toggleTopSkill(sk)} onLongPress={() => removeSkill(originalIdx)}>
+                        {isTop && <Star size={12} color="#D4A017" />}
+                        <Text style={[s.chipText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{sk}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+            <View style={[s.skillDivider, { borderColor: colors.borderLight }]} />
+            <Text style={[s.label, { color: colors.textTertiary, marginBottom: 8 }]}>Browse by category — Tap to add</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, marginBottom: 12 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+              {SKILL_CATEGORIES.map((cat, idx) => {
+                const active = activeSkillCat === idx;
                 return (
-                  <Pressable key={sk} style={[s.chip, { backgroundColor: isTop ? (theme === 'dark' ? '#3A2F1B' : '#FFF8E1') : colors.secondary, borderColor: isTop ? '#D4A017' : colors.secondary, borderWidth: isTop ? 2 : 1 }]} onPress={() => toggleTopSkill(sk)} onLongPress={() => removeSkill(originalIdx)}>
-                    {isTop && <Star size={12} color="#D4A017" />}
-                    <Text style={[s.chipText, { color: isTop ? '#8B6914' : colors.textInverse }]}>{sk}</Text>
+                  <Pressable key={cat.label} style={[s.tabPill, active && { backgroundColor: colors.secondary, borderColor: colors.secondary }]} onPress={() => setActiveSkillCat(idx)}>
+                    <Text style={[s.tabPillText, { color: active ? colors.surface : colors.textPrimary }]}>{cat.label}</Text>
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
+            {(() => {
+              const available = SKILL_CATEGORIES[activeSkillCat].skills.filter(sk => !skills.includes(sk));
+              return available.length > 0 ? (
+                <View style={s.chipGrid}>
+                  {available.map(sk => (
+                    <Pressable key={sk} style={[s.chip, { backgroundColor: colors.surface, borderColor: colors.borderLight }]} onPress={() => { animateChip(); setSkills(prev => [...prev, sk]); }}>
+                      <Plus size={10} color={colors.textTertiary} />
+                      <Text style={[s.chipText, { color: colors.textPrimary }]}>{sk}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[s.label, { color: colors.textTertiary, textAlign: 'center', marginTop: 12 }]}>All skills in this category added ✓</Text>
+              );
+            })()}
           </>
         );
       case 'jobtypeprefs':
@@ -540,7 +597,7 @@ export default function EditSectionScreen() {
             );
           }}
         />
-        <View style={[s.footer, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[s.footer, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT }]}>
           <Pressable style={[s.saveBtn, { backgroundColor: colors.secondary }]} onPress={() => setActiveRoleCategory(null)}>
             <Text style={[s.saveBtnText, { color: colors.surface }]}>Done with {cat?.label}</Text>
           </Pressable>
@@ -624,7 +681,7 @@ export default function EditSectionScreen() {
           onSaveCurrent={handleSaveOnly}
         />
       ) : (
-        <View style={[s.footer, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[s.footer, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT }]}>
           <Pressable style={[s.saveBtn, { backgroundColor: colors.secondary }, !hasChanges && { opacity: 0.4 }]} onPress={handleSave} disabled={!hasChanges}>
             <Check size={18} color={colors.surface} />
             <Text style={[s.saveBtnText, { color: colors.surface }]}>Save</Text>
@@ -681,5 +738,6 @@ const s = StyleSheet.create({
   catLabel: { fontSize: 14, fontWeight: '600' },
   roleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 14, borderBottomWidth: 1, borderRadius: 10, marginBottom: 2 },
   roleRowText: { fontSize: 14, fontWeight: '500' },
+  skillDivider: { borderBottomWidth: 1, marginVertical: 16 },
 });
 

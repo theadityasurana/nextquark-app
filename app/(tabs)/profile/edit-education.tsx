@@ -12,6 +12,8 @@ import { Education } from '@/types';
 import { universities } from '@/constants/universities';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+
 export default function EditEducationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -146,7 +148,7 @@ export default function EditEducationScreen() {
             <View style={{ height: 70 }} />
           </ScrollView>
         </KeyboardAvoidingView>
-        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
           <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
             <Check size={16} color={colors.surface} /><Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
           </Pressable>
@@ -208,13 +210,20 @@ export default function EditEducationScreen() {
           </View>
         ))}
       </ScrollView>
-      {isWizard && (
+      {isWizard ? (
         <WizardFooter
           wizardIndex={wizardIndex}
           wizardTotal={wizardTotal}
           incompleteSteps={incompleteSteps}
           onSaveCurrent={handleSaveOnly}
         />
+      ) : (
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSaveAll}>
+            <Check size={16} color={colors.surface} />
+            <Text style={[styles.saveBtnText, { color: colors.surface }]}>Save</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );

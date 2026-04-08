@@ -97,6 +97,25 @@ import { universities } from '@/constants/universities';
 import { SkeletonProfile } from '@/components/Skeleton';
 import FreeSwipesModal from '@/components/FreeSwipesModal';
 
+function SectionSkeletonOverlay({ visible, opacity, colors }: { visible: boolean; opacity: Animated.Value; colors: any }) {
+  if (!visible) return null;
+  return (
+    <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, backgroundColor: colors.background, opacity, borderRadius: 16, padding: 16, gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: colors.borderLight }} />
+        <View style={{ width: '45%', height: 14, borderRadius: 7, backgroundColor: colors.borderLight }} />
+      </View>
+      <View style={{ width: '85%', height: 10, borderRadius: 5, backgroundColor: colors.borderLight, opacity: 0.7 }} />
+      <View style={{ width: '60%', height: 10, borderRadius: 5, backgroundColor: colors.borderLight, opacity: 0.5 }} />
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+        <View style={{ width: 70, height: 24, borderRadius: 8, backgroundColor: colors.borderLight, opacity: 0.4 }} />
+        <View style={{ width: 55, height: 24, borderRadius: 8, backgroundColor: colors.borderLight, opacity: 0.4 }} />
+        <View style={{ width: 80, height: 24, borderRadius: 8, backgroundColor: colors.borderLight, opacity: 0.4 }} />
+      </View>
+    </Animated.View>
+  );
+}
+
 type ModalType = 'skill' | 'experience' | 'education' | 'bio' | 'headline' | 'location' | 'certification' | 'avatar' | 'achievement' | 'contact' | 'coverletter' | 'jobrequirements' | 'favoritecompanies' | 'referral' | 'veteranstatus' | 'disabilitystatus' | 'ethnicity' | 'race' | 'desiredroles' | 'preferredcities' | 'workdaycredentials' | null;
 
 const JOB_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
@@ -196,7 +215,16 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      refetchProfile();
+      setIsRefreshingSection(true);
+      skeletonOpacity.setValue(0);
+      Animated.timing(skeletonOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+      refetchProfile().finally(() => {
+        setTimeout(() => {
+          Animated.timing(skeletonOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+            setIsRefreshingSection(false);
+          });
+        }, 200);
+      });
     }, [refetchProfile])
   );
 
@@ -361,6 +389,8 @@ export default function ProfileScreen() {
 
   const [profileTab, setProfileTab] = useState<'personal' | 'preferences' | 'coverletter' | 'projects' | 'documents' | 'education' | 'workexperience'>('personal');
   const [docSubTab, setDocSubTab] = useState<'resumes' | 'transcript' | 'others'>('resumes');
+  const [isRefreshingSection, setIsRefreshingSection] = useState(false);
+  const skeletonOpacity = useRef(new Animated.Value(0)).current;
 
   const [showTabArrow, setShowTabArrow] = useState(true);
 
@@ -1432,6 +1462,8 @@ const MAJOR_CITIES = [
           </View>
         )}
 
+        <View style={{ position: 'relative' }}>
+        <SectionSkeletonOverlay visible={isRefreshingSection} opacity={skeletonOpacity} colors={colors} />
         {profileTab === 'preferences' && (
         <Pressable style={[styles.section, styles.darkSection, { backgroundColor: theme === 'dark' ? colors.surfaceElevated : '#111111', borderLeftColor: '#7C4DFF60' }]} onPress={() => router.push('/(tabs)/profile/edit-experience-level' as any)}>
           <View style={styles.sectionHeader}>
@@ -2103,6 +2135,7 @@ const MAJOR_CITIES = [
         </Pressable>
         )}
 
+        </View>
         <View style={{ height: 40 }} />
       </AnimatedHeaderScrollView>
 

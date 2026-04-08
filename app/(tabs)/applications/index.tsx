@@ -257,12 +257,12 @@ function ApplicationStreakChart({ data, colors }: { data: number[]; colors: any 
           </React.Fragment>
         );
       })}
-      <Polyline points={points.join(' ')} fill="none" stroke={colors.accent} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <Polyline points={points.join(' ')} fill="none" stroke="#EF4444" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       {data.map((v, i) => {
         if (v === 0) return null;
         const x = PX + (i / (data.length - 1)) * (W - PX * 2);
         const y = PY + (1 - v / max) * (H - PY * 2);
-        return <Circle key={i} cx={x} cy={y} r={2.5} fill={colors.accent} />;
+        return <Circle key={i} cx={x} cy={y} r={2.5} fill="#EF4444" />;
       })}
     </Svg>
   );

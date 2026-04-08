@@ -10,6 +10,8 @@ import { lightColors, darkColors } from '@/constants/colors';
 import { Achievement } from '@/types';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+
 export default function EditAchievementsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -114,13 +116,20 @@ export default function EditAchievementsScreen() {
           </Pressable>
         ))}
       </ScrollView>
-      {isWizard && (
+      {isWizard ? (
         <WizardFooter
           wizardIndex={wizardIndex}
           wizardTotal={wizardTotal}
           incompleteSteps={incompleteSteps}
           onSaveCurrent={handleSaveOnly}
         />
+      ) : (
+        <View style={[s.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[s.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSaveAll}>
+            <Check size={16} color={colors.surface} />
+            <Text style={[s.saveBtnText, { color: colors.surface }]}>Save</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -134,7 +143,8 @@ const s = StyleSheet.create({
   heroBanner: { width: '100%', height: 90, borderRadius: 12, marginTop: 8, marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' }, headerTitle: { fontSize: 17, fontWeight: '700' },
-  listContent: { padding: 16, gap: 10 }, formContent: { padding: 16, paddingBottom: 40 }, emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
+  listContent: { padding: 16, gap: 10 }, formContent: { padding: 16, paddingBottom: 40 },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 }, emptyText: { fontSize: 14, textAlign: 'center', marginTop: 40 },
   itemCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, gap: 12 },
   itemIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   itemTitle: { fontSize: 15, fontWeight: '700' }, itemSub: { fontSize: 13, marginTop: 2 }, itemDate: { fontSize: 12, marginTop: 2 },

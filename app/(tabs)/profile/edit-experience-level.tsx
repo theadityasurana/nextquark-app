@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, Briefcase, GraduationCap, Rocket, TrendingUp, Award, Crown } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
+
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 
@@ -69,7 +71,7 @@ export default function EditExperienceLevelScreen() {
         })}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT }]}>
         <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }, !hasChanges && { opacity: 0.4 }]} onPress={handleSave} disabled={!hasChanges}>
           <Check size={18} color={colors.surface} />
           <Text style={[styles.saveBtnText, { color: colors.surface }]}>Save</Text>

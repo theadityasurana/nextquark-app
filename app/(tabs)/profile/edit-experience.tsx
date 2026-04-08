@@ -11,6 +11,7 @@ import Colors from '@/constants/colors';
 import { WorkExperience } from '@/types';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
 const EXP_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'];
 const EXP_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
 
@@ -189,7 +190,7 @@ export default function EditExperienceScreen() {
             <View style={{ height: 70 }} />
           </ScrollView>
         </KeyboardAvoidingView>
-        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
           <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
             <Check size={16} color={colors.surface} />
             <Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
@@ -254,13 +255,20 @@ export default function EditExperienceScreen() {
           </View>
         ))}
       </ScrollView>
-      {isWizard && (
+      {isWizard ? (
         <WizardFooter
           wizardIndex={wizardIndex}
           wizardTotal={wizardTotal}
           incompleteSteps={incompleteSteps}
           onSaveCurrent={handleSaveOnly}
         />
+      ) : (
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+          <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSaveAll}>
+            <Check size={16} color={colors.surface} />
+            <Text style={[styles.saveBtnText, { color: colors.surface }]}>Save</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );

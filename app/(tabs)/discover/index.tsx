@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl, TextInput, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -574,7 +574,7 @@ export default function DiscoverScreen() {
               router={router}
             />
           )}
-          <View style={{ height: 0 }} />
+          <View style={{ height: Platform.OS === 'ios' ? 88 : 64 }} />
         </View>
         </AnimatedHeaderScrollView>
 

@@ -8,6 +8,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import { Project } from '@/types';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+
 export default function EditProjectsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -120,7 +122,7 @@ export default function EditProjectsScreen() {
             <View style={{ height: 70 }} />
           </ScrollView>
         </KeyboardAvoidingView>
-        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
           <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSave}>
             <Check size={16} color={colors.surface} />
             <Text style={[styles.saveBtnText, { color: colors.surface }]}>{editing ? 'Update' : 'Add'}</Text>
@@ -180,6 +182,12 @@ export default function EditProjectsScreen() {
           </Pressable>
         ))}
       </ScrollView>
+      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+        <Pressable style={[styles.saveBtn, { backgroundColor: colors.secondary }]} onPress={handleSaveAll}>
+          <Check size={16} color={colors.surface} />
+          <Text style={[styles.saveBtnText, { color: colors.surface }]}>Save</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

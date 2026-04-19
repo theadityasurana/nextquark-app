@@ -49,6 +49,20 @@ import { Share as RNShare, Clipboard } from 'react-native';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 const WELCOME_NOTIF_SENT_KEY = 'nextquark_welcome_notif_sent';
+const JOB_LEVEL_FILTER_MANUAL_KEY = 'nextquark_job_level_filter_manual';
+
+function getDefaultJobLevelsFromExperience(experienceLevel?: string): string[] {
+  if (!experienceLevel) return [];
+  switch (experienceLevel) {
+    case 'internship': return ['Internship'];
+    case 'entry_level': return ['Entry Level'];
+    case 'junior': return ['Mid Level', 'Senior Level'];
+    case 'mid': return ['Mid Level', 'Senior Level'];
+    case 'senior': return ['Senior Level', 'Lead', 'Principal'];
+    case 'expert': return ['Director', 'VP', 'C-Level'];
+    default: return [];
+  }
+}
 
 // CARD_COLORS moved inside component to support dark mode
 
@@ -77,8 +91,7 @@ const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 const JOB_TYPES = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODES = ['Remote', 'Onsite', 'Hybrid'];
-const JOB_LEVELS = ['Entry Level', 'Mid Level', 'Senior Level', 'Lead', 'Principal', 'Director', 'VP', 'C-Level'];
-const JOB_REQUIREMENTS = ['H1B Sponsorship', 'Security Clearance', 'No Degree Required', 'Remote Only', 'Relocation Assistance'];
+const JOB_LEVELS = ['Internship', 'Entry Level', 'Mid Level', 'Senior Level', 'Lead', 'Principal', 'Director', 'VP', 'C-Level'];
 const POSTED_OPTIONS = [
   { label: 'Last 24 hours', value: '1d' },
   { label: 'Last 2 days', value: '2d' },
@@ -102,7 +115,6 @@ interface Filters {
   searchKeyword: string;
   searchTags: string[];
   jobLevels: string[];
-  jobRequirements: string[];
 }
 
 const DEFAULT_FILTERS: Filters = {
@@ -116,7 +128,6 @@ const DEFAULT_FILTERS: Filters = {
   searchKeyword: '',
   searchTags: [],
   jobLevels: [],
-  jobRequirements: [],
 };
 
 function getGreeting(): string {
@@ -227,6 +238,21 @@ export default function HomeScreen() {
     });
   }, [isOnboardingComplete, userName]);
 
+  // Auto-apply Job Level filter based on onboarding experience level (only if user hasn't manually changed it)
+  const autoJobLevelAppliedRef = useRef(false);
+  useEffect(() => {
+    if (autoJobLevelAppliedRef.current || !userProfile?.experienceLevel) return;
+    autoJobLevelAppliedRef.current = true;
+    AsyncStorage.getItem(JOB_LEVEL_FILTER_MANUAL_KEY).then(manual => {
+      if (manual === 'true') return;
+      const defaultLevels = getDefaultJobLevelsFromExperience(userProfile.experienceLevel);
+      if (defaultLevels.length > 0) {
+        setFilters(prev => ({ ...prev, jobLevels: defaultLevels }));
+        setTempFilters(prev => ({ ...prev, jobLevels: defaultLevels }));
+      }
+    });
+  }, [userProfile?.experienceLevel]);
+
   // Load daily swipes on mount and on focus
   const refreshDailySwipes = useCallback(async () => {
     if (!supabaseUserId) return;
@@ -285,7 +311,6 @@ export default function HomeScreen() {
         workModes: filters.workModes.length > 0 ? filters.workModes : undefined,
         jobTypes: filters.jobTypes.length > 0 ? filters.jobTypes : undefined,
         jobLevels: filters.jobLevels.length > 0 ? filters.jobLevels : undefined,
-        jobRequirements: filters.jobRequirements.length > 0 ? filters.jobRequirements : undefined,
         postedWithin: filters.postedWithin.length > 0 ? filters.postedWithin : undefined,
       },
       desiredRoles: userProfile?.desiredRoles || undefined,
@@ -672,36 +697,40 @@ export default function HomeScreen() {
 
 
 
-  // Rebuild deck when feed mode, filters, or search tags change.
+  // Rebuild deck when feed mode, filters, search tags, or desired roles change.
   // Re-fetch all tabs with new filters, reset deck position.
   const prevFeedModeRef = useRef(feedMode);
   const prevFiltersRef = useRef(filters);
   const prevActiveSearchTagsRef = useRef(activeSearchTags);
+  const prevDesiredRolesRef = useRef(userProfile?.desiredRoles);
   useEffect(() => {
     const feedModeChanged = prevFeedModeRef.current !== feedMode;
     const filtersChanged = prevFiltersRef.current !== filters;
     const searchTagsChanged = prevActiveSearchTagsRef.current !== activeSearchTags;
+    const desiredRolesChanged = JSON.stringify(prevDesiredRolesRef.current) !== JSON.stringify(userProfile?.desiredRoles);
     
-    if (feedModeChanged || filtersChanged || searchTagsChanged) {
+    if (feedModeChanged || filtersChanged || searchTagsChanged || desiredRolesChanged) {
       prevFeedModeRef.current = feedMode;
       prevFiltersRef.current = filters;
       prevActiveSearchTagsRef.current = activeSearchTags;
+      prevDesiredRolesRef.current = userProfile?.desiredRoles;
       setDeckSwipedSnapshot(new Set(swipedJobIds));
       setCurrentIndex(0);
       currentIndexRef.current = 0;
       positionRef.setValue({ x: 0, y: 0 });
       setCardKey(prev => prev + 1);
 
-      // Re-fetch all tabs with updated filters/search
-      if (filtersChanged || searchTagsChanged) {
+      // Re-fetch all tabs with updated filters/search/desired roles
+      if (filtersChanged || searchTagsChanged || desiredRolesChanged) {
         const tabs: TabKey[] = ['discover', 'india', 'foryou', 'remote'];
+        setTabJobs({ discover: [], india: [], foryou: [], remote: [] });
         setTabOffsets({ discover: 0, india: 0, foryou: 0, remote: 0 });
         setTabHasMore({ discover: true, india: true, foryou: true, remote: true });
         autoRefetchTriggeredRef.current = { discover: false, india: false, foryou: false, remote: false };
         tabs.forEach(tab => doFetchBatch(tab, 0, false));
       }
     }
-  }, [feedMode, filters, activeSearchTags, positionRef, swipedJobIds, doFetchBatch]);
+  }, [feedMode, filters, activeSearchTags, userProfile?.desiredRoles, positionRef, swipedJobIds, doFetchBatch]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -1088,13 +1117,6 @@ export default function HomeScreen() {
     }));
   }, []);
 
-  const toggleJobRequirement = useCallback((req: string) => {
-    setTempFilters((prev) => ({
-      ...prev,
-      jobRequirements: prev.jobRequirements.includes(req) ? prev.jobRequirements.filter((r) => r !== req) : [...prev.jobRequirements, req],
-    }));
-  }, []);
-
   const handleOpenFilters = useCallback(() => {
     setTempFilters({ ...filters });
     setShowFilters(true);
@@ -1109,6 +1131,7 @@ export default function HomeScreen() {
   const handleApplyFilters = useCallback(() => {
     setFilters({ ...tempFilters });
     setShowFilters(false);
+    AsyncStorage.setItem(JOB_LEVEL_FILTER_MANUAL_KEY, 'true').catch(() => {});
     console.log('Filters applied:', tempFilters);
   }, [tempFilters]);
 
@@ -1116,6 +1139,7 @@ export default function HomeScreen() {
     setTempFilters({ ...DEFAULT_FILTERS });
     setFilters({ ...DEFAULT_FILTERS });
     setShowFilters(false);
+    AsyncStorage.setItem(JOB_LEVEL_FILTER_MANUAL_KEY, 'true').catch(() => {});
   }, []);
 
   const clearSearchTags = useCallback(async () => {
@@ -1134,7 +1158,6 @@ export default function HomeScreen() {
     filters.searchKeyword.trim().length > 0,
     filters.searchTags.length > 0,
     filters.jobLevels.length > 0,
-    filters.jobRequirements.length > 0,
     activeSearchTags.length > 0,
   ].filter(Boolean).length;
 
@@ -1328,6 +1351,19 @@ export default function HomeScreen() {
                 <Gift size={28} color="#EF4444" />
               </Pressable>
             </View>
+          )}
+          {activeFilterCount > 0 && (
+            <Pressable
+              style={styles.clearFiltersBtn}
+              onPress={() => {
+                setFilters({ ...DEFAULT_FILTERS });
+                setTempFilters({ ...DEFAULT_FILTERS });
+                AsyncStorage.setItem(JOB_LEVEL_FILTER_MANUAL_KEY, 'true').catch(() => {});
+              }}
+            >
+              <X size={12} color={isDark ? '#FFFFFF' : '#000000'} />
+              <Text style={[styles.clearFiltersBtnText, { color: isDark ? '#FFFFFF' : '#000000' }]}>Clear Filters ({activeFilterCount})</Text>
+            </Pressable>
           )}
         </View>
       </View>
@@ -1755,21 +1791,6 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB REQUIREMENTS</Text>
-              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
-                <View style={styles.chipGrid}>
-                  {JOB_REQUIREMENTS.map((req) => {
-                    const selected = tempFilters.jobRequirements.includes(req);
-                    return (
-                      <Pressable key={req} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobRequirement(req)}>
-                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{req}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
 
             <View style={styles.iosFilterSection}>
               <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>COMPANY</Text>
@@ -2097,6 +2118,8 @@ const styles = StyleSheet.create({
   headerButton: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' as const },
   filterBadge: { position: 'absolute' as const, top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   filterBadgeText: { fontSize: 10, fontWeight: '700' as const, color: "#000" },
+  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(128,128,128,0.3)', marginTop: 6 },
+  clearFiltersBtnText: { fontSize: 12, fontWeight: '600' as const },
   aiButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
   feedToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
   feedToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },

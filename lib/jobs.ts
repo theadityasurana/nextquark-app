@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Job, UserProfile } from '@/types';
+import { getRoleSynonyms, expandRolesWithSynonyms } from '@/constants/role-synonyms';
 
 export interface SupabaseJob {
   id: string;
@@ -244,7 +245,6 @@ export interface BatchFetchParams {
     workModes?: string[];
     jobTypes?: string[];
     jobLevels?: string[];
-    jobRequirements?: string[];
     postedWithin?: string[];
   };
   desiredRoles?: string[];
@@ -280,6 +280,16 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
       query = query.ilike('location', '%india%');
     }
 
+    // Desired roles — server-side filter with synonym expansion (applies to ALL tabs)
+    if (desiredRoles && desiredRoles.length > 0) {
+      const expandedKeywords = expandRolesWithSynonyms(desiredRoles);
+      const orClauses = expandedKeywords.map(kw => {
+        const escaped = kw.replace(/'/g, "''");
+        return `title.ilike.%${escaped}%`;
+      }).join(',');
+      query = query.or(orClauses);
+    }
+
     // Search tags — filter by company name or title
     if (searchTags && searchTags.length > 0) {
       const orClauses = searchTags.map(tag => {
@@ -295,7 +305,10 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
     }
 
     if (filters?.roles && filters.roles.length > 0) {
-      const orClauses = filters.roles.map(r => `title.ilike.%${r.replace(/'/g, "''")}%`).join(',');
+      const orClauses = filters.roles.flatMap(r => {
+        const synonyms = getRoleSynonyms(r);
+        return synonyms.map(s => `title.ilike.%${s.replace(/'/g, "''")}%`);
+      }).join(',');
       query = query.or(orClauses);
     }
 
@@ -314,6 +327,142 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
       query = query.or(orClauses);
     }
 
+    if (filters?.jobLevels && filters.jobLevels.length > 0) {
+      const levelKeywords: Record<string, string[]> = {
+        'Internship': [
+          'intern', 'internship', 'summer intern', 'winter intern', 'spring intern',
+          'co-op', 'coop', 'placement', 'industrial training', 'trainee',
+          'apprentice', 'apprenticeship', 'student', 'undergraduate',
+          'summer associate', 'summer analyst', 'intern program',
+          'internship program', 'paid intern', 'research intern',
+          'engineering intern', 'design intern', 'marketing intern',
+          'data intern', 'product intern', 'software intern',
+          'business intern', 'finance intern', 'hr intern',
+          'operations intern', 'sales intern', 'content intern',
+          'ux intern', 'ui intern', 'qa intern', 'test intern',
+          'devops intern', 'cloud intern', 'ml intern', 'ai intern',
+          'analytics intern', 'consulting intern', 'strategy intern',
+        ],
+        'Entry Level': [
+          'entry level', 'entry-level', 'fresher', 'fresh graduate', 'early career',
+          'graduate', 'junior', '0-2 years', '0-1 years', 'new grad',
+          'recent graduate', 'campus hire', 'graduate program', 'graduate scheme',
+          'associate', 'analyst', 'trainee', 'junior developer',
+          'junior engineer', 'junior designer', 'junior analyst',
+          'level 1', 'level i', 'l1', 'tier 1', 'beginner',
+          'no experience required', 'minimal experience', 'fresh talent',
+          'freshers welcome', 'college graduate', 'university graduate',
+          'new graduate', 'grad program', 'early professional',
+          'starting career', 'first job', 'career starter',
+          'junior associate', 'graduate trainee', 'management trainee',
+          'graduate engineer', 'graduate analyst', 'sde 1', 'sde i',
+          'software engineer i', 'engineer i', 'developer i',
+          'less than 2 years', '1 year experience', '1+ years',
+          'entry position', 'starter role', 'foundational role',
+        ],
+        'Mid Level': [
+          'mid level', 'mid-level', 'intermediate', '3-5 years', '2-5 years', '3+ years',
+          '4+ years', '2-4 years', '3-4 years', '4-6 years', 'mid-senior',
+          'sde 2', 'sde ii', 'software engineer ii', 'engineer ii', 'developer ii',
+          'level 2', 'level ii', 'l2', 'l3', 'tier 2',
+          'experienced professional', 'professional', 'specialist',
+          'individual contributor', 'ic2', 'ic3', 'mid career',
+          'mid-career', '2+ years', 'some experience',
+          'moderate experience', 'established professional',
+          'career growth', 'growing professional', 'solid experience',
+          'proven experience', 'demonstrated experience',
+          'working knowledge', 'hands-on experience',
+          'competent', 'proficient', 'skilled professional',
+          'experienced developer', 'experienced engineer',
+          'experienced designer', 'experienced analyst',
+        ],
+        'Senior Level': [
+          'senior', 'sr.', '5+ years', '5-8 years', '6+ years', 'experienced',
+          '7+ years', '8+ years', '6-8 years', '5-7 years', '7-10 years',
+          'sr ', 'senior engineer', 'senior developer', 'senior designer',
+          'senior analyst', 'senior consultant', 'senior specialist',
+          'sde 3', 'sde iii', 'software engineer iii', 'engineer iii',
+          'level 3', 'level iii', 'l4', 'l5', 'tier 3',
+          'ic4', 'ic5', 'advanced', 'expert level',
+          'highly experienced', 'seasoned', 'veteran',
+          'deep expertise', 'extensive experience', 'significant experience',
+          'strong background', 'proven track record', 'subject matter expert',
+          'domain expert', 'technical expert', 'senior individual contributor',
+          'senior ic', 'senior member', 'senior professional',
+          'accomplished', 'mature professional',
+        ],
+        'Lead': [
+          'lead', 'team lead', 'tech lead', 'staff',
+          'engineering lead', 'design lead', 'product lead', 'project lead',
+          'technical lead', 'development lead', 'frontend lead', 'backend lead',
+          'fullstack lead', 'data lead', 'analytics lead', 'qa lead',
+          'test lead', 'devops lead', 'infrastructure lead', 'platform lead',
+          'staff engineer', 'staff developer', 'staff designer',
+          'l6', 'ic6', 'level 6', 'senior staff',
+          'team leader', 'squad lead', 'pod lead', 'chapter lead',
+          'group lead', 'module lead', 'feature lead',
+          'people lead', 'delivery lead', 'scrum master',
+          'engineering manager', 'dev manager', 'technical manager',
+          '8+ years', '9+ years', '10+ years', '8-12 years',
+        ],
+        'Principal': [
+          'principal', 'staff engineer', 'distinguished',
+          'principal engineer', 'principal developer', 'principal architect',
+          'principal designer', 'principal consultant', 'principal scientist',
+          'distinguished engineer', 'distinguished architect',
+          'fellow', 'technical fellow', 'senior staff engineer',
+          'l7', 'l8', 'ic7', 'ic8', 'level 7', 'level 8',
+          'architect', 'chief architect', 'solutions architect',
+          'enterprise architect', 'system architect', 'software architect',
+          'thought leader', 'industry expert', 'domain authority',
+          '12+ years', '15+ years', '10-15 years',
+          'senior principal', 'advisory', 'senior advisory',
+        ],
+        'Director': [
+          'director', 'senior director', 'associate director',
+          'managing director', 'executive director', 'group director',
+          'regional director', 'divisional director', 'creative director',
+          'technical director', 'engineering director', 'product director',
+          'design director', 'operations director', 'program director',
+          'director of engineering', 'director of product', 'director of design',
+          'director of operations', 'director of technology', 'director of data',
+          'head of engineering', 'head of product', 'head of design',
+          'head of technology', 'head of data', 'head of',
+          'department head', 'division head',
+        ],
+        'VP': [
+          'vice president', 'vp', 'svp', 'evp', 'avp',
+          'senior vice president', 'executive vice president',
+          'assistant vice president', 'associate vice president',
+          'vp of engineering', 'vp of product', 'vp of design',
+          'vp of technology', 'vp of operations', 'vp of sales',
+          'vp of marketing', 'vp of data', 'vp of growth',
+          'vice president of engineering', 'vice president of product',
+          'vice president of technology', 'vice president of operations',
+        ],
+        'C-Level': [
+          'cto', 'ceo', 'cfo', 'coo', 'cmo', 'cpo', 'cio', 'cso', 'cdo',
+          'chief', 'c-level', 'c-suite', 'csuite',
+          'chief technology officer', 'chief executive officer',
+          'chief financial officer', 'chief operating officer',
+          'chief marketing officer', 'chief product officer',
+          'chief information officer', 'chief strategy officer',
+          'chief data officer', 'chief design officer',
+          'chief people officer', 'chief revenue officer',
+          'chief growth officer', 'chief digital officer',
+          'co-founder', 'cofounder', 'founder',
+          'president', 'managing partner', 'general manager',
+          'executive', 'senior executive', 'top executive',
+        ],
+      };
+      const allKeywords = filters.jobLevels.flatMap(level => levelKeywords[level] || [level.toLowerCase()]);
+      const orClauses = allKeywords.map(kw => {
+        const escaped = kw.replace(/'/g, "''");
+        return `title.ilike.%${escaped}%,description.ilike.%${escaped}%`;
+      }).join(',');
+      query = query.or(orClauses);
+    }
+
     if (filters?.postedWithin && filters.postedWithin.length > 0) {
       const maxMs = Math.max(...filters.postedWithin.map(range => {
         switch (range) {
@@ -329,8 +478,8 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
       query = query.gte('created_at', cutoff);
     }
 
-    // Over-fetch since we filter client-side by desired roles
-    const fetchLimit = (desiredRoles && desiredRoles.length > 0) ? limit * 1.5 : limit;
+    // Fetch exact limit since desired roles are now filtered server-side
+    const fetchLimit = limit;
     query = query.range(offset, offset + fetchLimit - 1);
 
     const { data, error } = await query;
@@ -346,19 +495,7 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
 
     console.log(`Batch fetch (${tab}, offset=${offset}): ${serverRowCount} jobs from DB, serverHadMore=${serverHadMore}`);
 
-    // Filter client-side by desired roles then trim to requested limit
     let rows = data as SupabaseJob[];
-    if (desiredRoles && desiredRoles.length > 0) {
-      const filtered = rows.filter(row => {
-        const title = (row.title || row.job_title || '').toLowerCase();
-        const desc = (row.description || '').toLowerCase();
-        return desiredRoles.some(role => {
-          const r = role.toLowerCase();
-          return title.includes(r) || desc.includes(r);
-        });
-      });
-      rows = filtered.length >= Math.min(limit, 3) ? filtered.slice(0, limit) : rows.slice(0, limit);
-    }
 
     const uniqueCompanies = [...new Set(rows.map(j => j.company_name).filter(Boolean))];
     const companyDataMap = await buildCompanyDataMap(uniqueCompanies);

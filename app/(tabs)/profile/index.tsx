@@ -2178,7 +2178,7 @@ const MAJOR_CITIES = [
         )}
 
         </View>
-        <View style={{ height: 40 }} />
+        <View style={{ height: 56 + insets.bottom }} />
       </AnimatedHeaderScrollView>
 
       <Modal visible={activeModal === 'skill'} animationType="slide" transparent onRequestClose={closeModal}>

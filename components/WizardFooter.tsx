@@ -23,6 +23,7 @@ interface WizardFooterProps {
   wizardTotal: number;
   incompleteSteps: WizardStep[];
   onSaveCurrent: () => Promise<void> | void;
+  tabBarHeight?: number;
 }
 
 export function getIncompleteSteps(profile: any): WizardStep[] {
@@ -58,7 +59,7 @@ function navigateToWizardStep(router: any, steps: WizardStep[], index: number) {
   router.replace({ pathname: STEP_ROUTES[step] as any, params: buildWizardParams(steps, index, step) });
 }
 
-export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps, onSaveCurrent }: WizardFooterProps) {
+export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps, onSaveCurrent, tabBarHeight = 56 }: WizardFooterProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme } = useTheme();
@@ -93,7 +94,7 @@ export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps
   };
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + tabBarHeight + 8, backgroundColor: colors.background, borderTopColor: colors.borderLight }]}>
       <View style={styles.progressRow}>
         <Text style={[styles.progressText, { color: colors.textTertiary }]}>
           {wizardIndex + 1} of {wizardTotal}

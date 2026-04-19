@@ -206,7 +206,7 @@ export default function EmailDetailScreen() {
       )}
 
       {/* Bottom actions */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12), borderTopColor: colors.border, backgroundColor: colors.background }]}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom + 56, 68), borderTopColor: colors.border, backgroundColor: colors.background }]}>
         {kind === 'inbound' && (
           <Pressable
             style={[styles.bottomBtn, { borderColor: colors.border }]}

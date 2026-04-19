@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
@@ -41,6 +42,7 @@ export default function TabLayout() {
   const { supabaseUserId, userProfile, swipedJobIds } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
+  const insets = useSafeAreaInsets();
   
   const { data: applications = [] } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
@@ -136,8 +138,8 @@ export default function TabLayout() {
           borderTopColor: colors.border,
           backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.surface,
           elevation: 0,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          height: 56 + insets.bottom,
+          paddingBottom: insets.bottom,
           paddingTop: 6,
         },
         tabBarBackground: () =>

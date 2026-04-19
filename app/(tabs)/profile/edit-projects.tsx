@@ -8,7 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import { Project } from '@/types';
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+const TAB_BAR_HEIGHT = 56;
 
 export default function EditProjectsScreen() {
   const insets = useSafeAreaInsets();
@@ -99,7 +99,7 @@ export default function EditProjectsScreen() {
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editing ? 'Edit Project' : 'Add Project'}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Project Title *</Text>
             <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.borderLight }]} placeholder="e.g. Real Time Voice RAG Agent" placeholderTextColor={colors.textTertiary} value={title} onChangeText={setTitle} />

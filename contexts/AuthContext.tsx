@@ -213,6 +213,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (error) {
         if (__DEV__) console.log('Error fetching profile (non-fatal):', error.message);
+        // Try to preserve cached auth state so a transient DB error doesn't log the user out
+        try {
+          const cached = await AsyncStorage.getItem(AUTH_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached) as AuthState;
+            if (parsed.isAuthenticated && parsed.isOnboardingComplete) {
+              setAuthState(parsed);
+              return;
+            }
+          }
+        } catch (_) {}
         const fallbackState: AuthState = {
           isAuthenticated: true,
           isOnboardingComplete: false,
@@ -459,6 +470,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       if (__DEV__) console.log('Supabase signIn success, user:', data.user.id);
+      setSupabaseUserId(data.user.id);
+      await fetchAndSetProfile(data.user.id, data.session!);
       return { success: true };
     } catch (e: any) {
       if (__DEV__) console.log('signInWithEmail exception:', e);

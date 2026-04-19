@@ -14,14 +14,15 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "app.nextquark.hireswipe",
-      "buildNumber": "1",
+      "buildNumber": "5",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to let you take profile photos.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to let you choose a profile picture.",
         "NSLocationWhenInUseUsageDescription": "This app uses your location to show relevant jobs near you.",
-        "NSDocumentPickerUsageDescription": "This app accesses documents to let you upload your resume."
+        "NSDocumentPickerUsageDescription": "This app accesses documents to let you upload your resume.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -29,8 +30,8 @@
         "foregroundImage": "./assets/images/applogo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.nextquark.hireswipe",
-      "versionCode": 2,
+      "package": "app.rork.hireswipe_v3_clone_ceuofke",
+      "versionCode": 7,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -58,7 +59,13 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "react-native-iap",
+        {
+          "paymentProvider": "both"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
@@ -68,8 +75,15 @@
         "origin": "https://nextquark.app/"
       },
       "eas": {
-        "projectId": "639de0ac-5a11-423c-ac9f-526386ac19f0"
+        "projectId": "0e5b98f7-311b-433c-8e7f-4b0f2d8f9dc9"
       }
+    },
+    "owner": "adityasuranadft",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0e5b98f7-311b-433c-8e7f-4b0f2d8f9dc9"
     }
   }
 }

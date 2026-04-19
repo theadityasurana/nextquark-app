@@ -11,7 +11,7 @@ import Colors from '@/constants/colors';
 import { WorkExperience } from '@/types';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+const TAB_BAR_HEIGHT = 56;
 const EXP_TYPE_OPTIONS = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'];
 const EXP_MODE_OPTIONS = ['Remote', 'Onsite', 'Hybrid'];
 
@@ -135,7 +135,7 @@ export default function EditExperienceScreen() {
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editing ? 'Edit Experience' : 'Add Experience'}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Job Title *</Text>
             <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !expTitle.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Software Engineer" placeholderTextColor={colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -26,9 +26,9 @@ export default function Welcome() {
         </TouchableOpacity>
         <Text style={styles.legalText}>
           By signing up, you agree to our{' '}
-          <Text style={styles.legalLink} onPress={() => router.push('/privacy-policy' as any)}>Privacy Policy</Text>
+          <Text style={styles.legalLink} onPress={() => Linking.openURL('https://nextquark.framer.website/privacy')}>Privacy Policy</Text>
           {' '}and{' '}
-          <Text style={styles.legalLink} onPress={() => router.push('/terms-of-service' as any)}>Terms of Service</Text>
+          <Text style={styles.legalLink} onPress={() => Linking.openURL('https://nextquark.framer.website/terms')}>Terms of Service</Text>
         </Text>
       </View>
     </View>
@@ -37,7 +37,7 @@ export default function Welcome() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', pointerEvents: 'none' },
   content: { flex: 1, justifyContent: 'flex-end', padding: 20, paddingBottom: 40 },
   logo: { width: '91%', height: 65, alignSelf: 'center', marginBottom: 10 },
   button: { backgroundColor: '#fff', padding: 18, borderRadius: 12, width: '100%', marginBottom: 16 },

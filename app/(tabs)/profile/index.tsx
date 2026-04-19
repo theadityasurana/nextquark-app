@@ -2372,7 +2372,7 @@ const MAJOR_CITIES = [
         onShare={async () => {
           if (referralStats?.referralCode) {
             try {
-              await Share.share({ message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${referralStats.referralCode} and get 5 free application swipes to get started. Download now!` });
+              await Share.share({ message: `Hey! Check out NextQuark — a swipe-based job discovery app. Join with my referral code ${referralStats.referralCode} and get 5 application swipes to get started. Download now!` });
             } catch (error) { console.error('Error sharing:', error); }
           }
         }}

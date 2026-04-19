@@ -231,57 +231,153 @@ async function buildCompanyDataMap(companyNames: string[]): Promise<Map<string, 
   return map;
 }
 
-export async function fetchJobsFromSupabase(): Promise<Job[]> {
+export interface BatchFetchParams {
+  tab: 'discover' | 'india' | 'foryou' | 'remote';
+  limit: number;
+  offset: number;
+  excludeIds?: string[];
+  searchTags?: string[];
+  filters?: {
+    companies?: string[];
+    roles?: string[];
+    locations?: string[];
+    workModes?: string[];
+    jobTypes?: string[];
+    jobLevels?: string[];
+    jobRequirements?: string[];
+    postedWithin?: string[];
+  };
+  desiredRoles?: string[];
+}
+
+export interface BatchFetchResult {
+  jobs: Job[];
+  serverHadMore: boolean;
+  serverRowCount: number;
+}
+
+export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFetchResult> {
   try {
-    const { data, error } = await supabase
+    const { tab, limit, offset, excludeIds, searchTags, filters, desiredRoles } = params;
+
+    let query = supabase
       .from('jobs')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1000);
+      .order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      console.log('Error or no jobs:', error?.message);
-      return [];
+    // Exclude already-swiped jobs server-side
+    if (excludeIds && excludeIds.length > 0) {
+      const idsToExclude = excludeIds.slice(0, 500);
+      query = query.not('id', 'in', `(${idsToExclude.join(',')})`);
     }
 
-    console.log(`Fetched ${data.length} jobs (initial batch)`);
-    const uniqueCompanies = [...new Set(data.map(j => j.company_name).filter(Boolean))];
+    // Tab-level server-side filters
+    if (tab === 'india') {
+      query = query.ilike('location', '%india%');
+    } else if (tab === 'remote') {
+      query = query.or('type.ilike.%remote%,location.ilike.%remote%');
+    } else if (tab === 'foryou') {
+      query = query.ilike('location', '%india%');
+    }
+
+    // Search tags — filter by company name or title
+    if (searchTags && searchTags.length > 0) {
+      const orClauses = searchTags.map(tag => {
+        const escaped = tag.replace(/'/g, "''");
+        return `company_name.ilike.%${escaped}%,title.ilike.%${escaped}%`;
+      }).join(',');
+      query = query.or(orClauses);
+    }
+
+    if (filters?.companies && filters.companies.length > 0) {
+      const orClauses = filters.companies.map(c => `company_name.ilike.%${c.replace(/'/g, "''")}%`).join(',');
+      query = query.or(orClauses);
+    }
+
+    if (filters?.roles && filters.roles.length > 0) {
+      const orClauses = filters.roles.map(r => `title.ilike.%${r.replace(/'/g, "''")}%`).join(',');
+      query = query.or(orClauses);
+    }
+
+    if (filters?.locations && filters.locations.length > 0) {
+      const orClauses = filters.locations.map(l => `location.ilike.%${l.replace(/'/g, "''")}%`).join(',');
+      query = query.or(orClauses);
+    }
+
+    if (filters?.workModes && filters.workModes.length > 0) {
+      const orClauses = filters.workModes.map(m => `type.ilike.%${m.replace(/'/g, "''")}%`).join(',');
+      query = query.or(orClauses);
+    }
+
+    if (filters?.jobTypes && filters.jobTypes.length > 0) {
+      const orClauses = filters.jobTypes.map(t => `employment_type.ilike.%${t.replace(/'/g, "''")}%`).join(',');
+      query = query.or(orClauses);
+    }
+
+    if (filters?.postedWithin && filters.postedWithin.length > 0) {
+      const maxMs = Math.max(...filters.postedWithin.map(range => {
+        switch (range) {
+          case '1d': return 24 * 60 * 60 * 1000;
+          case '2d': return 2 * 24 * 60 * 60 * 1000;
+          case '1w': return 7 * 24 * 60 * 60 * 1000;
+          case '1m': return 30 * 24 * 60 * 60 * 1000;
+          case '3m': return 90 * 24 * 60 * 60 * 1000;
+          default: return 90 * 24 * 60 * 60 * 1000;
+        }
+      }));
+      const cutoff = new Date(Date.now() - maxMs).toISOString();
+      query = query.gte('created_at', cutoff);
+    }
+
+    // For "foryou" tab, over-fetch since we filter client-side by desired roles
+    const fetchLimit = (tab === 'foryou' && desiredRoles && desiredRoles.length > 0) ? limit * 1.5 : limit;
+    query = query.range(offset, offset + fetchLimit - 1);
+
+    const { data, error } = await query;
+
+    if (error || !data || data.length === 0) {
+      console.log(`Batch fetch (${tab}, offset=${offset}): ${error?.message || 'no data'}`);
+      return { jobs: [], serverHadMore: false, serverRowCount: 0 };
+    }
+
+    const serverRowCount = data.length;
+    // serverHadMore is based on raw DB row count vs what we asked for
+    const serverHadMore = serverRowCount >= fetchLimit;
+
+    console.log(`Batch fetch (${tab}, offset=${offset}): ${serverRowCount} jobs from DB, serverHadMore=${serverHadMore}`);
+
+    // For "foryou" tab, filter client-side by desired roles then trim to requested limit
+    let rows = data as SupabaseJob[];
+    if (tab === 'foryou' && desiredRoles && desiredRoles.length > 0) {
+      const filtered = rows.filter(row => {
+        const title = (row.title || row.job_title || '').toLowerCase();
+        const desc = (row.description || '').toLowerCase();
+        return desiredRoles.some(role => {
+          const r = role.toLowerCase();
+          return title.includes(r) || desc.includes(r);
+        });
+      });
+      rows = filtered.length >= Math.min(limit, 3) ? filtered.slice(0, limit) : rows.slice(0, limit);
+    }
+
+    const uniqueCompanies = [...new Set(rows.map(j => j.company_name).filter(Boolean))];
     const companyDataMap = await buildCompanyDataMap(uniqueCompanies);
-    return enrichWithCompanyData(data, companyDataMap);
+    const jobs = enrichWithCompanyData(rows, companyDataMap);
+    return { jobs, serverHadMore, serverRowCount };
   } catch (e) {
-    console.log('Exception fetching jobs:', e);
-    return [];
+    console.log('Exception in fetchJobsBatch:', e);
+    return { jobs: [], serverHadMore: false, serverRowCount: 0 };
   }
 }
 
+// Legacy functions kept for any other callers
+export async function fetchJobsFromSupabase(): Promise<Job[]> {
+  const result = await fetchJobsBatch({ tab: 'discover', limit: 10, offset: 0 });
+  return result.jobs;
+}
+
 export async function fetchRemainingJobs(): Promise<Job[]> {
-  try {
-    const PAGE_SIZE = 1000;
-    const allRemaining: SupabaseJob[] = [];
-    let page = 1; // start from page 1 (offset 1000)
-
-    while (true) {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (error || !data || data.length === 0) break;
-      allRemaining.push(...data);
-      page++;
-    }
-
-    if (allRemaining.length === 0) return [];
-
-    console.log(`Fetched ${allRemaining.length} remaining jobs in background`);
-    const uniqueCompanies = [...new Set(allRemaining.map(j => j.company_name).filter(Boolean))];
-    const companyDataMap = await buildCompanyDataMap(uniqueCompanies);
-    return enrichWithCompanyData(allRemaining, companyDataMap);
-  } catch (e) {
-    console.log('Exception fetching remaining jobs:', e);
-    return [];
-  }
+  return [];
 }
 
 export async function fetchCompanyFromSupabase(companyName: string): Promise<SupabaseCompany | null> {
@@ -414,8 +510,6 @@ export async function addToLiveApplicationQueue(
       salary_max: profile.salaryMaxPref || null,
       desired_roles: Array.isArray(profile.desiredRoles) ? profile.desiredRoles : [],
       preferred_cities: Array.isArray(profile.preferredCities) ? profile.preferredCities : [],
-      work_professions: Array.isArray(profile.workProfessions) ? profile.workProfessions : [],
-      onboarding_data: profile.onboardingData || {},
       company_name: job.companyName,
       job_title: job.jobTitle,
       job_url: jobData?.job_url || null,

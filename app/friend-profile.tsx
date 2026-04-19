@@ -23,19 +23,30 @@ export default function FriendProfileScreen() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['friend-profile', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, headline, location, bio, skills, experience, education, achievements, favorite_companies, swiped_job_ids, subscription_type').eq('id', userId).single();
       if (error) throw error;
       return data;
     },
     enabled: !!userId,
   });
 
-  const { data: appliedJobs = [] } = useQuery({
+  const { data: appliedJobs = [], isLoading: isLoadingJobs } = useQuery({
     queryKey: ['friend-applied-jobs', userId],
     queryFn: async () => {
       if (!profile?.swiped_job_ids || profile.swiped_job_ids.length === 0) return [];
-      const jobs = await Promise.all(profile.swiped_job_ids.map((jobId: string) => fetchJobById(jobId).catch(() => null)));
-      return jobs.filter(Boolean);
+      // Batch fetch in one query with only card-display fields
+      const { data } = await supabase
+        .from('jobs')
+        .select('id, title, job_title, company_name, company_logo, location')
+        .in('id', profile.swiped_job_ids.slice(0, 200));
+      if (!data) return [];
+      return data.map((row: any) => ({
+        id: row.id,
+        jobTitle: row.title || row.job_title || 'Untitled',
+        companyName: row.company_name || 'Unknown',
+        companyLogo: row.company_logo?.startsWith('http') ? row.company_logo : `https://widujxpahzlpegzjjpqp.supabase.co/storage/v1/object/public/company-logos/logos/${(row.company_name || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`,
+        location: row.location || '',
+      }));
     },
     enabled: !!profile?.swiped_job_ids,
   });
@@ -211,15 +222,27 @@ export default function FriendProfileScreen() {
         {appliedJobs.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Applied Jobs ({appliedJobs.length})</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.jobsRow}>
-              {paginatedJobs.map((job: Job) => (
-                <Pressable key={job.id} style={styles.jobTile} onPress={() => router.push({ pathname: '/job-details' as any, params: { id: job.id } })}>
-                  <Image source={{ uri: job.companyLogo }} style={styles.jobLogo} />
-                  <Text style={styles.jobCompany} numberOfLines={1}>{job.companyName}</Text>
-                  <Text style={styles.jobTitle} numberOfLines={2}>{job.jobTitle}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            {isLoadingJobs ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.jobsRow}>
+                {[1,2,3].map(i => (
+                  <View key={i} style={[styles.jobTile, { opacity: 0.5 }]}>
+                    <View style={[styles.jobLogo, { backgroundColor: colors.borderLight }]} />
+                    <View style={{ height: 12, width: 60, borderRadius: 6, backgroundColor: colors.borderLight, marginBottom: 4 }} />
+                    <View style={{ height: 14, width: 100, borderRadius: 6, backgroundColor: colors.borderLight }} />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.jobsRow}>
+                {paginatedJobs.map((job: any) => (
+                  <Pressable key={job.id} style={styles.jobTile} onPress={() => router.push({ pathname: '/job-details' as any, params: { id: job.id } })}>
+                    <Image source={{ uri: job.companyLogo }} style={styles.jobLogo} />
+                    <Text style={styles.jobCompany} numberOfLines={1}>{job.companyName}</Text>
+                    <Text style={styles.jobTitle} numberOfLines={2}>{job.jobTitle}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
             {totalPages > 1 && (
               <View style={styles.pagination}>
                 <Pressable style={[styles.pageBtn, jobsPage === 0 && styles.pageBtnDisabled]} onPress={() => setJobsPage(p => Math.max(0, p - 1))} disabled={jobsPage === 0}>

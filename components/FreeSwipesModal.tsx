@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Animated, Platform, Linking, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
-import { X, Share2, Star } from '@/components/ProfileIcons';
+import { X, Share2 } from '@/components/ProfileIcons';
 import { SocialPlatform, SOCIAL_URLS, getSocialFollowStatus, claimSocialFollow } from '@/lib/referral';
 import { InstagramIcon, TwitterIcon, LinkedInIcon } from '@/components/SocialIcons';
 
@@ -13,18 +11,6 @@ const SOCIAL_ICON_MAP: Record<SocialPlatform, React.ReactNode> = {
   linkedin: <LinkedInIcon size={28} />,
 };
 
-const TESTIMONIALS = [
-  { quote: 'Got 3 interview calls in my first week. The auto-apply is a game changer!', name: 'Priya S.', role: 'Software Engineer', rating: 5, avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
-  { quote: 'Went from 0 callbacks to 5 interviews in 2 weeks. Incredibly accurate matching.', name: 'Rahul M.', role: 'Product Manager', rating: 5, avatar: 'https://randomuser.me/api/portraits/men/32.jpg' },
-  { quote: 'Recruiters started reaching out directly after the profile boost!', name: 'Ananya K.', role: 'UX Designer', rating: 4, avatar: 'https://randomuser.me/api/portraits/women/68.jpg' },
-  { quote: 'Applied to 150 jobs in one weekend. Would have taken a month manually.', name: 'Vikram T.', role: 'Data Scientist', rating: 5, avatar: 'https://randomuser.me/api/portraits/men/75.jpg' },
-  { quote: 'Premium paid for itself after my first offer letter. No regrets.', name: 'Arjun D.', role: 'Backend Developer', rating: 5, avatar: 'https://randomuser.me/api/portraits/men/46.jpg' },
-  { quote: 'As a fresh grad, this gave me a huge edge. Placed within 3 weeks!', name: 'Divya L.', role: 'Junior Analyst', rating: 5, avatar: 'https://randomuser.me/api/portraits/women/17.jpg' },
-];
-
-const CARD_H = 110;
-const CARD_GAP = 10;
-const VISIBLE_CARDS = 2;
 
 const STEPS = [
   { emoji: '📤', text: 'Share your code with a friend' },
@@ -83,18 +69,6 @@ export default function FreeSwipesModal({ visible, onClose, theme, colors, refer
     setClaimingPlatform(null);
   }, [userId, followStatus, claimingPlatform, onSwipesUpdated]);
 
-  // Testimonial auto-scroll
-  const scrollY = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!visible) return;
-    scrollY.setValue(0);
-    const totalH = TESTIMONIALS.length * (CARD_H + CARD_GAP);
-    const anim = Animated.loop(
-      Animated.timing(scrollY, { toValue: -totalH, duration: TESTIMONIALS.length * 4000, useNativeDriver: true })
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [visible]);
 
   // Step fade-in animations
   const stepAnims = useRef(STEPS.map(() => new Animated.Value(0))).current;
@@ -200,32 +174,6 @@ export default function FreeSwipesModal({ visible, onClose, theme, colors, refer
               })}
             </View>
 
-            {/* Testimonial carousel */}
-            <Text style={s.testimonialTitle}>Loved by thousands</Text>
-            <View style={s.carouselWrap}>
-              <LinearGradient colors={[bg, 'transparent']} style={s.fadeTop} pointerEvents="none" />
-              <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
-                {[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => (
-                  <View key={idx} style={[s.tCard, { backgroundColor: cardBg }]}>
-                    <Text style={s.tQuote} numberOfLines={2}>"{t.quote}"</Text>
-                    <View style={s.tFooter}>
-                      <Image source={{ uri: t.avatar }} style={s.tAvatar} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.tName}>{t.name}</Text>
-                        <Text style={s.tRole}>{t.role}</Text>
-                      </View>
-                      <View style={s.tStars}>
-                        {Array.from({ length: t.rating }).map((_, i) => (
-                          <Star key={i} size={10} color="#FFD700" fill="#FFD700" />
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </Animated.View>
-              <LinearGradient colors={['transparent', bg]} style={s.fadeBottom} pointerEvents="none" />
-            </View>
-
             <View style={{ height: 80 }} />
           </ScrollView>
 
@@ -279,18 +227,7 @@ const s = StyleSheet.create({
   socialBadgeClaimed: { backgroundColor: 'rgba(255,255,255,0.08)' },
   socialBadgeText: { fontSize: 11, fontWeight: '700', color: '#4CAF50' },
   socialBadgeTextClaimed: { color: 'rgba(255,255,255,0.3)' },
-  // Testimonials
-  testimonialTitle: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.5)', marginBottom: 12 },
-  carouselWrap: { height: (CARD_H + CARD_GAP) * VISIBLE_CARDS, overflow: 'hidden', position: 'relative', marginBottom: 8 },
-  fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 24, zIndex: 2 },
-  fadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, zIndex: 2 },
-  tCard: { borderRadius: 14, padding: 14, height: CARD_H, marginBottom: CARD_GAP, justifyContent: 'space-between' },
-  tQuote: { fontSize: 13, color: 'rgba(255,255,255,0.75)', fontStyle: 'italic', lineHeight: 20 },
-  tFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tAvatar: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)' },
-  tName: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
-  tRole: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
-  tStars: { flexDirection: 'row', gap: 1 },
+
   // Sticky bar
   stickyBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 34 : 20 },
   shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 16 },

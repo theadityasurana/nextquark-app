@@ -5,31 +5,38 @@ import { supabase } from './supabase';
 let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
 
-try {
-  const NotifModule = require('expo-notifications');
-  // Verify the module works — throws in Expo Go SDK 53+
-  if (NotifModule && typeof NotifModule.getPermissionsAsync === 'function') {
-    // Probe with a harmless call to detect Expo Go SDK 53 runtime error
-    NotifModule.getPermissionsAsync().catch(() => {});
-    Notifications = NotifModule;
+function loadNotifications() {
+  try {
+    const NotifModule = require('expo-notifications');
+    if (NotifModule && typeof NotifModule.getPermissionsAsync === 'function') {
+      Notifications = NotifModule;
+    }
+  } catch {
+    Notifications = null;
   }
-  Device = require('expo-device');
-
+  try {
+    Device = require('expo-device');
+  } catch {
+    Device = null;
+  }
   if (Notifications) {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+    } catch {
+      Notifications = null;
+    }
   }
-} catch (error) {
-  // expo-notifications not available (Expo Go SDK 53+, web, etc.)
-  Notifications = null;
-  if (__DEV__) console.log('Notifications not available, skipping');
 }
+
+// Delay loading to avoid synchronous crash during module init in Expo Go SDK 53+
+setTimeout(loadNotifications, 0);
 
 // --- Keys ---
 const IDX_MORNING = 'nq_notif_idx_morning';
@@ -78,7 +85,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: '639de0ac-5a11-423c-ac9f-526386ac19f0',
+      projectId: '24bd2a4b-c0d1-4133-9ab2-4d8ba7dbfd18',
     });
     return token.data;
   } catch (error) {

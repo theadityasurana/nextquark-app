@@ -9,8 +9,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import TutorialModal from '@/components/TutorialModal';
+
 import ErrorBoundary from '@/components/ErrorBoundary';
+import OfflineBanner from '@/components/OfflineBanner';
 import { handleStaleSession } from '@/lib/supabase';
 
 let Notifications: any;
@@ -33,15 +34,14 @@ const queryClient = new QueryClient({
   },
 });
 
-const TUTORIAL_COMPLETED_KEY = 'nextquark_tutorial_completed';
+
 const APP_OPENED_KEY = 'nextquark_app_opened';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isOnboardingComplete, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [tutorialChecked, setTutorialChecked] = useState(false);
+
   const [appOpenedChecked, setAppOpenedChecked] = useState(false);
   const notificationListener = useRef<any>(null);
   const responseListener = useRef<any>(null);
@@ -93,8 +93,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     } else if (isAuthenticated && isOnboardingComplete && (inAuthGroup || inOnboarding)) {
       console.log('Redirecting to home - fully authenticated');
       router.replace('/(tabs)' as any);
-    } else if (isAuthenticated && isOnboardingComplete && inTabs) {
-      checkAndShowTutorial();
     }
   }, [isAuthenticated, isOnboardingComplete, isLoading, segments, appOpenedChecked]);
 
@@ -118,29 +116,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const checkAndShowTutorial = async () => {
-    if (tutorialChecked) return;
-    try {
-      const completed = await AsyncStorage.getItem(TUTORIAL_COMPLETED_KEY);
-      if (!completed) {
-        setShowTutorial(true);
-      }
-      setTutorialChecked(true);
-    } catch (e) {
-      console.log('Error checking tutorial status:', e);
-      setTutorialChecked(true);
-    }
-  };
 
-  const handleCloseTutorial = async () => {
-    try {
-      await AsyncStorage.setItem(TUTORIAL_COMPLETED_KEY, 'true');
-      setShowTutorial(false);
-    } catch (e) {
-      console.log('Error saving tutorial status:', e);
-      setShowTutorial(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -153,7 +129,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      <TutorialModal visible={showTutorial} onClose={handleCloseTutorial} />
+      <OfflineBanner />
     </>
   );
 }

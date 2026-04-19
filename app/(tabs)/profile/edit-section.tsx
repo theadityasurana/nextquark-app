@@ -22,7 +22,7 @@ import { supabase, getCompanyLogoStorageUrl } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+const TAB_BAR_HEIGHT = 56;
 
 const JOB_TYPE_OPTIONS = [
   { key: 'Full-time', label: 'Full-time', icon: Briefcase, color: '#1E88E5' },
@@ -668,7 +668,7 @@ export default function EditSectionScreen() {
           )}
         </View>
       )}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
           {renderContent()}
         </ScrollView>

@@ -8,7 +8,7 @@ export interface SubscriptionData {
   subscription_end_date: string | null;
   applications_remaining: number;
   applications_limit: number;
-  razorpay_subscription_id?: string | null;
+  google_play_purchase_token?: string | null;
   subscription_status?: string | null;
 }
 
@@ -151,7 +151,7 @@ export async function activateSubscription(
   orderId?: string,
   amount?: number,
   couponCode?: string,
-  razorpaySubscriptionId?: string
+  googlePlayPurchaseToken?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const startDate = new Date();
@@ -179,7 +179,7 @@ export async function activateSubscription(
     const extData: Record<string, any> = {
       ...baseData,
       subscription_status: 'active',
-      ...(razorpaySubscriptionId && { razorpay_subscription_id: razorpaySubscriptionId }),
+      ...(googlePlayPurchaseToken && { google_play_purchase_token: googlePlayPurchaseToken }),
     };
 
     const { error: updateError } = await supabase
@@ -282,7 +282,7 @@ export async function handleSubscriptionFailed(
         subscription_status: 'payment_failed',
         applications_remaining: currentRemaining + freeAllowance,
         applications_limit: freeAllowance,
-        razorpay_subscription_id: null,
+        google_play_purchase_token: null,
       })
       .eq('id', userId);
 
@@ -347,7 +347,7 @@ export async function getSubscriptionStatus(
 
     const fullQuery = await supabase
       .from('profiles')
-      .select('subscription_type, subscription_start_date, subscription_end_date, applications_remaining, applications_limit, razorpay_subscription_id, subscription_status')
+      .select('subscription_type, subscription_start_date, subscription_end_date, applications_remaining, applications_limit, google_play_purchase_token, subscription_status')
       .eq('id', userId)
       .single();
 
@@ -380,7 +380,7 @@ export async function getSubscriptionStatus(
 
     const subStatus = data.subscription_status || null;
 
-    // Check if subscription expired and no active Razorpay subscription
+    // Check if subscription expired
     if (data.subscription_end_date && new Date(data.subscription_end_date) < new Date() && subStatus !== 'active') {
       await expireSubscription(userId, data.applications_remaining);
       return {
@@ -403,7 +403,7 @@ export async function getSubscriptionStatus(
       subscription_end_date: data.subscription_end_date || null,
       applications_remaining: data.applications_remaining ?? 40,
       applications_limit: data.applications_limit ?? 40,
-      razorpay_subscription_id: data.razorpay_subscription_id || null,
+      google_play_purchase_token: data.google_play_purchase_token || null,
       subscription_status: subStatus,
     };
   } catch (error) {
@@ -454,7 +454,7 @@ export async function expireSubscription(userId: string, currentRemaining?: numb
 
   const { error } = await supabase
     .from('profiles')
-    .update({ ...baseData, razorpay_subscription_id: null, subscription_status: null })
+    .update({ ...baseData, google_play_purchase_token: null, subscription_status: null })
     .eq('id', userId);
 
   if (error && error.code === '42703') {

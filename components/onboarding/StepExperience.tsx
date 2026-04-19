@@ -128,7 +128,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'title') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 1/5</Text>
           <View style={styles.titleRow}>
@@ -162,7 +162,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'company') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 2/5</Text>
           <View style={styles.titleRow}>
@@ -196,7 +196,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'type') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 3/5</Text>
           <Text style={styles.typeLabel}>EMPLOYMENT TYPE</Text>
@@ -422,7 +422,7 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'description') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 5/5</Text>
           <View style={styles.titleRow}>

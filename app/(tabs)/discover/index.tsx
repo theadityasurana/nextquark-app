@@ -155,14 +155,11 @@ export default function DiscoverScreen() {
       const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false }).limit(limit);
       if (!data) return [];
       if (desiredRoles.length === 0) return data;
-      const filtered = data.filter((job: any) =>
-        desiredRoles.some(role => {
-          const r = role.toLowerCase();
-          return job.job_title?.toLowerCase().includes(r) ||
-            job.description?.toLowerCase().includes(r) ||
-            (Array.isArray(job.skills) && job.skills.some((s: string) => s.toLowerCase().includes(r)));
-        })
-      );
+      const expandedRoles = desiredRoles.map((r: string) => r.toLowerCase());
+      const filtered = data.filter((job: any) => {
+        const jobText = `${job.job_title || ''} ${job.description || ''} ${Array.isArray(job.skills) ? job.skills.join(' ') : ''}`.toLowerCase();
+        return expandedRoles.some(keyword => jobText.includes(keyword));
+      });
       return filtered;
     },
   });
@@ -292,7 +289,7 @@ export default function DiscoverScreen() {
                 }
                 if (referralStats?.referralCode) {
                   try {
-                    await Share.share({ message: `Join NextQuark with my referral code ${referralStats.referralCode} and get 5 free job application swipes! Download the app now.` });
+                    await Share.share({ message: `Join NextQuark with my referral code ${referralStats.referralCode} and get 5 application swipes! Download the app now.` });
                   } catch (error) {
                     console.error('Error sharing:', error);
                   }
@@ -574,7 +571,7 @@ export default function DiscoverScreen() {
               router={router}
             />
           )}
-          <View style={{ height: Platform.OS === 'ios' ? 88 : 64 }} />
+          <View style={{ height: 56 + insets.bottom }} />
         </View>
         </AnimatedHeaderScrollView>
 

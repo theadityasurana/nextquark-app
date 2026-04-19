@@ -12,7 +12,7 @@ import { Education } from '@/types';
 import { universities } from '@/constants/universities';
 import WizardFooter, { getIncompleteSteps } from '@/components/WizardFooter';
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+const TAB_BAR_HEIGHT = 56;
 
 export default function EditEducationScreen() {
   const insets = useSafeAreaInsets();
@@ -106,7 +106,7 @@ export default function EditEducationScreen() {
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editing ? 'Edit Education' : 'Add Education'}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Institution *</Text>
             <View style={[styles.uniInputWrap, { backgroundColor: colors.surface, borderColor: formTouched && !institution.trim() ? '#EF4444' : colors.borderLight }]}>

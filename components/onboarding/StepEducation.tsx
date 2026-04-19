@@ -102,7 +102,7 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'school') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>EDUCATION 1/4</Text>
           <View style={styles.titleRow}>
@@ -193,7 +193,7 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'field') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>EDUCATION 3/4</Text>
           <View style={styles.titleRow}>
@@ -216,7 +216,7 @@ export default function StepEducation({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'dates') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.subStepLabel}>EDUCATION 4/4</Text>
           <View style={styles.titleRow}>

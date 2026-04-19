@@ -1,19 +1,36 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Animated, Alert, ActivityIndicator, TextInput, Image, AppState } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Animated, Alert, ActivityIndicator, TextInput, Image, Platform, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import SmoothSlider from '@/components/SmoothSlider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Crown, Check, X as XIcon, Zap, Star } from '@/components/ProfileIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
-import { initiatePayment, initiateSubscriptionPayment, checkPaymentLinkStatus, cancelRazorpaySubscription } from '@/lib/razorpay';
-import { validateCoupon, calculateDiscountedPrice, type Coupon } from '@/lib/coupons';
+
 import { activateSubscription, activateCustomSwipes, getSubscriptionStatus, getTransactionHistory, cancelSubscription, recordPaymentAttempt, updatePaymentStatus, markAbandonedPayments, type TransactionRecord } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendSubscriptionNotification } from '@/lib/notifications';
+import {
+  setupBilling,
+  teardownBilling,
+  buySubscription,
+  buyProduct,
+  acknowledgePurchase,
+  consumePurchase,
+  restorePurchases,
+  fetchSubscriptions,
+  fetchSwipeProducts,
+  purchaseUpdatedListener,
+  purchaseErrorListener,
+  isBillingAvailable,
+  SUBSCRIPTION_SKUS,
+  SWIPE_PRODUCTS,
+  type ProductPurchase,
+  type SubscriptionPurchase,
+  type PurchaseError,
+} from '@/lib/billing';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -28,20 +45,19 @@ const COMPARISON_FEATURES = [
 
 const PLAN_TIERS: Record<string, number> = { free: 0, pro: 1, premium: 2, custom: 3 };
 
-const TESTIMONIAL_HEIGHT = 130;
 const TESTIMONIAL_GAP = 12;
 
 const TESTIMONIALS = [
-  { quote: 'I got 3 interview calls within my first week of using Premium. The AI auto-apply feature is a game changer!', name: 'Priya S.', role: 'Software Engineer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/women/44.jpg' } },
-  { quote: 'Went from 0 callbacks to 5 interviews in 2 weeks. The smart matching is incredibly accurate.', name: 'Rahul M.', role: 'Product Manager', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/32.jpg' } },
-  { quote: 'The profile boost alone was worth it. Recruiters started reaching out to me directly!', name: 'Ananya K.', role: 'UX Designer', rating: 4, avatar: { uri: 'https://randomuser.me/api/portraits/women/68.jpg' } },
-  { quote: 'Applied to 150 jobs in one weekend. Manually that would have taken me a month!', name: 'Vikram T.', role: 'Data Scientist', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/75.jpg' } },
-  { quote: 'The priority support team helped me fix my resume in 24 hours. Incredible service.', name: 'Sneha R.', role: 'Marketing Lead', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/women/26.jpg' } },
-  { quote: 'I was skeptical at first, but Premium paid for itself after my first offer letter.', name: 'Arjun D.', role: 'Backend Developer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/46.jpg' } },
-  { quote: 'Smart matching found me a role I never would have searched for. Now I love my job!', name: 'Meera P.', role: 'DevOps Engineer', rating: 4, avatar: { uri: 'https://randomuser.me/api/portraits/women/52.jpg' } },
-  { quote: 'Switched careers from finance to tech. The AI auto-fill made applications so much easier.', name: 'Karthik N.', role: 'Frontend Developer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/22.jpg' } },
-  { quote: 'As a fresh graduate, this gave me a huge edge. Got placed within 3 weeks of subscribing.', name: 'Divya L.', role: 'Junior Analyst', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/women/17.jpg' } },
-  { quote: 'The profile visibility boost is real. My LinkedIn views tripled after upgrading.', name: 'Rohan G.', role: 'Full Stack Developer', rating: 4, avatar: { uri: 'https://randomuser.me/api/portraits/men/86.jpg' } },
+  { quote: 'Apply to hundreds of jobs with a single swipe — save hours every week.' },
+  { quote: 'AI auto-fill handles repetitive application fields so you can focus on what matters.' },
+  { quote: 'Get your profile seen by more recruiters with enhanced visibility.' },
+  { quote: 'Upload multiple resumes and use the right one for each application.' },
+  { quote: 'Priority support means faster responses when you need help.' },
+  { quote: 'Track all your applications in one place with real-time status updates.' },
+  { quote: 'Smart matching connects you with roles that fit your skills and preferences.' },
+  { quote: 'Get notified instantly when new jobs match your profile.' },
+  { quote: 'Manage your job search on the go with a fully mobile experience.' },
+  { quote: 'Your data is encrypted and secure — we never share your information.' },
 ];
 
 
@@ -74,18 +90,20 @@ export default function PremiumScreen() {
   const themeColors = dk as any;
   const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'premium' | 'custom'>('pro');
-  const [customSwipes, setCustomSwipes] = useState(10);
+  const [selectedSwipePack, setSelectedSwipePack] = useState(1); // index into SWIPE_PRODUCTS
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+
   const scrollViewRef = useRef<ScrollView>(null);
   const testimonialScrollY = useRef(new Animated.Value(0)).current;
   const [isRefreshingTx, setIsRefreshingTx] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [activeTab, setActiveTab] = useState<'plans' | 'subscription'>('plans');
-  const pendingPaymentRef = useRef<{ paymentLinkId: string; planType: 'pro' | 'premium' | 'custom'; billingCycle: string; amount: number; couponCode?: string; customSwipes?: number; recordId?: string } | null>(null);
+  const pendingPaymentRef = useRef<{ paymentLinkId: string; planType: 'pro' | 'premium' | 'custom'; billingCycle: string; amount: number; customSwipes?: number; recordId?: string } | null>(null);
+  const purchaseUpdateSubscription = useRef<any>(null);
+  const purchaseErrorSubscription = useRef<any>(null);
 
   const { data: subscriptionData, refetch: refetchSubscription } = useQuery({
     queryKey: ['subscription-status', supabaseUserId],
@@ -111,56 +129,95 @@ export default function PremiumScreen() {
     setIsRefreshingTx(false);
   };
 
-  // Poll for payment completion when user returns to the app
-  const verifyPendingPayment = useCallback(async () => {
-    const pending = pendingPaymentRef.current;
-    if (!pending || !supabaseUserId) return;
-
+  // Handle Google Play purchase updates
+  const handlePurchaseUpdate = useCallback(async (purchase: ProductPurchase | SubscriptionPurchase) => {
+    if (!supabaseUserId) return;
     setIsVerifying(true);
     try {
-      for (let i = 0; i < 5; i++) {
-        const status = await checkPaymentLinkStatus(pending.paymentLinkId);
-        if (status.paid) {
-          if (pending.recordId) {
-            await updatePaymentStatus(pending.recordId, 'completed', status.paymentId);
-          }
-          const result = pending.planType === 'custom'
-            ? await activateCustomSwipes(supabaseUserId, pending.customSwipes || 0, status.paymentId, pending.paymentLinkId, pending.amount, pending.couponCode)
-            : await activateSubscription(supabaseUserId, pending.planType, status.paymentId, pending.paymentLinkId, pending.amount, pending.couponCode);
+      const pending = pendingPaymentRef.current;
+      const purchaseToken = purchase.purchaseToken || purchase.transactionId || '';
+      const productId = purchase.productId;
 
-          pendingPaymentRef.current = null;
-          await refetchTransactions();
-          if (result.success) {
-            await sendSubscriptionNotification(pending.planType);
-            await refetchSubscription();
-            queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
-            Alert.alert(
-              pending.planType === 'custom' ? 'Swipes Added! 🎉' : 'Subscription Activated! 🎉',
-              pending.planType === 'custom'
-                ? `${pending.customSwipes} swipes have been added to your account!`
-                : `You are now subscribed to the ${pending.planType.toUpperCase()} plan!`,
-              [{ text: 'OK', onPress: navigateAfterSubscription }]
-            );
-          } else {
-            Alert.alert('Error', result.error || 'Failed to activate subscription. Please contact support.');
-          }
-          setIsVerifying(false);
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      // Determine plan type from product ID
+      let planType: 'pro' | 'premium' | 'custom' = 'custom';
+      let swipeCount = 0;
+      if (productId === SUBSCRIPTION_SKUS.pro) planType = 'pro';
+      else if (productId === SUBSCRIPTION_SKUS.premium) planType = 'premium';
+      else {
+        const swipeProduct = SWIPE_PRODUCTS.find(p => p.id === productId);
+        if (swipeProduct) swipeCount = swipeProduct.count;
       }
-      // Payment not confirmed — mark as failed
-      if (pending.recordId) {
-        await updatePaymentStatus(pending.recordId, 'failed');
+
+      // Acknowledge/consume the purchase
+      if (planType === 'custom') {
+        await consumePurchase(purchase as ProductPurchase);
+      } else {
+        await acknowledgePurchase(purchase);
       }
+
+      // Record in Supabase
+      if (pending?.recordId) {
+        await updatePaymentStatus(pending.recordId, 'completed', purchaseToken);
+      }
+
+      const result = planType === 'custom'
+        ? await activateCustomSwipes(supabaseUserId, swipeCount || pending?.customSwipes || 0, purchaseToken, productId, pending?.amount || 0)
+        : await activateSubscription(supabaseUserId, planType, purchaseToken, productId, pending?.amount || 0, undefined, purchaseToken);
+
       pendingPaymentRef.current = null;
-      setIsVerifying(false);
       await refetchTransactions();
+
+      if (result.success) {
+        await sendSubscriptionNotification(planType);
+        await refetchSubscription();
+        queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
+        Alert.alert(
+          planType === 'custom' ? 'Swipes Added! 🎉' : 'Subscription Activated! 🎉',
+          planType === 'custom'
+            ? `${swipeCount || pending?.customSwipes} swipes have been added to your account!`
+            : `You are now subscribed to the ${planType.toUpperCase()} plan!`,
+          [{ text: 'OK', onPress: navigateAfterSubscription }]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to activate subscription. Please contact support.');
+      }
     } catch (error) {
-      console.error('Error verifying payment:', error);
+      console.error('Error processing purchase:', error);
+      Alert.alert('Error', 'Failed to process purchase. Please contact support.');
+    } finally {
       setIsVerifying(false);
     }
   }, [supabaseUserId, refetchSubscription, refetchTransactions, queryClient]);
+
+  const handlePurchaseError = useCallback((error: PurchaseError) => {
+    if (error.code === ('E_USER_CANCELLED' as any) || error.code === 'user-cancelled') return;
+    console.error('Purchase error:', error);
+    const pending = pendingPaymentRef.current;
+    if (pending?.recordId) {
+      updatePaymentStatus(pending.recordId, 'failed');
+    }
+    pendingPaymentRef.current = null;
+    setIsProcessing(false);
+    Alert.alert('Purchase Failed', error.message || 'Something went wrong. Please try again.');
+  }, []);
+
+  // Initialize billing and listeners
+  useEffect(() => {
+    const init = async () => {
+      await setupBilling();
+      await fetchSubscriptions();
+      await fetchSwipeProducts();
+    };
+    init();
+    purchaseUpdateSubscription.current = purchaseUpdatedListener(handlePurchaseUpdate);
+    purchaseErrorSubscription.current = purchaseErrorListener(handlePurchaseError);
+
+    return () => {
+      purchaseUpdateSubscription.current?.remove();
+      purchaseErrorSubscription.current?.remove();
+      teardownBilling();
+    };
+  }, [handlePurchaseUpdate, handlePurchaseError]);
 
   // Mark stale pending payments as abandoned on mount
   useEffect(() => {
@@ -170,7 +227,7 @@ export default function PremiumScreen() {
   }, [supabaseUserId]);
 
   useEffect(() => {
-    const itemTotal = TESTIMONIAL_HEIGHT + TESTIMONIAL_GAP;
+    const itemTotal = 80 + TESTIMONIAL_GAP;
     const totalScroll = TESTIMONIALS.length * itemTotal;
     Animated.loop(
       Animated.timing(testimonialScrollY, {
@@ -181,52 +238,29 @@ export default function PremiumScreen() {
     ).start();
   }, []);
 
-  // Listen for app returning to foreground after payment
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && pendingPaymentRef.current) {
-        verifyPendingPayment();
-      }
-    });
-    return () => subscription.remove();
-  }, [verifyPendingPayment]);
+
+
+  const getSelectedSwipeProduct = () => SWIPE_PRODUCTS[selectedSwipePack];
 
   const getPlanPriceInINR = () => {
-    if (selectedPlan === 'custom') return customSwipes * 15;
+    if (selectedPlan === 'custom') return getSelectedSwipeProduct().price;
     if (selectedPlan === 'pro') return 1999;
     return 7599;
   };
 
   const getFinalPrice = () => {
-    const originalPrice = getPlanPriceInINR();
-    if (appliedCoupon) {
-      return calculateDiscountedPrice(originalPrice, appliedCoupon);
-    }
-    return originalPrice;
+    return getPlanPriceInINR();
   };
 
-  const handleApplyCoupon = () => {
-    const coupon = validateCoupon(couponCode);
-    if (coupon) {
-      setAppliedCoupon(coupon);
-      Alert.alert('Coupon Applied! 🎉', coupon.description);
-    } else {
-      Alert.alert('Invalid Coupon', 'This coupon code is not valid or has expired.');
-    }
-  };
 
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponCode('');
-  };
 
   const handleSubscribe = async () => {
     if (selectedPlan !== 'custom' && PLAN_TIERS[selectedPlan] <= PLAN_TIERS[effectivePlan]) {
       Alert.alert('Cannot Downgrade', `You are already on the ${effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1)} plan.`);
       return;
     }
-    if (selectedPlan === 'custom' && customSwipes === 0) {
-      Alert.alert('Select Swipes', 'Please select at least 1 swipe to purchase.');
+    if (selectedPlan === 'custom' && !getSelectedSwipeProduct()) {
+      Alert.alert('Select Pack', 'Please select a swipe pack to purchase.');
       return;
     }
 
@@ -234,119 +268,57 @@ export default function PremiumScreen() {
 
     try {
       const finalAmountINR = getFinalPrice();
-      
-      // Get current user
+
+      // Check billing availability
+      if (!isBillingAvailable()) {
+        Alert.alert(
+          'Purchases Unavailable',
+          'In-app purchases are not available on this device. Please try again later.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         Alert.alert('Error', 'Please sign in to subscribe');
         return;
       }
-      
-      // If coupon makes it free, skip payment and activate directly
-      if (finalAmountINR === 0) {
-        const couponAttempt = await recordPaymentAttempt(user.id, selectedPlan === 'custom' ? 'custom' : selectedPlan, 0);
-        const result = selectedPlan === 'custom'
-          ? await activateCustomSwipes(user.id, customSwipes, undefined, undefined, 0, appliedCoupon?.code)
-          : await activateSubscription(user.id, selectedPlan, undefined, undefined, 0, appliedCoupon?.code);
 
-        if (result.success) {
-          if (couponAttempt.recordId) await updatePaymentStatus(couponAttempt.recordId, 'completed');
-          await sendSubscriptionNotification(selectedPlan, true);
-          await refetchTransactions();
-          await refetchSubscription();
-          queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
-          Alert.alert(
-            selectedPlan === 'custom' ? 'Swipes Added! 🎉' : 'Subscription Activated! 🎉',
-            selectedPlan === 'custom'
-              ? `${customSwipes} swipes have been added to your account!`
-              : `You are now subscribed to ${selectedPlan.toUpperCase()} plan for free!`,
-            [{ text: 'OK', onPress: navigateAfterSubscription }]
-          );
-        } else {
-          Alert.alert('Error', result.error || 'Failed to activate subscription');
-        }
-        return;
-      }
+      // Record payment attempt
+      const attempt = await recordPaymentAttempt(
+        user.id,
+        selectedPlan === 'custom' ? 'custom' : selectedPlan,
+        finalAmountINR,
+        undefined,
+        undefined,
+        selectedPlan === 'custom' ? getSelectedSwipeProduct().count : undefined
+      );
+
+      pendingPaymentRef.current = {
+        paymentLinkId: '',
+        planType: selectedPlan,
+        billingCycle: selectedPlan === 'custom' ? 'one-time' : 'monthly',
+        amount: finalAmountINR,
+        customSwipes: selectedPlan === 'custom' ? getSelectedSwipeProduct().count : undefined,
+        recordId: attempt.recordId,
+      };
 
       if (selectedPlan === 'custom') {
-        // Record attempt in Supabase
-        const attempt = await recordPaymentAttempt(user.id, 'custom', finalAmountINR, undefined, undefined, customSwipes);
-
-        const result = await initiatePayment({
-          amount: finalAmountINR,
-          planType: selectedPlan,
-          billingCycle: 'one-time',
-          currency: 'INR',
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.user_metadata?.full_name || user.user_metadata?.name,
-        });
-
-        if (result.success && result.paymentLinkId) {
-          // Update record with payment link ID
-          if (attempt.recordId) {
-            await updatePaymentStatus(attempt.recordId, 'pending', undefined);
-            await supabase.from('payment_history').update({ order_id: result.paymentLinkId }).eq('id', attempt.recordId);
-          }
-          pendingPaymentRef.current = {
-            paymentLinkId: result.paymentLinkId,
-            planType: selectedPlan,
-            billingCycle: 'one-time',
-            amount: finalAmountINR,
-            couponCode: appliedCoupon?.code,
-            customSwipes,
-            recordId: attempt.recordId,
-          };
-          await refetchTransactions();
-        } else if (!result.success) {
+        const swipeProduct = getSelectedSwipeProduct();
+        const success = await buyProduct(swipeProduct.id);
+        if (!success) {
           if (attempt.recordId) await updatePaymentStatus(attempt.recordId, 'failed');
+          pendingPaymentRef.current = null;
           await refetchTransactions();
-          Alert.alert('Error', result.error || 'Failed to initiate payment');
         }
       } else {
-        // Record attempt in Supabase
-        const attempt = await recordPaymentAttempt(user.id, selectedPlan, finalAmountINR);
-
-        const result = await initiateSubscriptionPayment({
-          amount: finalAmountINR,
-          planType: selectedPlan,
-          billingCycle: 'monthly',
-          currency: 'INR',
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.user_metadata?.full_name || user.user_metadata?.name,
-        });
-
-        if (result.success && result.subscriptionId) {
-          if (attempt.recordId) {
-            await supabase.from('payment_history').update({ order_id: result.subscriptionId }).eq('id', attempt.recordId);
-          }
-          pendingPaymentRef.current = {
-            paymentLinkId: result.subscriptionId,
-            planType: selectedPlan,
-            billingCycle: 'monthly',
-            amount: finalAmountINR,
-            couponCode: appliedCoupon?.code,
-            recordId: attempt.recordId,
-          };
-          await refetchTransactions();
-          Alert.alert('Subscription Initiated', 'Complete the payment in the browser. Your plan will activate automatically.');
-        } else if (result.success && result.paymentLinkId) {
-          if (attempt.recordId) {
-            await supabase.from('payment_history').update({ order_id: result.paymentLinkId }).eq('id', attempt.recordId);
-          }
-          pendingPaymentRef.current = {
-            paymentLinkId: result.paymentLinkId,
-            planType: selectedPlan,
-            billingCycle: 'monthly',
-            amount: finalAmountINR,
-            couponCode: appliedCoupon?.code,
-            recordId: attempt.recordId,
-          };
-        } else if (!result.success) {
+        const sku = selectedPlan === 'pro' ? SUBSCRIPTION_SKUS.pro : SUBSCRIPTION_SKUS.premium;
+        const success = await buySubscription(sku);
+        if (!success) {
           if (attempt.recordId) await updatePaymentStatus(attempt.recordId, 'failed');
+          pendingPaymentRef.current = null;
           await refetchTransactions();
-          Alert.alert('Error', result.error || 'Failed to initiate payment');
         }
       }
     } catch (error: any) {
@@ -356,37 +328,46 @@ export default function PremiumScreen() {
     }
   };
 
+  const handleRestorePurchases = async () => {
+    if (!supabaseUserId) return;
+    setIsRestoring(true);
+    try {
+      const purchases = await restorePurchases();
+      if (purchases.length === 0) {
+        Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
+        return;
+      }
+      // Process the most recent subscription purchase
+      const subPurchase = purchases.find(
+        (p) => p.productId === SUBSCRIPTION_SKUS.pro || p.productId === SUBSCRIPTION_SKUS.premium
+      );
+      if (subPurchase) {
+        const planType = subPurchase.productId === SUBSCRIPTION_SKUS.pro ? 'pro' : 'premium';
+        const token = subPurchase.purchaseToken || subPurchase.transactionId || '';
+        await activateSubscription(supabaseUserId, planType, token, subPurchase.productId, 0, undefined, token);
+        await refetchSubscription();
+        queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
+        Alert.alert('Purchases Restored! 🎉', `Your ${planType.toUpperCase()} subscription has been restored.`);
+      } else {
+        Alert.alert('No Subscriptions Found', 'Only consumable purchases were found. Subscriptions could not be restored.');
+      }
+    } catch (error) {
+      console.error('Restore purchases error:', error);
+      Alert.alert('Error', 'Failed to restore purchases. Please try again.');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   const handleCancelSubscription = async () => {
     if (!supabaseUserId) return;
     Alert.alert(
       'Cancel Subscription',
-      'Your recurring payments will stop, but you will keep your remaining swipes until the end of the billing cycle.',
+      Platform.OS === 'ios'
+        ? 'To cancel your subscription, go to Settings → Apple ID → Subscriptions → NextQuark → Cancel.'
+        : 'To cancel your subscription, go to Google Play Store → Menu → Subscriptions → NextQuark → Cancel.',
       [
-        { text: 'Keep Subscription', style: 'cancel' },
-        {
-          text: 'Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            setIsCancelling(true);
-            try {
-              if (subscriptionData?.razorpay_subscription_id) {
-                await cancelRazorpaySubscription(subscriptionData.razorpay_subscription_id, true);
-              }
-              const result = await cancelSubscription(supabaseUserId);
-              if (result.success) {
-                await refetchSubscription();
-                queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
-                Alert.alert('Subscription Cancelled', 'Recurring payments have been stopped. You retain your remaining swipes.');
-              } else {
-                Alert.alert('Error', result.error || 'Failed to cancel subscription');
-              }
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to cancel subscription');
-            } finally {
-              setIsCancelling(false);
-            }
-          },
-        },
+        { text: 'OK', style: 'default' },
       ]
     );
   };
@@ -414,13 +395,14 @@ export default function PremiumScreen() {
     if (effectivePlan === selectedPlan && (effectivePlan as string) !== 'free') return 'Current Plan';
     if (isDowngrade) return `Already on ${effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1)}`;
     if (selectedPlan === 'custom') {
-      return customSwipes === 0 ? 'Select swipes to buy' : `Buy ${customSwipes} swipe${customSwipes > 1 ? 's' : ''} for ₹${customSwipes * 15}`;
+      const pack = getSelectedSwipeProduct();
+      return `Buy ${pack.count} swipes for ₹${pack.price}`;
     }
-    return getFinalPrice() === 0 ? 'Activate Free Subscription' : `Subscribe for ₹${getPlanPriceInINR()}`;
+    return `Subscribe for ₹${getPlanPriceInINR()}`;
   };
 
   const isDowngrade = selectedPlan !== 'custom' && PLAN_TIERS[selectedPlan] <= PLAN_TIERS[effectivePlan];
-  const isCtaDisabled = isProcessing || isVerifying || isDowngrade || (selectedPlan === 'custom' && customSwipes === 0);
+  const isCtaDisabled = isProcessing || isVerifying || isDowngrade;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#121212' }]}>
@@ -437,13 +419,13 @@ export default function PremiumScreen() {
           {effectivePlan === 'free' && (
             <>
               <Text style={[styles.heroTitle, { color: themeColors.textPrimary }]}>Unlock Your Full Potential</Text>
-              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Premium users are <Text style={styles.heroHighlight}>60x more likely</Text> to get an interview</Text>
+              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Upgrade to unlock <Text style={styles.heroHighlight}>more applications</Text> and premium features</Text>
             </>
           )}
           {effectivePlan === 'pro' && (
             <>
               <Text style={[styles.heroTitle, { color: themeColors.textPrimary }]}>Upgrade to Premium</Text>
-              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Get <Text style={styles.heroHighlight}>5x more applications</Text> and exclusive features</Text>
+              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Unlock <Text style={styles.heroHighlight}>more applications</Text> and exclusive features</Text>
             </>
           )}
           {effectivePlan === 'premium' && (
@@ -476,7 +458,7 @@ export default function PremiumScreen() {
           {[
             { key: 'pro' as const, label: 'Pro', apps: '200', sub: 'apps', price: '₹1,999', popular: true, color: '#1565C0' },
             { key: 'premium' as const, label: 'Premium', apps: '500', sub: 'apps', price: '₹7,599', popular: false, color: '#E65100' },
-            { key: 'custom' as const, label: 'Custom', apps: '₹15', sub: 'per swipe', price: `₹${customSwipes * 15}`, popular: false, color: '#7C3AED' },
+            { key: 'custom' as const, label: 'Custom', apps: `${getSelectedSwipeProduct().count}`, sub: 'swipes', price: `₹${getSelectedSwipeProduct().price}`, popular: false, color: '#7C3AED' },
           ].map((plan) => (
             <Pressable
               key={plan.key}
@@ -486,7 +468,7 @@ export default function PremiumScreen() {
               {plan.popular && (
                 <View style={styles.mostPopularBadge}>
                   <Star size={8} color="#FFFFFF" fill="#FFFFFF" />
-                  <Text style={styles.mostPopularText}>Most Popular</Text>
+                  <Text style={styles.mostPopularText}>Recommended</Text>
                 </View>
               )}
               <Text style={[styles.planBoxLabel, { color: themeColors.textSecondary }, selectedPlan === plan.key && styles.planBoxLabelSelected]}>{plan.label}</Text>
@@ -511,7 +493,7 @@ export default function PremiumScreen() {
                   <Text style={styles.popularTagText}>Popular</Text>
                 </View>
               </View>
-              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹1,999</Text>
+              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹1,999/month</Text>
               <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>200 applications · 3 resumes</Text>
               <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
             </>
@@ -521,102 +503,35 @@ export default function PremiumScreen() {
               <View style={styles.planDetailNameRow}>
                 <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Premium Plan</Text>
                 <View style={styles.bestValueTag}>
-                  <Text style={styles.bestValueText}>Best Value</Text>
+                  <Text style={styles.bestValueText}>Full Access</Text>
                 </View>
               </View>
-              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹7,599</Text>
+              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹7,599/month</Text>
               <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>500 applications · 5 resumes</Text>
               <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
             </>
           )}
           {selectedPlan === 'custom' && (
             <>
-              <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Custom Plan</Text>
-              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹{customSwipes * 15}</Text>
-              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>One-time purchase · ₹15 per application</Text>
-              <View style={[styles.sliderSection, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }]}>
-                <View style={styles.sliderHeader}>
-                  <Text style={[styles.sliderLabel, { color: themeColors.secondary }]}>Number of swipes</Text>
-                  <View style={styles.swipeCountBadge}>
-                    <Text style={styles.swipeCountText}>{customSwipes}</Text>
-                  </View>
-                </View>
-                <SmoothSlider
-                  value={customSwipes}
-                  min={0}
-                  max={50}
-                  step={1}
-                  onValueChange={setCustomSwipes}
-                  width={SCREEN_WIDTH - 96}
-                  trackHeight={6}
-                  thumbSize={28}
-                  activeColor="#7C3AED"
-                  inactiveColor="#E0E0E0"
-                  thumbColor="#7C3AED"
-                />
-                <View style={styles.sliderRange}>
-                  <Text style={styles.sliderRangeText}>0</Text>
-                  <Text style={styles.sliderRangeText}>25</Text>
-                  <Text style={styles.sliderRangeText}>50</Text>
-                </View>
-                <Text style={styles.sliderHelperText}>
-                  {customSwipes === 0
-                    ? 'Drag the slider to select swipes'
-                    : `${customSwipes} swipe${customSwipes > 1 ? 's' : ''} — ₹${customSwipes * 15}`}
-                </Text>
+              <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Custom Swipe Packs</Text>
+              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹{getSelectedSwipeProduct().price}</Text>
+              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>One-time purchase · Select a pack below</Text>
+              <View style={styles.swipePacksGrid}>
+                {SWIPE_PRODUCTS.map((pack, idx) => (
+                  <Pressable
+                    key={pack.id}
+                    style={[styles.swipePackCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.borderLight }, selectedSwipePack === idx && { backgroundColor: '#7C3AED', borderColor: '#7C3AED' }]}
+                    onPress={() => setSelectedSwipePack(idx)}
+                  >
+                    <Text style={[styles.swipePackCount, { color: themeColors.secondary }, selectedSwipePack === idx && { color: '#FFFFFF' }]}>{pack.count}</Text>
+                    <Text style={[styles.swipePackLabel, { color: themeColors.textTertiary }, selectedSwipePack === idx && { color: 'rgba(255,255,255,0.7)' }]}>swipes</Text>
+                    <Text style={[styles.swipePackPrice, { color: themeColors.accent }, selectedSwipePack === idx && { color: '#FFFFFF' }]}>₹{pack.price}</Text>
+                  </Pressable>
+                ))}
               </View>
             </>
           )}
         </View>
-
-        {selectedPlan !== 'custom' && effectivePlan !== 'premium' && (
-          <View style={[styles.couponSection, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }]}>
-            <View style={styles.couponInputRow}>
-              <Ionicons name="pricetag-outline" size={20} color={themeColors.textSecondary} style={styles.couponIcon} />
-              <TextInput
-                style={styles.couponInput}
-                placeholder="Enter coupon code"
-                placeholderTextColor={themeColors.textTertiary}
-                value={couponCode}
-                onChangeText={setCouponCode}
-                autoCapitalize="characters"
-                editable={!appliedCoupon}
-              />
-              {appliedCoupon ? (
-                <Pressable style={styles.removeCouponBtn} onPress={handleRemoveCoupon}>
-                  <XIcon size={16} color="#FFFFFF" />
-                </Pressable>
-              ) : (
-                <Pressable style={styles.applyCouponBtn} onPress={handleApplyCoupon}>
-                  <Text style={styles.applyCouponText}>Apply</Text>
-                </Pressable>
-              )}
-            </View>
-            {appliedCoupon && (
-              <View style={styles.couponApplied}>
-                <Check size={14} color="#10B981" />
-                <Text style={styles.couponAppliedText}>{appliedCoupon.description}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {appliedCoupon && selectedPlan !== 'custom' && effectivePlan !== 'premium' && (
-          <View style={[styles.priceBreakdown, { backgroundColor: themeColors.surfaceElevated }]}>
-            <View style={styles.priceRow}>
-              <Text style={[styles.priceLabel, { color: themeColors.textSecondary }]}>Original Price:</Text>
-              <Text style={[styles.priceValue, { color: themeColors.textPrimary }]}>₹{getPlanPriceInINR()}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={[styles.priceLabel, { color: themeColors.textSecondary }]}>Discount:</Text>
-              <Text style={styles.discountValue}>-₹{getPlanPriceInINR() - getFinalPrice()}</Text>
-            </View>
-            <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={[styles.totalLabel, { color: themeColors.secondary }]}>Total:</Text>
-              <Text style={styles.totalValue}>₹{getFinalPrice()}</Text>
-            </View>
-          </View>
-        )}
 
         <View style={styles.whatYouGetSection}>
           <Text style={[styles.whatYouGetTitle, { color: themeColors.secondary }]}>What you get</Text>
@@ -662,26 +577,13 @@ export default function PremiumScreen() {
           </View>
         </View>
 
-        <Text style={[styles.testimonialSectionTitle, { color: themeColors.secondary }]}>What our users say</Text>
+        <Text style={[styles.testimonialSectionTitle, { color: themeColors.secondary }]}>How it works</Text>
         <View style={styles.testimonialCarouselWrap}>
           <LinearGradient colors={['#121212', 'transparent']} style={styles.testimonialFadeTop} pointerEvents="none" />
           <Animated.View style={{ transform: [{ translateY: testimonialScrollY }] }}>
             {[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => (
               <View key={idx} style={styles.testimonialCard}>
-                <Ionicons name="chatbubble-outline" size={18} color="rgba(255,255,255,0.2)" style={styles.testimonialQuoteIcon} />
-                <Text style={styles.testimonialQuote} numberOfLines={2}>"{t.quote}"</Text>
-                <View style={styles.testimonialFooter}>
-                  <Image source={t.avatar} style={styles.testimonialAvatar} />
-                  <View style={styles.testimonialInfo}>
-                    <Text style={styles.testimonialName}>{t.name}</Text>
-                    <Text style={styles.testimonialRole}>{t.role}</Text>
-                  </View>
-                  <View style={styles.testimonialStars}>
-                    {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} size={12} color="#FFD700" fill="#FFD700" />
-                    ))}
-                  </View>
-                </View>
+                <Text style={styles.testimonialQuote}>{t.quote}</Text>
               </View>
             ))}
           </Animated.View>
@@ -794,33 +696,60 @@ export default function PremiumScreen() {
         </View>
           )}
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: 140 }} />
         </View>
       </ScrollView>
 
       {activeTab === 'plans' && (
         <View style={[styles.stickyCtaBar, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: '#1E1E1E', borderTopColor: '#2A2A2A' }]}>
-          <View style={styles.stickyCtaPriceCol}>
-            <Text style={[styles.stickyCtaPriceLabel, { color: themeColors.textSecondary }]}>{selectedPlan === 'custom' ? 'Custom' : selectedPlan === 'pro' ? 'Pro' : 'Premium'}</Text>
-            <Text style={[styles.stickyCtaPrice, { color: themeColors.secondary }]}>₹{getFinalPrice()}</Text>
-          </View>
-          <Pressable
-            style={[styles.stickyCtaBtn, isCtaDisabled && styles.subscribeBtnDisabled]}
-            onPress={handleSubscribe}
-            disabled={isCtaDisabled}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : isVerifying ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ActivityIndicator color="#FFFFFF" size="small" />
-                <Text style={styles.subscribeBtnText}>Verifying...</Text>
+          <View style={{ width: '100%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={styles.stickyCtaPriceCol}>
+                <Text style={[styles.stickyCtaPriceLabel, { color: themeColors.textSecondary }]}>{selectedPlan === 'custom' ? 'Custom' : selectedPlan === 'pro' ? 'Pro' : 'Premium'}</Text>
+                <Text style={[styles.stickyCtaPrice, { color: themeColors.secondary }]}>₹{getFinalPrice()}</Text>
               </View>
-            ) : (
-              <Text style={styles.subscribeBtnText}>{getCtaLabel()}</Text>
-            )}
-          </Pressable>
+              <Pressable
+                style={[styles.stickyCtaBtn, isCtaDisabled && styles.subscribeBtnDisabled]}
+                onPress={handleSubscribe}
+                disabled={isCtaDisabled}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : isVerifying ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.subscribeBtnText}>Verifying...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.subscribeBtnText}>{getCtaLabel()}</Text>
+                )}
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+              <Pressable onPress={() => Linking.openURL('https://nextquark.framer.website/privacy')}>
+                <Text style={{ fontSize: 11, color: '#808080' }}>Privacy Policy</Text>
+              </Pressable>
+              <Text style={{ fontSize: 11, color: '#555' }}>•</Text>
+              <Pressable onPress={() => Linking.openURL('https://nextquark.framer.website/terms')}>
+                <Text style={{ fontSize: 11, color: '#808080' }}>Terms of Use</Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
+      )}
+
+      {activeTab === 'plans' && Platform.OS === 'ios' && (
+        <Pressable
+          style={[styles.restoreBtn, { bottom: Math.max(insets.bottom, 16) + 68 }]}
+          onPress={handleRestorePurchases}
+          disabled={isRestoring}
+        >
+          {isRestoring ? (
+            <ActivityIndicator color="#B0B0B0" size="small" />
+          ) : (
+            <Text style={styles.restoreBtnText}>Restore Purchases</Text>
+          )}
+        </Pressable>
       )}
     </View>
   );
@@ -896,45 +825,24 @@ const styles = StyleSheet.create({
   compTablePremiumValue: { color: Colors.accent, fontWeight: '700' as const },
 
   testimonialSectionTitle: { fontSize: 20, fontWeight: '800' as const, color: Colors.secondary, marginBottom: 14 },
-  testimonialCarouselWrap: { height: (TESTIMONIAL_HEIGHT + TESTIMONIAL_GAP) * 3, overflow: 'hidden' as const, marginBottom: 24, position: 'relative' as const },
+  testimonialCarouselWrap: { height: 80 * 3, overflow: 'hidden' as const, marginBottom: 24, position: 'relative' as const },
   testimonialFadeTop: { position: 'absolute' as const, top: 0, left: 0, right: 0, height: 30, zIndex: 2 },
   testimonialFadeBottom: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 30, zIndex: 2 },
-  testimonialCard: { backgroundColor: '#0F172A', borderRadius: 16, padding: 16, height: TESTIMONIAL_HEIGHT, marginBottom: TESTIMONIAL_GAP, position: 'relative' as const, overflow: 'hidden' as const, justifyContent: 'space-between' as const },
-  testimonialQuoteIcon: { position: 'absolute' as const, top: 14, right: 16 },
-  testimonialQuote: { fontSize: 14, color: 'rgba(255,255,255,0.9)', fontStyle: 'italic' as const, lineHeight: 22, marginBottom: 10 },
-  testimonialFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  testimonialAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
-  testimonialInfo: { flex: 1 },
-  testimonialName: { fontSize: 13, fontWeight: '700' as const, color: '#FFFFFF' },
-  testimonialRole: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
+  testimonialCard: { backgroundColor: '#0F172A', borderRadius: 16, padding: 16, marginBottom: TESTIMONIAL_GAP, justifyContent: 'center' as const },
+  testimonialQuote: { fontSize: 14, color: 'rgba(255,255,255,0.9)', fontStyle: 'italic' as const, lineHeight: 22 },
+
+
   testimonialStars: { flexDirection: 'row', gap: 2 },
 
-  couponSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.borderLight },
-  couponInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  couponIcon: { marginLeft: 2 },
-  couponInput: { flex: 1, fontSize: 15, fontWeight: '600' as const, color: '#FFFFFF', paddingVertical: 8 },
-  applyCouponBtn: { backgroundColor: Colors.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
-  applyCouponText: { fontSize: 14, fontWeight: '700' as const, color: '#FFFFFF' },
-  removeCouponBtn: { backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
-  couponApplied: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  couponAppliedText: { fontSize: 13, color: '#10B981', fontWeight: '600' as const },
-  priceBreakdown: { backgroundColor: '#2A2A2A', borderRadius: 12, padding: 14, marginBottom: 16 },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  priceLabel: { fontSize: 14, color: Colors.textSecondary },
-  priceValue: { fontSize: 14, fontWeight: '600' as const, color: Colors.textPrimary },
-  discountValue: { fontSize: 14, fontWeight: '700' as const, color: '#10B981' },
-  totalRow: { marginTop: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.borderLight, marginBottom: 0 },
-  totalLabel: { fontSize: 16, fontWeight: '700' as const, color: Colors.secondary },
-  totalValue: { fontSize: 18, fontWeight: '800' as const, color: Colors.accent },
+
+
 
   sliderSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderLight },
-  sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sliderLabel: { fontSize: 15, fontWeight: '700' as const, color: Colors.secondary },
-  swipeCountBadge: { backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
-  swipeCountText: { fontSize: 16, fontWeight: '800' as const, color: '#FFFFFF' },
-  sliderRange: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  sliderRangeText: { fontSize: 11, color: Colors.textTertiary, fontWeight: '600' as const },
-  sliderHelperText: { fontSize: 13, color: '#7C3AED', fontWeight: '600' as const, textAlign: 'center' as const, marginTop: 10 },
+  swipePacksGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  swipePackCard: { width: '47%' as any, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 2 },
+  swipePackCount: { fontSize: 24, fontWeight: '900' as const },
+  swipePackLabel: { fontSize: 11, fontWeight: '600' as const, marginTop: 2 },
+  swipePackPrice: { fontSize: 16, fontWeight: '800' as const, marginTop: 6 },
 
   // Subscription Management
   tabBar: { flexDirection: 'row', backgroundColor: '#1E1E1E', borderRadius: 14, padding: 4, marginTop: 8, marginBottom: 8 },
@@ -967,4 +875,6 @@ const styles = StyleSheet.create({
   subTxEmptySubtext: { fontSize: 12, color: '#606060' },
   subCancelBtn: { marginTop: 16, borderWidth: 1.5, borderColor: '#EF4444', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   subCancelText: { fontSize: 14, fontWeight: '700' as const, color: '#EF4444' },
+  restoreBtn: { position: 'absolute' as const, left: 0, right: 0, alignItems: 'center', paddingVertical: 8 },
+  restoreBtnText: { fontSize: 13, fontWeight: '600' as const, color: '#808080', textDecorationLine: 'underline' as const },
 });

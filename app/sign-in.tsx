@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Image, ActivityIndicator, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Eye, Star } from '@/components/ProfileIcons';
@@ -7,15 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 
-const CARD_HEIGHT = 110;
 const CARD_GAP = 10;
 
 const TESTIMONIALS = [
-  { quote: 'Got 3 interview calls within my first week. The AI auto-apply is a game changer!', name: 'Priya S.', role: 'Software Engineer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/women/44.jpg' } },
-  { quote: 'Went from 0 callbacks to 5 interviews in 2 weeks. Smart matching is incredibly accurate.', name: 'Rahul M.', role: 'Product Manager', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/32.jpg' } },
-  { quote: 'The profile boost alone was worth it. Recruiters started reaching out directly!', name: 'Ananya K.', role: 'UX Designer', rating: 4, avatar: { uri: 'https://randomuser.me/api/portraits/women/68.jpg' } },
-  { quote: 'Applied to 150 jobs in one weekend. Manually that would have taken me a month!', name: 'Vikram T.', role: 'Data Scientist', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/75.jpg' } },
-  { quote: 'I was skeptical at first, but it paid for itself after my first offer letter.', name: 'Arjun D.', role: 'Backend Developer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/46.jpg' } },
+  { quote: 'Apply to hundreds of jobs with a single swipe — save hours every week.' },
+  { quote: 'AI auto-fill handles repetitive fields so you can focus on what matters.' },
+  { quote: 'Get your profile seen by more recruiters with enhanced visibility.' },
+  { quote: 'Upload multiple resumes and use the right one for each application.' },
+  { quote: 'Track all your applications in one place with real-time status updates.' },
 ];
 
 export default function SignInScreen() {
@@ -33,7 +32,7 @@ export default function SignInScreen() {
   const isFormValid = isEmailValid && password.length >= 1;
 
   useEffect(() => {
-    const totalScroll = TESTIMONIALS.length * (CARD_HEIGHT + CARD_GAP);
+    const totalScroll = TESTIMONIALS.length * (70 + CARD_GAP);
     Animated.loop(
       Animated.timing(scrollY, {
         toValue: -totalScroll,
@@ -43,8 +42,10 @@ export default function SignInScreen() {
     ).start();
   }, []);
 
+  const loadingRef = useRef(false);
   const handleSignIn = async () => {
-    if (!isFormValid || loading) return;
+    if (!isFormValid || loading || loadingRef.current) return;
+    loadingRef.current = true;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     setError('');
@@ -58,6 +59,7 @@ export default function SignInScreen() {
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
     setLoading(false);
+    loadingRef.current = false;
   };
 
   const animatePress = () => {
@@ -115,6 +117,8 @@ export default function SignInScreen() {
                 placeholder="Required"
                 placeholderTextColor="#555"
                 secureTextEntry={!showPassword}
+                autoComplete="password"
+                textContentType="password"
                 value={password}
                 onChangeText={(t) => { setPassword(t); setError(''); }}
                 onSubmitEditing={handleSignIn}
@@ -148,26 +152,20 @@ export default function SignInScreen() {
             </Text>
           </Pressable>
 
+          <Text style={styles.termsText}>
+            By signing in, you agree to our{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL('https://nextquark.framer.website/terms')}>Terms</Text>
+            {' '}and{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL('https://nextquark.framer.website/privacy')}>Privacy Policy</Text>
+          </Text>
+
           {/* Testimonial carousel */}
           <View style={styles.carouselWrap}>
             <LinearGradient colors={['#111111', 'transparent']} style={styles.fadeTop} pointerEvents="none" />
             <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
               {[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => (
                 <View key={idx} style={styles.tCard}>
-                  <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.15)" style={styles.tQuoteIcon} />
-                  <Text style={styles.tQuote} numberOfLines={2}>"{t.quote}"</Text>
-                  <View style={styles.tFooter}>
-                    <Image source={t.avatar} style={styles.tAvatar} />
-                    <View style={styles.tInfo}>
-                      <Text style={styles.tName}>{t.name}</Text>
-                      <Text style={styles.tRole}>{t.role}</Text>
-                    </View>
-                    <View style={styles.tStars}>
-                      {Array.from({ length: t.rating }).map((_, i) => (
-                        <Star key={i} size={10} color="#FFD700" fill="#FFD700" />
-                      ))}
-                    </View>
-                  </View>
+                  <Text style={styles.tQuote}>"{t.quote}"</Text>
                 </View>
               ))}
             </Animated.View>
@@ -213,17 +211,14 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', marginTop: 24 },
   footerText: { color: '#777', fontSize: 14 },
   footerLink: { color: '#0A84FF', fontWeight: '600' },
+  termsText: { textAlign: 'center', fontSize: 12, color: '#777', lineHeight: 18, marginTop: 12 },
+  termsLink: { color: '#0A84FF' },
 
-  carouselWrap: { height: (CARD_HEIGHT + CARD_GAP) * 2.5, overflow: 'hidden', marginTop: 32, position: 'relative' },
+  carouselWrap: { height: 80 * 2.5, overflow: 'hidden', marginTop: 32, position: 'relative' },
   fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 30, zIndex: 2 },
   fadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 30, zIndex: 2 },
-  tCard: { backgroundColor: '#1C1C1E', borderRadius: 14, padding: 14, height: CARD_HEIGHT, marginBottom: CARD_GAP, justifyContent: 'space-between', position: 'relative', overflow: 'hidden' },
-  tQuoteIcon: { position: 'absolute', top: 12, right: 14 },
-  tQuote: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20, paddingRight: 20 },
-  tFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)' },
-  tInfo: { flex: 1 },
-  tName: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
-  tRole: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
+  tCard: { backgroundColor: '#1C1C1E', borderRadius: 14, padding: 14, marginBottom: CARD_GAP, justifyContent: 'center' },
+  tQuote: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20 },
+
   tStars: { flexDirection: 'row', gap: 2 },
 });

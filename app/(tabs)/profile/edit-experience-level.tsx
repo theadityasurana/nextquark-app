@@ -7,7 +7,7 @@ import { ArrowLeft, Check, Briefcase, GraduationCap, Rocket, TrendingUp, Award, 
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
+const TAB_BAR_HEIGHT = 56;
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 

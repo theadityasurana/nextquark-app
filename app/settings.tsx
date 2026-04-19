@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Linking
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, BookOpen, Crown, Zap, Trash2 } from '@/components/ProfileIcons';
+import { ArrowLeft, ShieldCheck, HelpCircle, Info, MessageSquareMore, LogOut, Lightbulb, ChevronRight, Crown, Zap, Trash2 } from '@/components/ProfileIcons';
 import { InstagramIcon, TwitterIcon, LinkedInIcon, WebsiteIcon } from '@/components/SocialIcons';
 import * as Haptics from 'expo-haptics';
 import { darkColors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import TutorialModal from '@/components/TutorialModal';
+
 import { Image } from 'expo-image';
 import { getSubscriptionStatus } from '@/lib/subscription';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { logout, deleteAccount, userProfile, supabaseUserId } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
+
 
   const { data: subscriptionData } = useQuery({
     queryKey: ['subscription-status-settings', supabaseUserId],
@@ -76,9 +76,8 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const menuItems = [
+  const menuItems: { icon: any; label: string; route?: string; highlight?: boolean; action?: () => void }[] = [
     { icon: Zap, label: 'Upgrade to Premium', route: '/premium', highlight: true },
-    { icon: BookOpen, label: 'How to Use', action: () => setShowTutorial(true) },
     { icon: Lightbulb, label: 'Quick Tips', route: '/quick-tips' },
     { icon: ShieldCheck, label: 'Privacy Policy', route: '/privacy-policy' },
     { icon: HelpCircle, label: 'Help & Support', route: '/help-support' },
@@ -205,7 +204,7 @@ export default function SettingsScreen() {
         <Text style={styles.versionText}>NextQuark v1.0.0</Text>
       </ScrollView>
 
-      <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
+
     </View>
   );
 }

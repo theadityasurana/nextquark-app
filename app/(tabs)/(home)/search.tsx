@@ -67,32 +67,34 @@ export default function SearchScreen() {
         </Pressable>
       </View>
 
-      {searchTags.length > 0 && (
-        <View style={styles.tagsSection}>
-          <Text style={[styles.tagsSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>SEARCH TERMS</Text>
-          <View style={[styles.tagsGroupBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF' }]}>
-            <View style={styles.tagsWrap}>
-              {searchTags.map((tag, idx) => (
-                <Pressable key={idx} style={styles.tag} onPress={() => removeSearchTag(tag)}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                  <X size={12} color="#FFFFFF" strokeWidth={2.5} />
-                </Pressable>
-              ))}
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+        {searchTags.length > 0 && (
+          <View style={styles.tagsSection}>
+            <Text style={[styles.tagsSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>SEARCH TERMS</Text>
+            <View style={[styles.tagsGroupBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF' }]}>
+              <View style={styles.tagsWrap}>
+                {searchTags.map((tag, idx) => (
+                  <Pressable key={idx} style={styles.tag} onPress={() => removeSearchTag(tag)}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                    <X size={12} color="#FFFFFF" strokeWidth={2.5} />
+                  </Pressable>
+                ))}
+              </View>
             </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {searchTags.length === 0 && (
-        <View style={styles.hintSection}>
-          <Text style={[styles.hintText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
-            Type a keyword and press search to add it.{'\n'}You can add multiple search terms.
-          </Text>
-        </View>
-      )}
+        {searchTags.length === 0 && (
+          <View style={styles.hintSection}>
+            <Text style={[styles.hintText, { color: isDark ? '#8E8E93' : '#8E8E93' }]}>
+              Type a keyword and press search to add it.{'\n'}You can add multiple search terms.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
 
       {searchTags.length > 0 && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 56 + 16 }]}>
           <Pressable style={styles.viewResultsButton} onPress={handleViewResults}>
             <Text style={styles.viewResultsText}>View Results</Text>
             <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
@@ -116,9 +118,11 @@ const styles = StyleSheet.create({
   tagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#007AFF', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   tagText: { fontSize: 15, fontWeight: '500', color: '#FFFFFF' },
+  content: { flex: 1 },
+  contentContainer: { flexGrow: 1 },
   hintSection: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
   hintText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12 },
+  footer: { paddingHorizontal: 16, paddingTop: 12 },
   viewResultsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#007AFF', paddingVertical: 14, borderRadius: 12 },
   viewResultsText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
 });

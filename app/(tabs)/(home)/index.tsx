@@ -27,12 +27,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors, { darkColors } from '@/constants/colors';
-import { mockJobs } from '@/mocks/jobs';
 import { Job } from '@/types';
 import JobCard from '@/components/JobCard';
 import { MAJOR_CITIES } from '@/constants/cities';
 import { mockUser } from '@/mocks/user';
-import { fetchJobsFromSupabase, fetchRemainingJobs, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
+import { fetchJobsBatch, BatchFetchParams, BatchFetchResult, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
 import { computeMatchScores } from '@/lib/match-scoring';
 import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -131,7 +130,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile, isOnboardingComplete, refetchProfile } = useAuth();
+  const { userName, swipedJobIds, addSwipedJobId, supabaseUserId, userProfile, isOnboardingComplete, refetchProfile, isLoading: isAuthLoading } = useAuth();
   const colors = useColors();
   const isDark = colors.background === darkColors.background;
   const CARD_COLORS = [colors.surfaceElevated];
@@ -224,70 +223,130 @@ export default function HomeScreen() {
     });
   }, [isOnboardingComplete, userName]);
 
-  const { data: supabaseJobs, isLoading: isLoadingJobs, refetch: refetchJobs } = useQuery({
-    queryKey: ['supabase-jobs'],
-    queryFn: fetchJobsFromSupabase,
-    staleTime: 1000 * 60 * 5,
-  });
+  // --- Batch loading state per tab ---
+  const BATCH_SIZE = 10;
+  const PREFETCH_THRESHOLD = 6; // prefetch when 6 of 10 swiped
+  type TabKey = 'discover' | 'india' | 'foryou' | 'remote';
+  const [tabJobs, setTabJobs] = useState<Record<TabKey, Job[]>>({ discover: [], india: [], foryou: [], remote: [] });
+  const [tabOffsets, setTabOffsets] = useState<Record<TabKey, number>>({ discover: 0, india: 0, foryou: 0, remote: 0 });
+  const [tabHasMore, setTabHasMore] = useState<Record<TabKey, boolean>>({ discover: true, india: true, foryou: true, remote: true });
+  const [tabLoading, setTabLoading] = useState<Record<TabKey, boolean>>({ discover: false, india: false, foryou: false, remote: false });
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const prefetchingRef = useRef<Record<TabKey, boolean>>({ discover: false, india: false, foryou: false, remote: false });
 
-  useEffect(() => {
-    if (!isLoadingJobs) return;
-    const interval = setInterval(() => {
-      setLiveJobCount(Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE));
-    }, 50);
-    return () => clearInterval(interval);
-  }, [isLoadingJobs]);
+  const buildBatchParams = useCallback((tab: TabKey, offset: number): BatchFetchParams => {
+    return {
+      tab,
+      limit: BATCH_SIZE,
+      offset,
+      excludeIds: swipedJobIds,
+      searchTags: activeSearchTags.length > 0 ? activeSearchTags : (filters.searchTags.length > 0 ? filters.searchTags : undefined),
+      filters: {
+        companies: filters.companies.length > 0 ? filters.companies : undefined,
+        roles: filters.roles.length > 0 ? filters.roles : undefined,
+        locations: filters.locations.length > 0 ? filters.locations : undefined,
+        workModes: filters.workModes.length > 0 ? filters.workModes : undefined,
+        jobTypes: filters.jobTypes.length > 0 ? filters.jobTypes : undefined,
+        jobLevels: filters.jobLevels.length > 0 ? filters.jobLevels : undefined,
+        jobRequirements: filters.jobRequirements.length > 0 ? filters.jobRequirements : undefined,
+        postedWithin: filters.postedWithin.length > 0 ? filters.postedWithin : undefined,
+      },
+      desiredRoles: (tab === 'foryou' && userProfile?.desiredRoles) ? userProfile.desiredRoles : undefined,
+    };
+  }, [swipedJobIds, activeSearchTags, filters, userProfile]);
 
-  const { data: remainingJobs } = useQuery({
-    queryKey: ['supabase-jobs-remaining'],
-    queryFn: fetchRemainingJobs,
-    enabled: !!supabaseJobs && supabaseJobs.length > 0,
-    staleTime: 1000 * 60 * 5,
-  });
+  // Refs to hold latest values for fetch functions (avoids stale closures & dependency churn)
+  const buildBatchParamsRef = useRef(buildBatchParams);
+  buildBatchParamsRef.current = buildBatchParams;
+  const userProfileRef = useRef(userProfile);
+  userProfileRef.current = userProfile;
+  const tabOffsetsRef = useRef(tabOffsets);
+  tabOffsetsRef.current = tabOffsets;
+  const tabHasMoreRef = useRef(tabHasMore);
+  tabHasMoreRef.current = tabHasMore;
+  const tabJobsRef = useRef(tabJobs);
+  tabJobsRef.current = tabJobs;
 
-  // Floating bounce + loading word animation
-  useEffect(() => {
-    if (!isLoadingJobs) {
-      setLoadingWordIndex(0);
-      loadingWordOpacity.setValue(0);
-      floatAnim.setValue(0);
-      return;
+  const doFetchBatch = useCallback(async (tab: TabKey, offset: number, append: boolean) => {
+    setTabLoading(prev => {
+      if (prev[tab] && append) return prev; // already fetching
+      return { ...prev, [tab]: true };
+    });
+    try {
+      const params = buildBatchParamsRef.current(tab, offset);
+      const result = await fetchJobsBatch(params);
+      let batch = computeMatchScores(userProfileRef.current || null, result.jobs);
+      for (let i = batch.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [batch[i], batch[j]] = [batch[j], batch[i]];
+      }
+      const newOffset = offset + result.serverRowCount;
+      setTabJobs(prev => ({
+        ...prev,
+        [tab]: append ? [...prev[tab], ...batch] : batch,
+      }));
+      setTabOffsets(prev => ({ ...prev, [tab]: newOffset }));
+      // Use serverHadMore (raw DB count) not client-filtered batch.length
+      setTabHasMore(prev => ({ ...prev, [tab]: result.serverHadMore }));
+
+      // Auto-backfill: if client-filtered batch is small but server has more, keep fetching
+      if (batch.length < BATCH_SIZE && result.serverHadMore) {
+        const currentTotal = append
+          ? (tabJobsRef.current[tab] || []).length + batch.length
+          : batch.length;
+        if (currentTotal < BATCH_SIZE) {
+          // Schedule next fetch without blocking
+          setTimeout(() => doFetchBatch(tab, newOffset, true), 0);
+        }
+      }
+    } catch (e) {
+      console.log(`Error fetching batch for ${tab}:`, e);
+    } finally {
+      setTabLoading(prev => ({ ...prev, [tab]: false }));
+      prefetchingRef.current[tab] = false;
     }
+  }, []); // stable — no deps, uses refs
 
-    let wordTimeout: ReturnType<typeof setTimeout> | null = null;
-    let cancelled = false;
+  // Initial load: fetch first batch for all tabs (runs exactly once)
+  const initialLoadDone = useRef(false);
+  useEffect(() => {
+    if (!supabaseUserId || initialLoadDone.current) return;
+    initialLoadDone.current = true;
+    setInitialLoaded(true);
+    const tabs: TabKey[] = ['discover', 'india', 'foryou', 'remote'];
+    tabs.forEach(tab => doFetchBatch(tab, 0, false));
+  }, [supabaseUserId, doFetchBatch]);
 
-    const floatAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
-      ])
-    );
-    floatAnimation.start();
+  // Prefetch next batch when user has swiped through PREFETCH_THRESHOLD cards
+  const checkAndPrefetch = useCallback((tab: TabKey, swipedInBatch: number, totalInTab: number) => {
+    if (prefetchingRef.current[tab]) return;
+    const remaining = totalInTab - swipedInBatch;
+    if (remaining <= (BATCH_SIZE - PREFETCH_THRESHOLD) && tabHasMoreRef.current[tab]) {
+      prefetchingRef.current[tab] = true;
+      doFetchBatch(tab, tabOffsetsRef.current[tab], true);
+    }
+  }, [doFetchBatch]);
 
-    const animateWord = () => {
-      if (cancelled) return;
-      Animated.timing(loadingWordOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start(() => {
-        if (cancelled) return;
-        wordTimeout = setTimeout(() => {
-          if (cancelled) return;
-          Animated.timing(loadingWordOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
-            if (cancelled) return;
-            setLoadingWordIndex((prev) => (prev + 1) % loadingWords.length);
-          });
-        }, 250);
-      });
-    };
-    animateWord();
+  // Auto-refetch when current tab has fewer than 10 jobs (or 0) after initial load
+  const autoRefetchTriggeredRef = useRef<Record<TabKey, boolean>>({ discover: false, india: false, foryou: false, remote: false });
+  useEffect(() => {
+    if (!initialLoaded || !supabaseUserId) return;
+    const tab = feedMode as TabKey;
+    const currentJobs = tabJobs[tab] || [];
+    const isLoading = tabLoading[tab];
+    // If we have < 10 jobs, not currently loading, have more to fetch, and haven't auto-refetched yet
+    if (currentJobs.length < BATCH_SIZE && !isLoading && tabHasMore[tab] && !autoRefetchTriggeredRef.current[tab]) {
+      autoRefetchTriggeredRef.current[tab] = true;
+      doFetchBatch(tab, tabOffsets[tab], true);
+    }
+    // Reset the flag when we get enough jobs
+    if (currentJobs.length >= BATCH_SIZE) {
+      autoRefetchTriggeredRef.current[tab] = false;
+    }
+  }, [initialLoaded, supabaseUserId, feedMode, tabJobs, tabLoading, tabHasMore, tabOffsets, doFetchBatch]);
 
-    return () => {
-      cancelled = true;
-      if (wordTimeout) clearTimeout(wordTimeout);
-      floatAnimation.stop();
-      loadingWordOpacity.stopAnimation();
-      loadingWordOpacity.setValue(0);
-    };
-  }, [isLoadingJobs, loadingWordIndex, loadingWordOpacity, floatAnim, loadingWords.length]);
+  // Show loader when: auth loading, initial load, OR current tab has 0 jobs and is still fetching/has more to fetch
+  const isShowingLoader = !supabaseUserId || isAuthLoading || (!initialLoaded) || (tabJobs[feedMode].length === 0 && (tabLoading[feedMode] || tabHasMore[feedMode]));
 
   useFocusEffect(
     useCallback(() => {
@@ -493,337 +552,94 @@ export default function HomeScreen() {
     setResumeRenameText('');
   }, [resumeRenamingResume, resumeRenameText]);
 
-  const allJobs: Job[] = useMemo(() => {
-    let jobsList: Job[] = [];
-    if (supabaseJobs && supabaseJobs.length > 0) {
-      jobsList = remainingJobs && remainingJobs.length > 0
-        ? [...supabaseJobs, ...remainingJobs]
-        : supabaseJobs;
-    } else {
-      jobsList = mockJobs;
-    }
-
-    // Compute real match scores based on user profile
-    jobsList = computeMatchScores(userProfile || null, jobsList);
-    
-    // Shuffle the jobs array using a seeded approach so it's stable
-    const shuffled = [...jobsList];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    
-    return shuffled;
-  }, [supabaseJobs, remainingJobs, userProfile]);
-
-  // Calculate For You count separately (constant regardless of active section)
-  const forYouCount = useMemo(() => {
-    let filtered = allJobs;
-    if (swipedJobIds.length > 0) {
-      const swipedSet = new Set(swipedJobIds);
-      filtered = filtered.filter(job => !swipedSet.has(job.id));
-    }
-    // Apply India filter
-    filtered = filtered.filter(job => {
-      const keyword = 'india';
-      return job.jobTitle.toLowerCase().includes(keyword) ||
-        job.companyName.toLowerCase().includes(keyword) ||
-        job.location.toLowerCase().includes(keyword) ||
-        job.description.toLowerCase().includes(keyword) ||
-        job.skills.some(skill => skill.toLowerCase().includes(keyword));
-    });
-    // Apply desired roles filter
-    if (userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
-      filtered = filtered.filter(job => 
-        userProfile.desiredRoles!.some(role => {
-          const roleLower = role.toLowerCase();
-          return job.jobTitle.toLowerCase().includes(roleLower) ||
-            job.description.toLowerCase().includes(roleLower) ||
-            job.skills.some(skill => skill.toLowerCase().includes(roleLower));
-        })
-      );
-    }
-    return filtered.length;
-  }, [allJobs, swipedJobIds, userProfile]);
-
-  const indiaCount = useMemo(() => {
-    let filtered = allJobs;
-    if (swipedJobIds.length > 0) {
-      const swipedSet = new Set(swipedJobIds);
-      filtered = filtered.filter(job => !swipedSet.has(job.id));
-    }
-    return filtered.filter(job => {
-      const keyword = 'india';
-      return job.jobTitle.toLowerCase().includes(keyword) ||
-        job.companyName.toLowerCase().includes(keyword) ||
-        job.location.toLowerCase().includes(keyword) ||
-        job.description.toLowerCase().includes(keyword) ||
-        job.skills.some(skill => skill.toLowerCase().includes(keyword));
-    }).length;
-  }, [allJobs, swipedJobIds]);
-
-  const remoteCount = useMemo(() => {
-    let filtered = allJobs;
-    if (swipedJobIds.length > 0) {
-      const swipedSet = new Set(swipedJobIds);
-      filtered = filtered.filter(job => !swipedSet.has(job.id));
-    }
-    return filtered.filter(job => {
-      const keyword = 'remote';
-      return job.jobTitle.toLowerCase().includes(keyword) ||
-        job.companyName.toLowerCase().includes(keyword) ||
-        job.location.toLowerCase().includes(keyword) ||
-        job.description.toLowerCase().includes(keyword) ||
-        job.employmentType.toLowerCase().includes(keyword) ||
-        job.locationType.toLowerCase().includes(keyword) ||
-        job.skills.some(skill => skill.toLowerCase().includes(keyword));
-    }).length;
-  }, [allJobs, swipedJobIds]);
-
+  // The jobs for the current tab come directly from tabJobs (already fetched server-side with filters)
   const jobs: Job[] = useMemo(() => {
-    let filtered = allJobs;
-
-    // Use the snapshot taken at deck-build time, NOT the live swipedJobIds.
-    // This prevents the deck from shifting when a card is swiped.
+    const tabData = tabJobs[feedMode] || [];
+    // Filter out any that got swiped since the batch was fetched
     if (deckSwipedSnapshot.size > 0) {
-      filtered = filtered.filter(job => !deckSwipedSnapshot.has(job.id));
+      return tabData.filter(job => !deckSwipedSnapshot.has(job.id));
+    }
+    return tabData;
+  }, [tabJobs, feedMode, deckSwipedSnapshot]);
+
+  // Reset currentIndex when new jobs arrive after exhaustion
+  const prevJobsLengthRef = useRef(jobs.length);
+  useEffect(() => {
+    if (prevJobsLengthRef.current === 0 && jobs.length > 0 && currentIndex >= prevJobsLengthRef.current) {
+      // New jobs arrived after we ran out — reset to show them
+      setCurrentIndex(0);
+      currentIndexRef.current = 0;
+      setDeckSwipedSnapshot(new Set(swipedJobIds));
+      positionRef.setValue({ x: 0, y: 0 });
+      setCardKey(prev => prev + 1);
+    }
+    prevJobsLengthRef.current = jobs.length;
+  }, [jobs.length]);
+
+  // isFetchingMore must be after jobs is defined
+  const isFetchingMore = currentIndex >= jobs.length && (tabLoading[feedMode] || (tabHasMore[feedMode] && !prefetchingRef.current[feedMode as TabKey]));
+
+  useEffect(() => {
+    if (!isShowingLoader && !isFetchingMore) return;
+    const interval = setInterval(() => {
+      setLiveJobCount(Math.floor(COUNTER_BASE + ((Date.now() - COUNTER_EPOCH) / 1000) * COUNTER_RATE));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isShowingLoader, isFetchingMore]);
+
+  // Floating bounce + loading word animation
+  useEffect(() => {
+    if (!isShowingLoader && !isFetchingMore) {
+      setLoadingWordIndex(0);
+      loadingWordOpacity.setValue(0);
+      floatAnim.setValue(0);
+      return;
     }
 
-    // For You mode: filter by India + user's desired roles
-    if (feedMode === 'foryou') {
-      filtered = filtered.filter(job => {
-        const keyword = 'india';
-        return job.jobTitle.toLowerCase().includes(keyword) ||
-          job.companyName.toLowerCase().includes(keyword) ||
-          job.location.toLowerCase().includes(keyword) ||
-          job.description.toLowerCase().includes(keyword) ||
-          job.employmentType.toLowerCase().includes(keyword) ||
-          job.locationType.toLowerCase().includes(keyword) ||
-          job.skills.some(skill => skill.toLowerCase().includes(keyword));
+    let wordTimeout: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const floatAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      ])
+    );
+    floatAnimation.start();
+
+    const animateWord = () => {
+      if (cancelled) return;
+      Animated.timing(loadingWordOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start(() => {
+        if (cancelled) return;
+        wordTimeout = setTimeout(() => {
+          if (cancelled) return;
+          Animated.timing(loadingWordOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+            if (cancelled) return;
+            setLoadingWordIndex((prev) => (prev + 1) % loadingWords.length);
+          });
+        }, 250);
       });
-      if (userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
-        filtered = filtered.filter(job => 
-          userProfile.desiredRoles!.some(role => {
-            const roleLower = role.toLowerCase();
-            return job.jobTitle.toLowerCase().includes(roleLower) ||
-              job.description.toLowerCase().includes(roleLower) ||
-              job.skills.some(skill => skill.toLowerCase().includes(roleLower));
-          })
-        );
-      }
-    }
+    };
+    animateWord();
 
-    // ACTIVE FILTERS (ALL FUNCTIONAL):
-    // ✅ Search Tags (from search page)
-    // ✅ Search Tags (from filter modal)
-    // ✅ Search Keyword
-    // ✅ Companies
-    // ✅ Roles
-    // ✅ Locations
-    // ✅ Work Modes (Remote/Onsite/Hybrid)
-    // ✅ Job Types (Full-time/Part-time/etc)
-    // ✅ Posted Within (Date Range) - NOW WORKING
-    // ✅ Job Levels - NOW WORKING (filters by experienceLevel, jobTitle, description)
-    // ✅ Job Requirements - NOW WORKING (H1B, Security Clearance, No Degree, Remote Only, Relocation)
+    return () => {
+      cancelled = true;
+      if (wordTimeout) clearTimeout(wordTimeout);
+      floatAnimation.stop();
+      loadingWordOpacity.stopAnimation();
+      loadingWordOpacity.setValue(0);
+    };
+  }, [isShowingLoader, isFetchingMore, loadingWordIndex, loadingWordOpacity, floatAnim, loadingWords.length]);
 
-    // India mode: filter by India keyword
-    if (feedMode === 'india') {
-      filtered = filtered.filter(job => {
-        const keyword = 'india';
-        return job.jobTitle.toLowerCase().includes(keyword) ||
-          job.companyName.toLowerCase().includes(keyword) ||
-          job.location.toLowerCase().includes(keyword) ||
-          job.description.toLowerCase().includes(keyword) ||
-          job.employmentType.toLowerCase().includes(keyword) ||
-          job.locationType.toLowerCase().includes(keyword) ||
-          job.skills.some(skill => skill.toLowerCase().includes(keyword));
-      });
-    }
-
-    // Remote mode: filter by remote keyword
-    if (feedMode === 'remote') {
-      filtered = filtered.filter(job => {
-        const keyword = 'remote';
-        return job.jobTitle.toLowerCase().includes(keyword) ||
-          job.companyName.toLowerCase().includes(keyword) ||
-          job.location.toLowerCase().includes(keyword) ||
-          job.description.toLowerCase().includes(keyword) ||
-          job.employmentType.toLowerCase().includes(keyword) ||
-          job.locationType.toLowerCase().includes(keyword) ||
-          job.skills.some(skill => skill.toLowerCase().includes(keyword));
-      });
-    }
-
-    // Apply active search tags from search page
-    if (activeSearchTags.length > 0) {
-      filtered = filtered.filter(job => 
-        activeSearchTags.some(tag => {
-          const keyword = tag.toLowerCase();
-          return job.jobTitle.toLowerCase().includes(keyword) ||
-            job.companyName.toLowerCase().includes(keyword) ||
-            job.location.toLowerCase().includes(keyword) ||
-            job.description.toLowerCase().includes(keyword) ||
-            job.employmentType.toLowerCase().includes(keyword) ||
-            job.locationType.toLowerCase().includes(keyword) ||
-            job.skills.some(skill => skill.toLowerCase().includes(keyword));
-        })
-      );
-    }
-
-    if (filters.searchTags.length > 0) {
-      filtered = filtered.filter(job => 
-        filters.searchTags.some(tag => {
-          const keyword = tag.toLowerCase();
-          return job.jobTitle.toLowerCase().includes(keyword) ||
-            job.companyName.toLowerCase().includes(keyword) ||
-            job.location.toLowerCase().includes(keyword) ||
-            job.description.toLowerCase().includes(keyword) ||
-            job.employmentType.toLowerCase().includes(keyword) ||
-            job.locationType.toLowerCase().includes(keyword) ||
-            job.skills.some(skill => skill.toLowerCase().includes(keyword));
-        })
-      );
-    }
-
-    if (filters.searchKeyword.trim()) {
-      const keyword = filters.searchKeyword.toLowerCase().trim();
-      filtered = filtered.filter(job => 
-        job.jobTitle.toLowerCase().includes(keyword) ||
-        job.companyName.toLowerCase().includes(keyword) ||
-        job.location.toLowerCase().includes(keyword) ||
-        job.description.toLowerCase().includes(keyword) ||
-        job.employmentType.toLowerCase().includes(keyword) ||
-        job.locationType.toLowerCase().includes(keyword) ||
-        job.skills.some(skill => skill.toLowerCase().includes(keyword))
-      );
-    }
-
-    if (filters.companies.length > 0) {
-      filtered = filtered.filter(job => 
-        filters.companies.some(company => 
-          job.companyName.toLowerCase().includes(company.toLowerCase())
-        )
-      );
-    }
-
-    if (filters.roles.length > 0) {
-      filtered = filtered.filter(job => 
-        filters.roles.some(role => 
-          job.jobTitle.toLowerCase().includes(role.toLowerCase())
-        )
-      );
-    }
-
-    if (filters.locations.length > 0) {
-      filtered = filtered.filter(job => 
-        filters.locations.some(location => 
-          job.location.toLowerCase().includes(location.toLowerCase())
-        )
-      );
-    }
-
-    if (filters.workModes.length > 0) {
-      filtered = filtered.filter(job => 
-        filters.workModes.some(mode => 
-          job.locationType.toLowerCase() === mode.toLowerCase()
-        )
-      );
-    }
-
-    if (filters.jobTypes.length > 0) {
-      filtered = filtered.filter(job => 
-        filters.jobTypes.some(type => 
-          job.employmentType.toLowerCase().includes(type.toLowerCase())
-        )
-      );
-    }
-
-    // Posted Within filter
-    if (filters.postedWithin.length > 0) {
-      const now = Date.now();
-      filtered = filtered.filter(job => {
-        // Parse the relative date string (e.g., "2 days ago", "Today", "1 week ago")
-        const postedDate = job.postedDate.toLowerCase();
-        let jobAgeMs = 0;
-        
-        if (postedDate.includes('today') || postedDate.includes('just now')) {
-          jobAgeMs = 0;
-        } else if (postedDate.includes('hour')) {
-          const hours = parseInt(postedDate.match(/\d+/)?.[0] || '0');
-          jobAgeMs = hours * 60 * 60 * 1000;
-        } else if (postedDate.includes('day')) {
-          const days = parseInt(postedDate.match(/\d+/)?.[0] || '0');
-          jobAgeMs = days * 24 * 60 * 60 * 1000;
-        } else if (postedDate.includes('week')) {
-          const weeks = parseInt(postedDate.match(/\d+/)?.[0] || '0');
-          jobAgeMs = weeks * 7 * 24 * 60 * 60 * 1000;
-        } else if (postedDate.includes('month')) {
-          const months = parseInt(postedDate.match(/\d+/)?.[0] || '0');
-          jobAgeMs = months * 30 * 24 * 60 * 60 * 1000;
-        }
-        
-        return filters.postedWithin.some(range => {
-          let maxAgeMs = 0;
-          switch (range) {
-            case '1d': maxAgeMs = 24 * 60 * 60 * 1000; break;
-            case '2d': maxAgeMs = 2 * 24 * 60 * 60 * 1000; break;
-            case '1w': maxAgeMs = 7 * 24 * 60 * 60 * 1000; break;
-            case '1m': maxAgeMs = 30 * 24 * 60 * 60 * 1000; break;
-            case '3m': maxAgeMs = 90 * 24 * 60 * 60 * 1000; break;
-          }
-          return jobAgeMs <= maxAgeMs;
-        });
-      });
-    }
-
-    // Job Levels filter
-    if (filters.jobLevels.length > 0) {
-      filtered = filtered.filter(job => {
-        const experienceLevel = job.experienceLevel?.toLowerCase() || '';
-        return filters.jobLevels.some(level => {
-          const levelLower = level.toLowerCase();
-          return experienceLevel.includes(levelLower) || 
-                 job.jobTitle.toLowerCase().includes(levelLower) ||
-                 job.description.toLowerCase().includes(levelLower);
-        });
-      });
-    }
-
-    // Job Requirements filter
-    if (filters.jobRequirements.length > 0) {
-      filtered = filtered.filter(job => {
-        const description = job.description.toLowerCase();
-        const requirements = job.requirements?.map(r => r.toLowerCase()).join(' ') || '';
-        const detailedReqs = job.detailedRequirements?.toLowerCase() || '';
-        const allText = `${description} ${requirements} ${detailedReqs}`;
-        
-        return filters.jobRequirements.some(req => {
-          switch (req) {
-            case 'H1B Sponsorship':
-              return allText.includes('h1b') || allText.includes('visa sponsor') || allText.includes('sponsorship');
-            case 'Security Clearance':
-              return allText.includes('security clearance') || allText.includes('clearance required');
-            case 'No Degree Required':
-              return allText.includes('no degree') || allText.includes('without degree') || !allText.includes('degree required');
-            case 'Remote Only':
-              return job.locationType === 'remote';
-            case 'Relocation Assistance':
-              return allText.includes('relocation') || allText.includes('relo');
-            default:
-              return allText.includes(req.toLowerCase());
-          }
-        });
-      });
-    }
-
-    console.log(`Applied filters: ${allJobs.length} -> ${filtered.length} jobs`);
-    return filtered;
-  }, [allJobs, deckSwipedSnapshot, filters, feedMode, userProfile, activeSearchTags]);
+  // Tab counts (show loaded count for current batch)
+  const forYouCount = tabJobs.foryou.length;
+  const indiaCount = tabJobs.india.length;
+  const remoteCount = tabJobs.remote.length;
 
 
 
   // Rebuild deck when feed mode, filters, or search tags change.
-  // Take a fresh snapshot of swipedJobIds so the new deck excludes already-swiped jobs.
+  // Re-fetch all tabs with new filters, reset deck position.
   const prevFeedModeRef = useRef(feedMode);
   const prevFiltersRef = useRef(filters);
   const prevActiveSearchTagsRef = useRef(activeSearchTags);
@@ -841,8 +657,17 @@ export default function HomeScreen() {
       currentIndexRef.current = 0;
       positionRef.setValue({ x: 0, y: 0 });
       setCardKey(prev => prev + 1);
+
+      // Re-fetch all tabs with updated filters/search
+      if (filtersChanged || searchTagsChanged) {
+        const tabs: TabKey[] = ['discover', 'india', 'foryou', 'remote'];
+        setTabOffsets({ discover: 0, india: 0, foryou: 0, remote: 0 });
+        setTabHasMore({ discover: true, india: true, foryou: true, remote: true });
+        autoRefetchTriggeredRef.current = { discover: false, india: false, foryou: false, remote: false };
+        tabs.forEach(tab => doFetchBatch(tab, 0, false));
+      }
     }
-  }, [feedMode, filters, activeSearchTags, positionRef, swipedJobIds]);
+  }, [feedMode, filters, activeSearchTags, positionRef, swipedJobIds, doFetchBatch]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -1047,6 +872,12 @@ export default function HomeScreen() {
     
     setCardKey(prev => prev + 1);
     setCurrentIndex(nextIndex);
+
+    // Check if we need to prefetch next batch
+    checkAndPrefetch(feedMode as TabKey, nextIndex, jobs.length);
+
+    // If we just ran out of jobs but more exist, reset index to 0 for the new batch
+    // This is handled by the render logic showing the loader
     
     // Scale-up fade-in: 0.92 scale + 0 opacity -> 1.0 scale + 1 opacity
     Animated.timing(cardMountAnim, {
@@ -1401,7 +1232,7 @@ export default function HomeScreen() {
           </View>
           <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.headerTitle, { color: colors.secondary }]}>{greeting}</Text>
           <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>
-            {isLoadingJobs 
+            {isShowingLoader 
               ? 'Loading jobs...' 
               : subscriptionData 
               ? `${subscriptionData.applications_remaining} applications left this month`
@@ -1524,8 +1355,8 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <View style={styles.cardsContainer}>
-        {isLoadingJobs ? (
+      <View style={[styles.cardsContainer, { marginBottom: 56 + insets.bottom }]}>
+        {isShowingLoader ? (
           <View style={styles.loadingContainer}>
             <View style={styles.floatWrapper}>
               <Animated.View
@@ -1577,6 +1408,52 @@ export default function HomeScreen() {
               {liveJobCount.toLocaleString()} jobs added and counting
             </Text>
           </View>
+        ) : currentIndex >= jobs.length && (tabLoading[feedMode] || (tabHasMore[feedMode] && !prefetchingRef.current[feedMode as TabKey])) ? (
+          (() => {
+            // Trigger a background fetch if we ran out of jobs but more exist
+            if (!tabLoading[feedMode] && tabHasMore[feedMode] && !prefetchingRef.current[feedMode as TabKey]) {
+              prefetchingRef.current[feedMode as TabKey] = true;
+              doFetchBatch(feedMode as TabKey, tabOffsets[feedMode], true);
+            }
+            return (
+              <View style={styles.loadingContainer}>
+                <View style={styles.floatWrapper}>
+                  <Animated.View
+                    style={[
+                      styles.floatCard,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.borderLight,
+                        transform: [
+                          { translateY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
+                        ],
+                      },
+                    ]}
+                  >
+                    <View style={[styles.floatCardInner, { backgroundColor: colors.background }]}>
+                      <View style={styles.floatCardHeader}>
+                        <View style={[styles.floatCardLogo, { backgroundColor: '#D5F5E3' }]} />
+                        <View style={{ flex: 1 }}>
+                          <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '75%' }]} />
+                          <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '50%', marginTop: 6 }]} />
+                        </View>
+                      </View>
+                      <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '90%', height: 12, marginTop: 16 }]} />
+                      <View style={[styles.floatCardLine, { backgroundColor: colors.borderLight, width: '60%', height: 8, marginTop: 8 }]} />
+                      <View style={styles.floatCardChips}>
+                        <View style={[styles.floatChip, { backgroundColor: colors.borderLight }]} />
+                        <View style={[styles.floatChip, { backgroundColor: colors.borderLight, width: 50 }]} />
+                        <View style={[styles.floatChip, { backgroundColor: colors.borderLight, width: 40 }]} />
+                      </View>
+                    </View>
+                  </Animated.View>
+                </View>
+                <Animated.Text style={[styles.loadingWordText, { color: colors.textPrimary, opacity: loadingWordOpacity }]}>
+                  {loadingWords[loadingWordIndex]}
+                </Animated.Text>
+              </View>
+            );
+          })()
         ) : currentIndex >= jobs.length ? (
           <EmptyState colors={colors} emptyFadeAnim={emptyFadeAnim} emptySlideAnim={emptySlideAnim} />
         ) : (
@@ -1609,7 +1486,7 @@ export default function HomeScreen() {
                     try {
                       const { Share } = await import('react-native');
                       await Share.share({
-                        message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${updatedStats.referralCode} and get 5 free application swipes to get started. Download now!`,
+                        message: `Hey! Check out NextQuark — a swipe-based job discovery app. Join with my referral code ${updatedStats.referralCode} and get 5 application swipes to get started. Download now!`,
                       });
                     } catch (error) {
                       console.error('Error sharing:', error);
@@ -2138,7 +2015,7 @@ export default function HomeScreen() {
         onShare={async () => {
           if (referralStats?.referralCode) {
             try {
-              await RNShare.share({ message: `Hey! Have you heard about NextQuark? It's Tinder for jobs - swipe right to apply for your dream job! Join with my referral code ${referralStats.referralCode} and get 5 free application swipes to get started. Download now!` });
+              await RNShare.share({ message: `Hey! Check out NextQuark — a swipe-based job discovery app. Join with my referral code ${referralStats.referralCode} and get 5 application swipes to get started. Download now!` });
             } catch (error) { console.error('Error sharing:', error); }
           }
         }}
@@ -2183,7 +2060,7 @@ const styles = StyleSheet.create({
   activeSearchTagText: { fontSize: 13, fontWeight: '600' as const, color: '#000000' },
   clearSearchButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#000000', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#FFFFFF' },
   clearSearchText: { fontSize: 12, fontWeight: '600' as const, color: '#FFFFFF' },
-  cardsContainer: { flex: 1, marginBottom: Platform.OS === 'ios' ? 88 : 64 },
+  cardsContainer: { flex: 1 },
   cardWrapper: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
   overlayLabel: { position: 'absolute' as const, zIndex: 10, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
   likeLabel: { top: 40, left: 24, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#16a34a' },

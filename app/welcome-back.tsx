@@ -36,7 +36,7 @@ export default function WelcomeBack() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', pointerEvents: 'none' },
   content: { flex: 1, justifyContent: 'flex-end', padding: 20, paddingBottom: 40 },
   logo: { width: '91%', height: 65, alignSelf: 'center', marginBottom: 10 },
   button: { backgroundColor: '#fff', padding: 18, borderRadius: 12, width: '100%', marginBottom: 16 },

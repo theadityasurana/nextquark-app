@@ -1,12 +1,10 @@
-import { supabase } from './supabase';
+import { supabase, SUPABASE_FUNCTIONS_URL } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 
 const PROXY_DOMAIN = 'nextquark.in';
-const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
 const SUPABASE_URL = 'https://widujxpahzlpegzjjpqp.supabase.co';
 const SERVICE_ROLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
 
-// Service-role client bypasses RLS for sent_emails operations
 const adminSupabase = SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
   : supabase;
@@ -223,6 +221,25 @@ export interface EmailAttachment {
   content: string; // base64
 }
 
+async function sendEmailDirectFetch(payload: Record<string, any>): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.log('send-email direct fetch error:', res.status, await res.text());
+      return false;
+    }
+    const data = await res.json();
+    return data?.success || false;
+  } catch (e) {
+    console.log('sendEmailDirectFetch error:', e);
+    return false;
+  }
+}
+
 export async function sendEmailViaResend(
   from: string,
   to: string,
@@ -234,85 +251,30 @@ export async function sendEmailViaResend(
   senderName?: string,
   emailAttachments?: EmailAttachment[]
 ): Promise<boolean> {
+  const payload = {
+    from: from.includes('<') ? from : `${senderName || 'NextQuark Mail'} <${from}>`,
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    body,
+    user_id: userId,
+    is_html: isHtml,
+    in_reply_to: inReplyToMessageId || null,
+    attachments: emailAttachments || null,
+  };
+
   try {
-    const displayName = senderName || 'NextQuark Mail';
-    const fromFormatted = from.includes('<') ? from : `${displayName} <${from}>`;
-
-    const emailPayload: Record<string, any> = {
-      from: fromFormatted,
-      to: Array.isArray(to) ? to : [to],
-      subject,
-    };
-
-    if (isHtml) {
-      emailPayload.html = body;
-      emailPayload.text = (body || '').replace(/<[^>]*>/g, '');
-    } else {
-      emailPayload.text = body || '';
-    }
-
-    if (inReplyToMessageId) {
-      emailPayload.headers = {
-        'In-Reply-To': inReplyToMessageId,
-        'References': inReplyToMessageId,
-      };
-    }
-
-    if (emailAttachments && emailAttachments.length > 0) {
-      emailPayload.attachments = emailAttachments.map((a) => ({
-        filename: a.filename,
-        content: a.content,
-      }));
-      if (__DEV__) console.log('Sending with', emailAttachments.length, 'attachments, sizes:', emailAttachments.map(a => `${a.filename}:${Math.round(a.content.length / 1024)}KB`));
-    }
-
-    if (__DEV__) console.log('Resend payload keys:', Object.keys(emailPayload), 'attachments?', !!emailPayload.attachments);
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailPayload),
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: payload,
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      if (__DEV__) console.log('Resend API error:', res.status, errText);
-      return false;
+    if (error) {
+      console.log('send-email edge function error:', error.message);
+      return sendEmailDirectFetch(payload);
     }
-
-    // Store in sent_emails
-    const sentRow: Record<string, any> = {
-      user_id: userId,
-      from_email: from,
-      to_email: Array.isArray(to) ? to[0] : to,
-      subject,
-      body_text: isHtml ? (body || '').replace(/<[^>]*>/g, '') : (body || ''),
-      thread_id: computeThreadId(subject),
-      in_reply_to: inReplyToMessageId || null,
-      sent_at: new Date().toISOString(),
-    };
-    if (__DEV__) console.log('Inserting sent email:', JSON.stringify(sentRow));
-    let { data: insertData, error: insertErr } = await adminSupabase.from('sent_emails').insert(sentRow).select();
-    if (insertErr) {
-      if (__DEV__) console.log('Insert error (retrying without in_reply_to):', insertErr.message);
-      // Retry without in_reply_to in case column doesn't exist
-      delete sentRow.in_reply_to;
-      ({ data: insertData, error: insertErr } = await adminSupabase.from('sent_emails').insert(sentRow).select());
-    }
-    if (insertErr) {
-      if (__DEV__) console.log('Error storing sent email:', insertErr.message, insertErr.details, insertErr.hint);
-    } else {
-      featureCache.table.delete('sent_emails');
-      if (__DEV__) console.log('Sent email stored:', insertData);
-    }
-
-    return true;
+    return data?.success || false;
   } catch (e) {
-    if (__DEV__) console.log('sendEmailViaResend error:', e);
-    return false;
+    console.log('sendEmailViaResend error:', e);
+    return sendEmailDirectFetch(payload);
   }
 }
 
@@ -433,54 +395,26 @@ export async function forwardEmail(
   forwardTo: string,
   senderName?: string
 ): Promise<boolean> {
+  const payload = {
+    action: 'forward',
+    email_id: emailId,
+    user_id: userId,
+    forward_to: forwardTo,
+  };
+
   try {
-    // Fetch the original email
-    const { data: email, error: emailErr } = await supabase
-      .from('inbound_emails')
-      .select('*')
-      .eq('id', emailId)
-      .eq('user_id', userId)
-      .single();
-
-    if (emailErr || !email) {
-      if (__DEV__) console.log('forwardEmail: email not found');
-      return false;
-    }
-
-    const { data: proxy } = await supabase
-      .from('proxy_emails')
-      .select('proxy_address')
-      .eq('user_id', userId)
-      .single();
-
-    const fromAddr = proxy?.proxy_address || `noreply@${PROXY_DOMAIN}`;
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: `${senderName || 'NextQuark Mail'} <${fromAddr}>`,
-        to: [forwardTo],
-        subject: `Fwd: ${email.subject || '(no subject)'}`,
-        ...(email.body_html ? { html: email.body_html } : {}),
-        text: email.body_text || '(no content)',
-        reply_to: email.from_email,
-      }),
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: payload,
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      if (__DEV__) console.log('Forward Resend error:', res.status, errText);
-      return false;
+    if (error) {
+      console.log('forward email error:', error.message);
+      return sendEmailDirectFetch(payload);
     }
-
-    return true;
+    return data?.success || false;
   } catch (e) {
-    if (__DEV__) console.log('forwardEmail error:', e);
-    return false;
+    console.log('forwardEmail error:', e);
+    return sendEmailDirectFetch(payload);
   }
 }
 

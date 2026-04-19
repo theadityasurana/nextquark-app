@@ -3,3 +3,9 @@ verify_jwt = false
 
 [functions.send-email]
 verify_jwt = false
+
+[functions.apple-webhook]
+verify_jwt = false
+
+[functions.google-play-webhook]
+verify_jwt = false

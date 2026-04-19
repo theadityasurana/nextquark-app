@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Modal, FlatList, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Phone, ChevronDown, Search, X } from '@/components/ProfileIcons';
@@ -78,7 +78,7 @@ export default function MobileSignUpScreen() {
     return (
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
               <Pressable onPress={() => setStep('phone')} style={styles.backButton}>
                 <ArrowLeft size={24} color="#111111" />
@@ -139,7 +139,7 @@ export default function MobileSignUpScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             <Pressable onPress={() => router.back()} style={styles.backButton}>
               <ArrowLeft size={24} color="#111111" />
@@ -185,9 +185,9 @@ export default function MobileSignUpScreen() {
               </Pressable>
               <Text style={styles.termsText}>
                 By signing up, you agree to our{' '}
-                <Text style={styles.termsLink}>Terms of Service</Text>
+                <Text style={styles.termsLink} onPress={() => Linking.openURL('https://nextquark.framer.website/terms')}>Terms of Service</Text>
                 {' '}and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
+                <Text style={styles.termsLink} onPress={() => Linking.openURL('https://nextquark.framer.website/privacy')}>Privacy Policy</Text>
               </Text>
             </View>
           </ScrollView>

@@ -124,7 +124,6 @@ export default function SavedJobsScreen() {
             </View>
           </View>
           <View style={st.jobCardBottom}>
-            <Text style={[st.salary, { color: colors.textPrimary }]}>{formatSalary(item.salaryMin, item.salaryMax)}/{item.salaryPeriod}</Text>
             <View style={[st.typeBadge, { backgroundColor: colors.surfaceElevated }]}><Text style={[st.typeBadgeText, { color: colors.textSecondary }]}>{item.employmentType}</Text></View>
             <View style={[st.matchBadge, { backgroundColor: colors.surfaceElevated }]}><Text style={[st.matchBadgeText, { color: colors.textPrimary }]}>{item.matchScore}% match</Text></View>
           </View>

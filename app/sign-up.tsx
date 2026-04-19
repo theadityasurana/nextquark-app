@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Animated, Image, ActivityIndicator, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Eye, Star } from '@/components/ProfileIcons';
@@ -7,15 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 
-const CARD_HEIGHT = 110;
 const CARD_GAP = 10;
 
 const TESTIMONIALS = [
-  { quote: 'Got 3 interview calls within my first week. The AI auto-apply is a game changer!', name: 'Priya S.', role: 'Software Engineer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/women/44.jpg' } },
-  { quote: 'Went from 0 callbacks to 5 interviews in 2 weeks. Smart matching is incredibly accurate.', name: 'Rahul M.', role: 'Product Manager', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/32.jpg' } },
-  { quote: 'The profile boost alone was worth it. Recruiters started reaching out directly!', name: 'Ananya K.', role: 'UX Designer', rating: 4, avatar: { uri: 'https://randomuser.me/api/portraits/women/68.jpg' } },
-  { quote: 'Applied to 150 jobs in one weekend. Manually that would have taken me a month!', name: 'Vikram T.', role: 'Data Scientist', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/75.jpg' } },
-  { quote: 'I was skeptical at first, but it paid for itself after my first offer letter.', name: 'Arjun D.', role: 'Backend Developer', rating: 5, avatar: { uri: 'https://randomuser.me/api/portraits/men/46.jpg' } },
+  { quote: 'Apply to hundreds of jobs with a single swipe — save hours every week.' },
+  { quote: 'AI auto-fill handles repetitive fields so you can focus on what matters.' },
+  { quote: 'Get your profile seen by more recruiters with enhanced visibility.' },
+  { quote: 'Upload multiple resumes and use the right one for each application.' },
+  { quote: 'Track all your applications in one place with real-time status updates.' },
 ];
 
 export default function SignUpScreen() {
@@ -35,21 +34,12 @@ export default function SignUpScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const hasMinLength = password.length >= 8;
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-  const rules = [hasMinLength, hasUppercase, hasNumber, hasSpecial];
-  const rulesMet = rules.filter(Boolean).length;
-  const isPasswordValid = rulesMet === 4;
+  const isPasswordValid = password.length >= 6;
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
   const isFormValid = isEmailValid && isPasswordValid && passwordsMatch;
 
-  const strengthColor = rulesMet <= 1 ? '#FF453A' : rulesMet <= 2 ? '#FF9F0A' : rulesMet <= 3 ? '#FFD60A' : '#30D158';
-  const strengthLabel = rulesMet <= 1 ? 'Weak' : rulesMet <= 2 ? 'Fair' : rulesMet <= 3 ? 'Good' : 'Strong';
-
   useEffect(() => {
-    const totalScroll = TESTIMONIALS.length * (CARD_HEIGHT + CARD_GAP);
+    const totalScroll = TESTIMONIALS.length * (70 + CARD_GAP);
     Animated.loop(
       Animated.timing(scrollY, {
         toValue: -totalScroll,
@@ -98,8 +88,8 @@ export default function SignUpScreen() {
         <View style={styles.content}>
           <View style={styles.headerTextSection}>
             <Text style={styles.heading}>Create Your Account 🚀</Text>
-            <Text style={styles.subheading}>Swipe right on jobs. AI applies for you.</Text>
-            <Text style={styles.funnyText}>tinder for jobs — won't find you a date,{'\n'}but will land you a paycheck 💰</Text>
+            <Text style={styles.subheading}>Swipe to discover jobs. AI helps you apply.</Text>
+            <Text style={styles.funnyText}>swipe-based job discovery — find your{'\n'}next opportunity in seconds 🚀</Text>
           </View>
 
           {errorMessage.length > 0 && (
@@ -132,9 +122,11 @@ export default function SignUpScreen() {
               <TextInput
                 ref={passwordRef}
                 style={styles.input}
-                placeholder="Required"
+                placeholder="Min 6 characters"
                 placeholderTextColor="#555"
                 secureTextEntry={!showPassword}
+                autoComplete="password-new"
+                textContentType="newPassword"
                 value={password}
                 onChangeText={setPassword}
                 onSubmitEditing={() => confirmRef.current?.focus()}
@@ -154,6 +146,8 @@ export default function SignUpScreen() {
                 placeholder="Re-enter password"
                 placeholderTextColor="#555"
                 secureTextEntry={!showConfirm}
+                autoComplete="password-new"
+                textContentType="newPassword"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 returnKeyType="done"
@@ -168,15 +162,8 @@ export default function SignUpScreen() {
           {emailTouched && !isEmailValid && email.length > 0 && (
             <Text style={styles.hintError}>Please enter a valid email address</Text>
           )}
-          {password.length > 0 && (
-            <View style={styles.strengthSection}>
-              <View style={styles.strengthRow}>
-                <View style={styles.strengthTrack}>
-                  <View style={[styles.strengthFill, { width: `${(rulesMet / 4) * 100}%`, backgroundColor: strengthColor }]} />
-                </View>
-                <Text style={[styles.strengthLabel, { color: strengthColor }]}>{strengthLabel}</Text>
-              </View>
-            </View>
+          {password.length > 0 && password.length < 6 && (
+            <Text style={styles.hintError}>Password must be at least 6 characters</Text>
           )}
           {confirmPassword.length > 0 && !passwordsMatch && (
             <Text style={styles.hintError}>Passwords do not match</Text>
@@ -207,9 +194,9 @@ export default function SignUpScreen() {
 
           <Text style={styles.termsText}>
             By signing up, you agree to our{' '}
-            <Text style={styles.termsLink} onPress={() => router.push('/terms-of-service' as any)}>Terms</Text>
+            <Text style={styles.termsLink} onPress={() => Linking.openURL('https://nextquark.framer.website/terms')}>Terms</Text>
             {' '}and{' '}
-            <Text style={styles.termsLink} onPress={() => router.push('/privacy-policy' as any)}>Privacy Policy</Text>
+            <Text style={styles.termsLink} onPress={() => Linking.openURL('https://nextquark.framer.website/privacy')}>Privacy Policy</Text>
           </Text>
 
           {/* Testimonial carousel */}
@@ -218,20 +205,7 @@ export default function SignUpScreen() {
             <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
               {[...TESTIMONIALS, ...TESTIMONIALS].map((t, idx) => (
                 <View key={idx} style={styles.tCard}>
-                  <Ionicons name="chatbubble-outline" size={16} color="rgba(255,255,255,0.15)" style={styles.tQuoteIcon} />
-                  <Text style={styles.tQuote} numberOfLines={2}>"{t.quote}"</Text>
-                  <View style={styles.tFooter}>
-                    <Image source={t.avatar} style={styles.tAvatar} />
-                    <View style={styles.tInfo}>
-                      <Text style={styles.tName}>{t.name}</Text>
-                      <Text style={styles.tRole}>{t.role}</Text>
-                    </View>
-                    <View style={styles.tStars}>
-                      {Array.from({ length: t.rating }).map((_, i) => (
-                        <Star key={i} size={10} color="#FFD700" fill="#FFD700" />
-                      ))}
-                    </View>
-                  </View>
+                  <Text style={styles.tQuote}>"{t.quote}"</Text>
                 </View>
               ))}
             </Animated.View>
@@ -272,11 +246,6 @@ const styles = StyleSheet.create({
 
   hintError: { color: '#FF453A', fontSize: 13, marginBottom: 8, paddingHorizontal: 4 },
 
-  strengthSection: { marginBottom: 12 },
-  strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  strengthTrack: { flex: 1, height: 3, borderRadius: 2, backgroundColor: '#1C1C1E' },
-  strengthFill: { height: 3, borderRadius: 2 },
-  strengthLabel: { fontSize: 12, fontWeight: '500' },
 
   button: { height: 50, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   buttonDisabled: { backgroundColor: '#1C1C1E' },
@@ -289,16 +258,11 @@ const styles = StyleSheet.create({
   termsText: { textAlign: 'center', fontSize: 12, color: '#555', lineHeight: 18, marginTop: 12 },
   termsLink: { color: '#0A84FF' },
 
-  carouselWrap: { height: (CARD_HEIGHT + CARD_GAP) * 2.5, overflow: 'hidden', marginTop: 28, position: 'relative' },
+  carouselWrap: { height: 80 * 2.5, overflow: 'hidden', marginTop: 28, position: 'relative' },
   fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 30, zIndex: 2 },
   fadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 30, zIndex: 2 },
-  tCard: { backgroundColor: '#1C1C1E', borderRadius: 14, padding: 14, height: CARD_HEIGHT, marginBottom: CARD_GAP, justifyContent: 'space-between', position: 'relative', overflow: 'hidden' },
-  tQuoteIcon: { position: 'absolute', top: 12, right: 14 },
-  tQuote: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20, paddingRight: 20 },
-  tFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)' },
-  tInfo: { flex: 1 },
-  tName: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
-  tRole: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
+  tCard: { backgroundColor: '#1C1C1E', borderRadius: 14, padding: 14, marginBottom: CARD_GAP, justifyContent: 'center' },
+  tQuote: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20 },
+
   tStars: { flexDirection: 'row', gap: 2 },
 });

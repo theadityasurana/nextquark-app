@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 
-import { activateSubscription, activateCustomSwipes, getSubscriptionStatus, getTransactionHistory, cancelSubscription, recordPaymentAttempt, updatePaymentStatus, markAbandonedPayments, type TransactionRecord } from '@/lib/subscription';
+import { activateSubscription, getSubscriptionStatus, getTransactionHistory, cancelSubscription, recordPaymentAttempt, updatePaymentStatus, markAbandonedPayments, type TransactionRecord } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendSubscriptionNotification } from '@/lib/notifications';
@@ -16,17 +16,13 @@ import {
   setupBilling,
   teardownBilling,
   buySubscription,
-  buyProduct,
   acknowledgePurchase,
-  consumePurchase,
   restorePurchases,
   fetchSubscriptions,
-  fetchSwipeProducts,
   purchaseUpdatedListener,
   purchaseErrorListener,
   isBillingAvailable,
   SUBSCRIPTION_SKUS,
-  SWIPE_PRODUCTS,
   type ProductPurchase,
   type SubscriptionPurchase,
   type PurchaseError,
@@ -35,15 +31,12 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COMPARISON_FEATURES = [
-  { label: 'Job applications', free: '40/month', pro: '200', premium: '500' },
-  { label: 'Resume uploads', free: '1', pro: '3', premium: '5' },
-  { label: 'AI auto-fill', free: false as const, pro: true, premium: true },
-  { label: 'Priority support', free: false as const, pro: true, premium: true },
-  { label: 'Profile visibility boost', free: false as const, pro: true, premium: true },
+  { label: 'Job applications', free: '15/day', premium: 'Unlimited' },
+  { label: 'Resume uploads', free: '1', premium: '3' },
+  { label: 'AI auto-fill', free: true, premium: true },
+  { label: 'Priority support', free: false as const, premium: true },
+  { label: 'Profile visibility boost', free: false as const, premium: true },
 ];
-
-
-const PLAN_TIERS: Record<string, number> = { free: 0, pro: 1, premium: 2, custom: 3 };
 
 const TESTIMONIAL_GAP = 12;
 
@@ -89,8 +82,7 @@ export default function PremiumScreen() {
   };
   const themeColors = dk as any;
   const queryClient = useQueryClient();
-  const [selectedPlan, setSelectedPlan] = useState<'pro' | 'premium' | 'custom'>('pro');
-  const [selectedSwipePack, setSelectedSwipePack] = useState(1); // index into SWIPE_PRODUCTS
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'weekly'>('monthly');
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -101,7 +93,7 @@ export default function PremiumScreen() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [activeTab, setActiveTab] = useState<'plans' | 'subscription'>('plans');
-  const pendingPaymentRef = useRef<{ paymentLinkId: string; planType: 'pro' | 'premium' | 'custom'; billingCycle: string; amount: number; customSwipes?: number; recordId?: string } | null>(null);
+  const pendingPaymentRef = useRef<{ billingCycle: string; amount: number; recordId?: string } | null>(null);
   const purchaseUpdateSubscription = useRef<any>(null);
   const purchaseErrorSubscription = useRef<any>(null);
 
@@ -136,46 +128,27 @@ export default function PremiumScreen() {
     try {
       const pending = pendingPaymentRef.current;
       const purchaseToken = purchase.purchaseToken || purchase.transactionId || '';
-      const productId = purchase.productId;
 
-      // Determine plan type from product ID
-      let planType: 'pro' | 'premium' | 'custom' = 'custom';
-      let swipeCount = 0;
-      if (productId === SUBSCRIPTION_SKUS.pro) planType = 'pro';
-      else if (productId === SUBSCRIPTION_SKUS.premium) planType = 'premium';
-      else {
-        const swipeProduct = SWIPE_PRODUCTS.find(p => p.id === productId);
-        if (swipeProduct) swipeCount = swipeProduct.count;
-      }
-
-      // Acknowledge/consume the purchase
-      if (planType === 'custom') {
-        await consumePurchase(purchase as ProductPurchase);
-      } else {
-        await acknowledgePurchase(purchase);
-      }
+      // Acknowledge the subscription purchase
+      await acknowledgePurchase(purchase);
 
       // Record in Supabase
       if (pending?.recordId) {
         await updatePaymentStatus(pending.recordId, 'completed', purchaseToken);
       }
 
-      const result = planType === 'custom'
-        ? await activateCustomSwipes(supabaseUserId, swipeCount || pending?.customSwipes || 0, purchaseToken, productId, pending?.amount || 0)
-        : await activateSubscription(supabaseUserId, planType, purchaseToken, productId, pending?.amount || 0, undefined, purchaseToken);
+      const result = await activateSubscription(supabaseUserId, 'premium', purchaseToken, purchase.productId, pending?.amount || 0, undefined, purchaseToken);
 
       pendingPaymentRef.current = null;
       await refetchTransactions();
 
       if (result.success) {
-        await sendSubscriptionNotification(planType);
+        await sendSubscriptionNotification('premium');
         await refetchSubscription();
         queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
         Alert.alert(
-          planType === 'custom' ? 'Swipes Added! 🎉' : 'Subscription Activated! 🎉',
-          planType === 'custom'
-            ? `${swipeCount || pending?.customSwipes} swipes have been added to your account!`
-            : `You are now subscribed to the ${planType.toUpperCase()} plan!`,
+          'Subscription Activated! 🎉',
+          'You are now a Premium member with unlimited applications!',
           [{ text: 'OK', onPress: navigateAfterSubscription }]
         );
       } else {
@@ -206,7 +179,6 @@ export default function PremiumScreen() {
     const init = async () => {
       await setupBilling();
       await fetchSubscriptions();
-      await fetchSwipeProducts();
     };
     init();
     purchaseUpdateSubscription.current = purchaseUpdatedListener(handlePurchaseUpdate);
@@ -240,36 +212,21 @@ export default function PremiumScreen() {
 
 
 
-  const getSelectedSwipeProduct = () => SWIPE_PRODUCTS[selectedSwipePack];
-
-  const getPlanPriceInINR = () => {
-    if (selectedPlan === 'custom') return getSelectedSwipeProduct().price;
-    if (selectedPlan === 'pro') return 1999;
-    return 7599;
+  const getPlanPrice = () => {
+    return billingCycle === 'monthly' ? 3599 : 999;
   };
-
-  const getFinalPrice = () => {
-    return getPlanPriceInINR();
-  };
-
-
 
   const handleSubscribe = async () => {
-    if (selectedPlan !== 'custom' && PLAN_TIERS[selectedPlan] <= PLAN_TIERS[effectivePlan]) {
-      Alert.alert('Cannot Downgrade', `You are already on the ${effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1)} plan.`);
-      return;
-    }
-    if (selectedPlan === 'custom' && !getSelectedSwipeProduct()) {
-      Alert.alert('Select Pack', 'Please select a swipe pack to purchase.');
+    if (effectivePlan === 'premium') {
+      Alert.alert('Already Premium', 'You are already on the Premium plan.');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      const finalAmountINR = getFinalPrice();
+      const finalAmountINR = getPlanPrice();
 
-      // Check billing availability
       if (!isBillingAvailable()) {
         Alert.alert(
           'Purchases Unavailable',
@@ -285,41 +242,24 @@ export default function PremiumScreen() {
         return;
       }
 
-      // Record payment attempt
       const attempt = await recordPaymentAttempt(
         user.id,
-        selectedPlan === 'custom' ? 'custom' : selectedPlan,
+        'premium',
         finalAmountINR,
-        undefined,
-        undefined,
-        selectedPlan === 'custom' ? getSelectedSwipeProduct().count : undefined
       );
 
       pendingPaymentRef.current = {
-        paymentLinkId: '',
-        planType: selectedPlan,
-        billingCycle: selectedPlan === 'custom' ? 'one-time' : 'monthly',
+        billingCycle,
         amount: finalAmountINR,
-        customSwipes: selectedPlan === 'custom' ? getSelectedSwipeProduct().count : undefined,
         recordId: attempt.recordId,
       };
 
-      if (selectedPlan === 'custom') {
-        const swipeProduct = getSelectedSwipeProduct();
-        const success = await buyProduct(swipeProduct.id);
-        if (!success) {
-          if (attempt.recordId) await updatePaymentStatus(attempt.recordId, 'failed');
-          pendingPaymentRef.current = null;
-          await refetchTransactions();
-        }
-      } else {
-        const sku = selectedPlan === 'pro' ? SUBSCRIPTION_SKUS.pro : SUBSCRIPTION_SKUS.premium;
-        const success = await buySubscription(sku);
-        if (!success) {
-          if (attempt.recordId) await updatePaymentStatus(attempt.recordId, 'failed');
-          pendingPaymentRef.current = null;
-          await refetchTransactions();
-        }
+      const sku = billingCycle === 'monthly' ? SUBSCRIPTION_SKUS.premium_monthly : SUBSCRIPTION_SKUS.premium_weekly;
+      const success = await buySubscription(sku);
+      if (!success) {
+        if (attempt.recordId) await updatePaymentStatus(attempt.recordId, 'failed');
+        pendingPaymentRef.current = null;
+        await refetchTransactions();
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to process payment');
@@ -337,19 +277,17 @@ export default function PremiumScreen() {
         Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
         return;
       }
-      // Process the most recent subscription purchase
       const subPurchase = purchases.find(
-        (p) => p.productId === SUBSCRIPTION_SKUS.pro || p.productId === SUBSCRIPTION_SKUS.premium
+        (p) => p.productId === SUBSCRIPTION_SKUS.premium_monthly || p.productId === SUBSCRIPTION_SKUS.premium_weekly
       );
       if (subPurchase) {
-        const planType = subPurchase.productId === SUBSCRIPTION_SKUS.pro ? 'pro' : 'premium';
         const token = subPurchase.purchaseToken || subPurchase.transactionId || '';
-        await activateSubscription(supabaseUserId, planType, token, subPurchase.productId, 0, undefined, token);
+        await activateSubscription(supabaseUserId, 'premium', token, subPurchase.productId, 0, undefined, token);
         await refetchSubscription();
         queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
-        Alert.alert('Purchases Restored! 🎉', `Your ${planType.toUpperCase()} subscription has been restored.`);
+        Alert.alert('Purchases Restored! 🎉', 'Your Premium subscription has been restored.');
       } else {
-        Alert.alert('No Subscriptions Found', 'Only consumable purchases were found. Subscriptions could not be restored.');
+        Alert.alert('No Subscriptions Found', 'We could not find an active Premium subscription to restore.');
       }
     } catch (error) {
       console.error('Restore purchases error:', error);
@@ -392,17 +330,12 @@ export default function PremiumScreen() {
   };
 
   const getCtaLabel = () => {
-    if (effectivePlan === selectedPlan && (effectivePlan as string) !== 'free') return 'Current Plan';
-    if (isDowngrade) return `Already on ${effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1)}`;
-    if (selectedPlan === 'custom') {
-      const pack = getSelectedSwipeProduct();
-      return `Buy ${pack.count} swipes for ₹${pack.price}`;
-    }
-    return `Subscribe for ₹${getPlanPriceInINR()}`;
+    if (effectivePlan === 'premium') return 'Current Plan';
+    return `Subscribe for ₹${getPlanPrice()}/${billingCycle === 'monthly' ? 'month' : 'week'}`;
   };
 
-  const isDowngrade = selectedPlan !== 'custom' && PLAN_TIERS[selectedPlan] <= PLAN_TIERS[effectivePlan];
-  const isCtaDisabled = isProcessing || isVerifying || isDowngrade;
+  const isAlreadyPremium = effectivePlan === 'premium';
+  const isCtaDisabled = isProcessing || isVerifying || isAlreadyPremium;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#121212' }]}>
@@ -419,13 +352,7 @@ export default function PremiumScreen() {
           {effectivePlan === 'free' && (
             <>
               <Text style={[styles.heroTitle, { color: themeColors.textPrimary }]}>Unlock Your Full Potential</Text>
-              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Upgrade to unlock <Text style={styles.heroHighlight}>more applications</Text> and premium features</Text>
-            </>
-          )}
-          {effectivePlan === 'pro' && (
-            <>
-              <Text style={[styles.heroTitle, { color: themeColors.textPrimary }]}>Upgrade to Premium</Text>
-              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Unlock <Text style={styles.heroHighlight}>more applications</Text> and exclusive features</Text>
+              <Text style={[styles.heroSubtext, { color: themeColors.textSecondary }]}>Upgrade to unlock <Text style={styles.heroHighlight}>unlimited applications</Text> and premium features</Text>
             </>
           )}
           {effectivePlan === 'premium' && (
@@ -451,85 +378,47 @@ export default function PremiumScreen() {
           {activeTab === 'plans' ? (
             <View>
         <Text style={[styles.pricingSectionTitle, { color: themeColors.secondary }]}>
-          {effectivePlan === 'premium' ? 'Your Current Plan' : 'Choose Your Plan'}
+          {effectivePlan === 'premium' ? 'Your Current Plan' : 'Go Premium'}
         </Text>
 
+        {/* Billing cycle toggle */}
         <View style={styles.planBoxRow}>
-          {[
-            { key: 'pro' as const, label: 'Pro', apps: '200', sub: 'apps', price: '₹1,999', popular: true, color: '#1565C0' },
-            { key: 'premium' as const, label: 'Premium', apps: '500', sub: 'apps', price: '₹7,599', popular: false, color: '#E65100' },
-            { key: 'custom' as const, label: 'Custom', apps: `${getSelectedSwipeProduct().count}`, sub: 'swipes', price: `₹${getSelectedSwipeProduct().price}`, popular: false, color: '#7C3AED' },
-          ].map((plan) => (
-            <Pressable
-              key={plan.key}
-              style={[styles.planBox, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }, selectedPlan === plan.key && { backgroundColor: plan.color, borderColor: plan.color, transform: [{ scale: 1.04 }] }, plan.popular && selectedPlan !== plan.key && styles.planBoxPopular]}
-              onPress={() => setSelectedPlan(plan.key)}
-            >
-              {plan.popular && (
-                <View style={styles.mostPopularBadge}>
-                  <Star size={8} color="#FFFFFF" fill="#FFFFFF" />
-                  <Text style={styles.mostPopularText}>Recommended</Text>
-                </View>
-              )}
-              <Text style={[styles.planBoxLabel, { color: themeColors.textSecondary }, selectedPlan === plan.key && styles.planBoxLabelSelected]}>{plan.label}</Text>
-              <Text style={[styles.planBoxApps, { color: themeColors.secondary }, selectedPlan === plan.key && styles.planBoxAppsSelected]}>{plan.apps}</Text>
-              <Text style={[styles.planBoxSub, { color: themeColors.textTertiary }, selectedPlan === plan.key && styles.planBoxSubSelected]}>{plan.sub}</Text>
-              {effectivePlan === plan.key && (effectivePlan as string) !== 'free' && (
-                <View style={styles.planBoxCurrentBadge}>
-                  <Text style={styles.planBoxCurrentText}>Current</Text>
-                </View>
-              )}
-            </Pressable>
-          ))}
+          <Pressable
+            style={[styles.planBox, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }, billingCycle === 'weekly' && { backgroundColor: '#E65100', borderColor: '#E65100', transform: [{ scale: 1.04 }] }]}
+            onPress={() => setBillingCycle('weekly')}
+          >
+            <Text style={[styles.planBoxLabel, { color: themeColors.textSecondary }, billingCycle === 'weekly' && styles.planBoxLabelSelected]}>Weekly</Text>
+            <Text style={[styles.planBoxApps, { color: themeColors.secondary }, billingCycle === 'weekly' && styles.planBoxAppsSelected]}>₹999</Text>
+            <Text style={[styles.planBoxSub, { color: themeColors.textTertiary }, billingCycle === 'weekly' && styles.planBoxSubSelected]}>per week</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.planBox, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }, billingCycle === 'monthly' && { backgroundColor: '#E65100', borderColor: '#E65100', transform: [{ scale: 1.04 }] }]}
+            onPress={() => setBillingCycle('monthly')}
+          >
+            <View style={styles.mostPopularBadge}>
+              <Star size={8} color="#FFFFFF" fill="#FFFFFF" />
+              <Text style={styles.mostPopularText}>Best Value</Text>
+            </View>
+            <Text style={[styles.planBoxLabel, { color: themeColors.textSecondary }, billingCycle === 'monthly' && styles.planBoxLabelSelected]}>Monthly</Text>
+            <Text style={[styles.planBoxApps, { color: themeColors.secondary }, billingCycle === 'monthly' && styles.planBoxAppsSelected]}>₹3,599</Text>
+            <Text style={[styles.planBoxSub, { color: themeColors.textTertiary }, billingCycle === 'monthly' && styles.planBoxSubSelected]}>per month</Text>
+          </Pressable>
         </View>
 
         <View style={[styles.planDetailCard, { backgroundColor: themeColors.surface, borderColor: themeColors.borderLight }]}>
-          {selectedPlan === 'pro' && (
-            <>
-              <View style={styles.planDetailNameRow}>
-                <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Pro Plan</Text>
-                <View style={styles.popularTag}>
-                  <Star size={10} color="#FFFFFF" fill="#FFFFFF" />
-                  <Text style={styles.popularTagText}>Popular</Text>
-                </View>
-              </View>
-              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹1,999/month</Text>
-              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>200 applications · 3 resumes</Text>
-              <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
-            </>
-          )}
-          {selectedPlan === 'premium' && (
-            <>
-              <View style={styles.planDetailNameRow}>
-                <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Premium Plan</Text>
-                <View style={styles.bestValueTag}>
-                  <Text style={styles.bestValueText}>Full Access</Text>
-                </View>
-              </View>
-              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹7,599/month</Text>
-              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>500 applications · 5 resumes</Text>
-              <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
-            </>
-          )}
-          {selectedPlan === 'custom' && (
-            <>
-              <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Custom Swipe Packs</Text>
-              <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹{getSelectedSwipeProduct().price}</Text>
-              <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>One-time purchase · Select a pack below</Text>
-              <View style={styles.swipePacksGrid}>
-                {SWIPE_PRODUCTS.map((pack, idx) => (
-                  <Pressable
-                    key={pack.id}
-                    style={[styles.swipePackCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.borderLight }, selectedSwipePack === idx && { backgroundColor: '#7C3AED', borderColor: '#7C3AED' }]}
-                    onPress={() => setSelectedSwipePack(idx)}
-                  >
-                    <Text style={[styles.swipePackCount, { color: themeColors.secondary }, selectedSwipePack === idx && { color: '#FFFFFF' }]}>{pack.count}</Text>
-                    <Text style={[styles.swipePackLabel, { color: themeColors.textTertiary }, selectedSwipePack === idx && { color: 'rgba(255,255,255,0.7)' }]}>swipes</Text>
-                    <Text style={[styles.swipePackPrice, { color: themeColors.accent }, selectedSwipePack === idx && { color: '#FFFFFF' }]}>₹{pack.price}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
+          <View style={styles.planDetailNameRow}>
+            <Text style={[styles.planDetailName, { color: themeColors.secondary }]}>Premium Plan</Text>
+            <View style={styles.bestValueTag}>
+              <Text style={styles.bestValueText}>Unlimited</Text>
+            </View>
+          </View>
+          <Text style={[styles.planDetailPrice, { color: themeColors.accent }]}>₹{billingCycle === 'monthly' ? '3,599/month' : '999/week'}</Text>
+          <Text style={[styles.planDetailDesc, { color: themeColors.textPrimary }]}>Unlimited applications · 3 resumes</Text>
+          <Text style={[styles.planDetailNote, { color: themeColors.textSecondary }]}>AI auto-fill · Priority support · Profile boost</Text>
+          {effectivePlan === 'premium' && (
+            <View style={styles.planBoxCurrentBadge}>
+              <Text style={styles.planBoxCurrentText}>Current</Text>
+            </View>
           )}
         </View>
 
@@ -539,7 +428,6 @@ export default function PremiumScreen() {
             <View style={styles.compTableHeader}>
               <Text style={styles.compTableFeatureHeader}>Feature</Text>
               <Text style={styles.compTablePlanHeader}>Free</Text>
-              <Text style={styles.compTablePlanHeader}>Pro</Text>
               <Text style={[styles.compTablePlanHeader, styles.compTablePremiumHeader]}>Premium</Text>
             </View>
             {COMPARISON_FEATURES.map((feat, idx) => (
@@ -549,15 +437,6 @@ export default function PremiumScreen() {
                   {typeof feat.free === 'string' ? (
                     <Text style={[styles.compTableValue, { color: themeColors.textPrimary }]}>{feat.free}</Text>
                   ) : feat.free ? (
-                    <Check size={16} color={themeColors.accent} />
-                  ) : (
-                    <XIcon size={16} color={themeColors.textTertiary} />
-                  )}
-                </View>
-                <View style={styles.compTableCell}>
-                  {typeof feat.pro === 'string' ? (
-                    <Text style={[styles.compTableValue, { color: themeColors.textPrimary }]}>{feat.pro}</Text>
-                  ) : feat.pro ? (
                     <Check size={16} color={themeColors.accent} />
                   ) : (
                     <XIcon size={16} color={themeColors.textTertiary} />
@@ -597,7 +476,7 @@ export default function PremiumScreen() {
 
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
-                <Crown size={16} color={currentSubscription === 'premium' ? '#E65100' : '#1565C0'} />
+                <Crown size={16} color={currentSubscription === 'premium' ? '#E65100' : '#757575'} />
                 <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Plan</Text>
               </View>
               <Text style={[styles.subMgmtValue, { color: themeColors.textPrimary }]}>{currentSubscription.charAt(0).toUpperCase() + currentSubscription.slice(1)}</Text>
@@ -617,19 +496,22 @@ export default function PremiumScreen() {
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
                 <Zap size={16} color="#7C3AED" />
-                <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Swipes Remaining</Text>
+                <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Applications</Text>
               </View>
-              <Text style={[styles.subMgmtValue, { color: themeColors.accent, fontWeight: '800' }]}>{subscriptionData?.applications_remaining ?? 0} / {subscriptionData?.applications_limit ?? 0}</Text>
+              <Text style={[styles.subMgmtValue, { color: themeColors.accent, fontWeight: '800' }]}>{currentSubscription === 'premium' ? 'Unlimited' : '15 / day'}</Text>
             </View>
 
+            {currentSubscription === 'premium' && (
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
                 <Ionicons name="calendar-outline" size={16} color={themeColors.textSecondary} />
                 <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Billing Cycle</Text>
               </View>
-              <Text style={[styles.subMgmtValue, { color: themeColors.textPrimary }]}>Monthly</Text>
+              <Text style={[styles.subMgmtValue, { color: themeColors.textPrimary }]}>{subscriptionData?.subscription_end_date ? (new Date(subscriptionData.subscription_end_date).getTime() - new Date(subscriptionData.subscription_start_date || '').getTime() <= 8 * 24 * 60 * 60 * 1000 ? 'Weekly' : 'Monthly') : '—'}</Text>
             </View>
+            )}
 
+            {currentSubscription === 'premium' && (
             <View style={styles.subMgmtRow}>
               <View style={styles.subMgmtLabelRow}>
                 <Ionicons name="card-outline" size={16} color={themeColors.textSecondary} />
@@ -637,6 +519,7 @@ export default function PremiumScreen() {
               </View>
               <Text style={[styles.subMgmtValue, { color: themeColors.textPrimary }]}>{formatDate(subscriptionData?.subscription_end_date ?? null)}</Text>
             </View>
+            )}
 
             {subscriptionStatus === 'payment_failed' && (
               <View style={styles.subWarningBanner}>
@@ -645,7 +528,7 @@ export default function PremiumScreen() {
               </View>
             )}
 
-            {subscriptionStatus !== 'cancelled' && subscriptionStatus !== 'payment_failed' && (
+            {currentSubscription === 'premium' && subscriptionStatus !== 'cancelled' && subscriptionStatus !== 'payment_failed' && (
               <Pressable style={styles.subCancelBtn} onPress={handleCancelSubscription} disabled={isCancelling}>
                 {isCancelling ? (
                   <ActivityIndicator color="#EF4444" size="small" />
@@ -705,8 +588,8 @@ export default function PremiumScreen() {
           <View style={{ width: '100%' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={styles.stickyCtaPriceCol}>
-                <Text style={[styles.stickyCtaPriceLabel, { color: themeColors.textSecondary }]}>{selectedPlan === 'custom' ? 'Custom' : selectedPlan === 'pro' ? 'Pro' : 'Premium'}</Text>
-                <Text style={[styles.stickyCtaPrice, { color: themeColors.secondary }]}>₹{getFinalPrice()}</Text>
+                <Text style={[styles.stickyCtaPriceLabel, { color: themeColors.textSecondary }]}>Premium</Text>
+                <Text style={[styles.stickyCtaPrice, { color: themeColors.secondary }]}>₹{getPlanPrice()}</Text>
               </View>
               <Pressable
                 style={[styles.stickyCtaBtn, isCtaDisabled && styles.subscribeBtnDisabled]}
@@ -838,11 +721,7 @@ const styles = StyleSheet.create({
 
 
   sliderSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderLight },
-  swipePacksGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
-  swipePackCard: { width: '47%' as any, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 2 },
-  swipePackCount: { fontSize: 24, fontWeight: '900' as const },
-  swipePackLabel: { fontSize: 11, fontWeight: '600' as const, marginTop: 2 },
-  swipePackPrice: { fontSize: 16, fontWeight: '800' as const, marginTop: 6 },
+
 
   // Subscription Management
   tabBar: { flexDirection: 'row', backgroundColor: '#1E1E1E', borderRadius: 14, padding: 4, marginTop: 8, marginBottom: 8 },

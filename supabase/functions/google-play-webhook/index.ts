@@ -2,21 +2,13 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SUBSCRIPTION_LIMITS: Record<string, number> = {
-  pro: 200,
-  premium: 500,
+  premium: 999999,
   free: 40,
 }
 
 const PRODUCT_TO_PLAN: Record<string, string> = {
-  nq_pro: 'pro',
-  nq_premium: 'premium',
-}
-
-const SWIPE_PRODUCT_COUNTS: Record<string, number> = {
-  nq_5swipes: 5,
-  nq_10swipes: 10,
-  nq_25swipes: 25,
-  nq_50swipes: 50,
+  nq_premium_monthly: 'premium',
+  nq_premium_weekly: 'premium',
 }
 
 const SUBSCRIPTION_NOTIFICATION_TYPES: Record<number, string> = {
@@ -164,8 +156,13 @@ serve(async (req) => {
 
         const currentRemaining = profile?.applications_remaining || 0
         const applicationsLimit = SUBSCRIPTION_LIMITS[planType] || 0
+        const isWeekly = subscriptionId === 'nq_premium_weekly'
         const endDate = new Date()
-        endDate.setMonth(endDate.getMonth() + 1)
+        if (isWeekly) {
+          endDate.setDate(endDate.getDate() + 7)
+        } else {
+          endDate.setMonth(endDate.getMonth() + 1)
+        }
 
         await supabase
           .from('profiles')
@@ -201,7 +198,7 @@ serve(async (req) => {
           await supabase.from('payment_history').insert({
             user_id: userId,
             subscription_type: planType,
-            amount: planType === 'pro' ? 1999 : 7599,
+            amount: isWeekly ? 999 : 3599,
             payment_id: purchaseToken,
             order_id: subscriptionId,
             status: 'completed',
@@ -221,8 +218,13 @@ serve(async (req) => {
 
         const currentRemaining = profile?.applications_remaining || 0
         const applicationsLimit = SUBSCRIPTION_LIMITS[planType] || 0
+        const isWeekly = subscriptionId === 'nq_premium_weekly'
         const endDate = new Date()
-        endDate.setMonth(endDate.getMonth() + 1)
+        if (isWeekly) {
+          endDate.setDate(endDate.getDate() + 7)
+        } else {
+          endDate.setMonth(endDate.getMonth() + 1)
+        }
 
         await supabase
           .from('profiles')
@@ -240,7 +242,7 @@ serve(async (req) => {
         await supabase.from('payment_history').insert({
           user_id: userId,
           subscription_type: planType,
-          amount: planType === 'pro' ? 1999 : 7599,
+          amount: isWeekly ? 999 : 3599,
           payment_id: purchaseToken,
           order_id: subscriptionId,
           status: 'completed',
@@ -306,58 +308,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, message: `Acknowledged: ${typeName}` }))
     }
 
-    // ─── One-time product notifications ───
+    // One-time product notifications — no longer supported
     if (oneTimeProductNotification) {
-      const { notificationType, purchaseToken, sku } = oneTimeProductNotification
-      const swipeCount = SWIPE_PRODUCT_COUNTS[sku] || 0
-
-      console.log(`Google Play RTDN: One-time product ${sku}, type ${notificationType}`)
-
-      if (swipeCount > 0 && notificationType === 1) {
-        // ONE_TIME_PRODUCT_PURCHASED
-        const userId = await findUserId(supabase, purchaseToken)
-        if (userId) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('applications_remaining')
-            .eq('id', userId)
-            .single()
-
-          const currentRemaining = profile?.applications_remaining || 0
-
-          await supabase
-            .from('profiles')
-            .update({ applications_remaining: currentRemaining + swipeCount })
-            .eq('id', userId)
-
-          // Update pending payment record
-          const { data: pendingRecord } = await supabase
-            .from('payment_history')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('status', 'pending')
-            .eq('subscription_type', 'custom')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-          if (pendingRecord?.id) {
-            await supabase
-              .from('payment_history')
-              .update({ status: 'completed', payment_id: purchaseToken })
-              .eq('id', pendingRecord.id)
-          }
-
-          return new Response(JSON.stringify({ success: true, message: 'Swipes added' }))
-        }
-      }
-
-      // ONE_TIME_PRODUCT_CANCELED (type 2) — could handle refund here
-      if (notificationType === 2) {
-        console.log(`Google Play RTDN: One-time product ${sku} canceled/refunded`)
-      }
-
-      return new Response(JSON.stringify({ success: true, message: 'One-time processed' }))
+      console.log('Google Play RTDN: One-time product notification (no longer supported)')
+      return new Response(JSON.stringify({ success: true, message: 'One-time products deprecated' }))
     }
 
     return new Response(JSON.stringify({ success: true, message: 'Processed' }))

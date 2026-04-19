@@ -403,9 +403,7 @@ export async function sendWelcomeNotification(firstName: string) {
 // ============================================================
 
 const SUBSCRIPTION_NOTIFICATIONS: Record<string, { title: string; body: string }> = {
-  pro: { title: 'You\'re now a Pro! \u{1F389}', body: 'Enjoy 200 swipes/month, AI auto-fill, priority support & profile boost. Start swiping!' },
-  premium: { title: 'Welcome to Premium! \u{1F451}', body: 'You\'ve unlocked 500 swipes/month and all exclusive features. Go land your dream job!' },
-  custom: { title: 'Swipes Added! \u{26A1}', body: 'Your custom swipes have been added to your account. Happy swiping!' },
+  premium: { title: 'Welcome to Premium! \u{1F451}', body: 'You\'ve unlocked unlimited applications and all exclusive features. Go land your dream job!' },
   coupon: { title: 'Plan Activated! \u{1F381}', body: 'Your coupon has been applied and your plan is now active. Enjoy!' },
 };
 

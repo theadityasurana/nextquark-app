@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 
 import ErrorBoundary from '@/components/ErrorBoundary';
 import OfflineBanner from '@/components/OfflineBanner';
+import PipOverlay from '@/components/PipOverlay';
 import { handleStaleSession } from '@/lib/supabase';
 
 let Notifications: any;
@@ -139,6 +140,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <OfflineBanner />
+      <PipOverlay />
     </>
   );
 }

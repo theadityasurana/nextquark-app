@@ -72,8 +72,7 @@ export default function ResumeManagementScreen() {
   const getResumeLimit = () => {
     if (!subscriptionData) return 1;
     switch (subscriptionData.subscription_type) {
-      case 'premium': return 5;
-      case 'pro': return 3;
+      case 'premium': return 3;
       default: return 1;
     }
   };
@@ -194,10 +193,8 @@ export default function ResumeManagementScreen() {
     // Check resume limit
     if (resumes.length >= resumeLimit) {
       const upgradeMessage = subscriptionData?.subscription_type === 'free'
-        ? 'Upgrade to Pro (3 resumes) or Premium (5 resumes) to upload more.'
-        : subscriptionData?.subscription_type === 'pro'
-        ? 'Upgrade to Premium to upload up to 5 resumes.'
-        : 'You have reached the maximum limit of 5 resumes.';
+        ? 'Upgrade to Premium for 3 resumes.'
+        : 'You have reached the maximum limit of 3 resumes.';
       
       Alert.alert(
         'Resume Limit Reached',
@@ -339,11 +336,6 @@ export default function ResumeManagementScreen() {
           {subscriptionData?.subscription_type === 'free' && (
             <Pressable onPress={() => router.push('/premium' as any)}>
               <Text style={styles.upgradeLink}>Upgrade for more</Text>
-            </Pressable>
-          )}
-          {subscriptionData?.subscription_type === 'pro' && (
-            <Pressable onPress={() => router.push('/premium' as any)}>
-              <Text style={styles.upgradeLink}>Get Premium (5 resumes)</Text>
             </Pressable>
           )}
         </View>

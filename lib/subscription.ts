@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type SubscriptionType = 'free' | 'pro' | 'premium';
+export type SubscriptionType = 'free' | 'premium';
 
 export interface SubscriptionData {
   subscription_type: SubscriptionType;
@@ -26,8 +26,12 @@ export interface TransactionRecord {
 
 const SUBSCRIPTION_LIMITS: Record<string, number> = {
   free: 40,
-  pro: 200,
-  premium: 500,
+  premium: 999999, // unlimited
+};
+
+export const RESUME_LIMITS: Record<string, number> = {
+  free: 1,
+  premium: 3,
 };
 
 // ─── Record a payment attempt (pending) ───
@@ -37,8 +41,7 @@ export async function recordPaymentAttempt(
   subscriptionType: string,
   amount: number,
   paymentLinkId?: string,
-  subscriptionId?: string,
-  customSwipes?: number
+  subscriptionId?: string
 ): Promise<{ success: boolean; recordId?: string; error?: string }> {
   try {
     const insertData: Record<string, any> = {
@@ -109,38 +112,7 @@ export async function markAbandonedPayments(userId: string): Promise<void> {
   }
 }
 
-// ─── Activate custom swipes (one-time purchase) ───
 
-export async function activateCustomSwipes(
-  userId: string,
-  swipeCount: number,
-  paymentId?: string,
-  orderId?: string,
-  amount?: number,
-  couponCode?: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { data: currentProfile } = await supabase
-      .from('profiles')
-      .select('applications_remaining')
-      .eq('id', userId)
-      .single();
-    const currentRemaining = currentProfile?.applications_remaining || 0;
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ applications_remaining: currentRemaining + swipeCount })
-      .eq('id', userId);
-
-    if (updateError) throw updateError;
-
-    // payment_history is now tracked by recordPaymentAttempt + updatePaymentStatus
-
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
 
 // ─── Activate recurring subscription ───
 
@@ -156,7 +128,12 @@ export async function activateSubscription(
   try {
     const startDate = new Date();
     const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 1);
+    const isWeekly = orderId === 'nq_premium_weekly' || orderId?.includes('weekly');
+    if (isWeekly) {
+      endDate.setDate(endDate.getDate() + 7);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
 
     const applicationsLimit = SUBSCRIPTION_LIMITS[subscriptionType];
 
@@ -217,7 +194,12 @@ export async function handleSubscriptionCharged(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 1);
+    const isWeekly = subscriptionId === 'nq_premium_weekly' || subscriptionId?.includes('weekly');
+    if (isWeekly) {
+      endDate.setDate(endDate.getDate() + 7);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
 
     const applicationsLimit = SUBSCRIPTION_LIMITS[subscriptionType];
 
@@ -395,7 +377,7 @@ export async function getSubscriptionStatus(
     // If cancelled or payment_failed, report as free for the rest of the app
     const resolvedType = (subStatus === 'cancelled' || subStatus === 'payment_failed')
       ? 'free' as const
-      : (data.subscription_type || 'free') as 'free' | 'pro' | 'premium';
+      : (data.subscription_type || 'free') as 'free' | 'premium';
 
     return {
       subscription_type: resolvedType,
@@ -486,7 +468,6 @@ export async function decrementApplicationCount(userId: string): Promise<boolean
 
 export function getSubscriptionDisplayName(type: SubscriptionType): string {
   switch (type) {
-    case 'pro': return 'Pro User';
     case 'premium': return 'Premium User';
     default: return 'Free User';
   }
@@ -494,7 +475,6 @@ export function getSubscriptionDisplayName(type: SubscriptionType): string {
 
 export function getSubscriptionBadgeColor(type: SubscriptionType): string {
   switch (type) {
-    case 'pro': return '#1565C0';
     case 'premium': return '#E65100';
     default: return '#757575';
   }

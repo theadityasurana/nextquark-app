@@ -329,8 +329,8 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
       query = query.gte('created_at', cutoff);
     }
 
-    // For "foryou" tab, over-fetch since we filter client-side by desired roles
-    const fetchLimit = (tab === 'foryou' && desiredRoles && desiredRoles.length > 0) ? limit * 1.5 : limit;
+    // Over-fetch since we filter client-side by desired roles
+    const fetchLimit = (desiredRoles && desiredRoles.length > 0) ? limit * 1.5 : limit;
     query = query.range(offset, offset + fetchLimit - 1);
 
     const { data, error } = await query;
@@ -346,9 +346,9 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
 
     console.log(`Batch fetch (${tab}, offset=${offset}): ${serverRowCount} jobs from DB, serverHadMore=${serverHadMore}`);
 
-    // For "foryou" tab, filter client-side by desired roles then trim to requested limit
+    // Filter client-side by desired roles then trim to requested limit
     let rows = data as SupabaseJob[];
-    if (tab === 'foryou' && desiredRoles && desiredRoles.length > 0) {
+    if (desiredRoles && desiredRoles.length > 0) {
       const filtered = rows.filter(row => {
         const title = (row.title || row.job_title || '').toLowerCase();
         const desc = (row.description || '').toLowerCase();

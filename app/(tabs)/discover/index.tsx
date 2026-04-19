@@ -297,7 +297,7 @@ export default function DiscoverScreen() {
                 }
                 if (referralStats?.referralCode) {
                   try {
-                    await Share.share({ message: `Join NextQuark with my referral code ${referralStats.referralCode} and get 5 application swipes! Download the app now.` });
+                    await Share.share({ message: `Hey! Check out NextQuark — think of it like Tinder for jobs. You swipe right on jobs you like and AI applies for you automatically. It's the fastest way to apply to hundreds of jobs. Join with my referral code ${referralStats.referralCode} and we both get 5 free swipes to get started. Download it here: https://nextquark.framer.website/#download` });
                   } catch (error) {
                     console.error('Error sharing:', error);
                   }
@@ -341,7 +341,7 @@ export default function DiscoverScreen() {
                     avatarUrl = 'https://api.dicebear.com/9.x/adventurer/png?seed=' + encodeURIComponent(profile.id || profile.full_name || 'User') + '&size=200';
                   }
                   
-                  const borderColor = profile.subscription_type === 'pro' ? '#FF8C00' : profile.subscription_type === 'premium' ? '#9C27B0' : '#DDD';
+                  const borderColor = profile.subscription_type === 'premium' ? '#E65100' : '#DDD';
                   return (
                     <Pressable
                       key={profile.id}

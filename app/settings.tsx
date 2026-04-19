@@ -129,9 +129,9 @@ export default function SettingsScreen() {
               <Text style={styles.profileName}>{userProfile.name}</Text>
               <Text style={styles.profileHeadline} numberOfLines={1}>{userProfile.headline || userProfile.email}</Text>
             </View>
-            <View style={[styles.subBadge, subType === 'premium' ? { backgroundColor: '#E65100' } : subType === 'pro' ? { backgroundColor: '#1565C0' } : { backgroundColor: '#9E9E9E' }]}>
-              {subType !== 'free' && <Crown size={10} color="#FFF" />}
-              <Text style={styles.subBadgeText}>{subType === 'premium' ? 'Premium' : subType === 'pro' ? 'Pro' : 'Free'}</Text>
+            <View style={[styles.subBadge, subType === 'premium' ? { backgroundColor: '#E65100' } : { backgroundColor: '#9E9E9E' }]}>
+              {subType === 'premium' && <Crown size={10} color="#FFF" />}
+              <Text style={styles.subBadgeText}>{subType === 'premium' ? 'Premium' : 'Free'}</Text>
             </View>
             <ChevronRight size={16} color="#9E9E9E" />
           </Pressable>

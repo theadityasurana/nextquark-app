@@ -10,33 +10,11 @@ try {
 
 // Product IDs — must match App Store Connect and Google Play Console
 export const SUBSCRIPTION_SKUS = {
-  pro: 'nq_pro',
-  premium: 'nq_premium',
+  premium_monthly: 'nq_premium_monthly',
+  premium_weekly: 'nq_premium_weekly',
 };
 
-export const PRODUCT_SKUS = {
-  swipes_5: 'nq_5swipes',
-  swipes_10: 'nq_10swipes',
-  swipes_25: 'nq_25swipes',
-  swipes_50: 'nq_50swipes',
-};
 
-// Map swipe counts to product IDs
-export function getSwipeProductId(count: number): string | null {
-  if (count <= 5) return PRODUCT_SKUS.swipes_5;
-  if (count <= 10) return PRODUCT_SKUS.swipes_10;
-  if (count <= 25) return PRODUCT_SKUS.swipes_25;
-  if (count <= 50) return PRODUCT_SKUS.swipes_50;
-  return null;
-}
-
-// Swipe counts per product
-export const SWIPE_PRODUCTS: { id: string; count: number; price: number }[] = [
-  { id: PRODUCT_SKUS.swipes_5, count: 5, price: 75 },
-  { id: PRODUCT_SKUS.swipes_10, count: 10, price: 150 },
-  { id: PRODUCT_SKUS.swipes_25, count: 25, price: 375 },
-  { id: PRODUCT_SKUS.swipes_50, count: 50, price: 750 },
-];
 
 let isConnected = false;
 
@@ -63,7 +41,7 @@ export async function fetchSubscriptions() {
   if (!IAP) return [];
   try {
     return await IAP.fetchProducts({
-      skus: [SUBSCRIPTION_SKUS.pro, SUBSCRIPTION_SKUS.premium],
+      skus: [SUBSCRIPTION_SKUS.premium_monthly, SUBSCRIPTION_SKUS.premium_weekly],
       type: 'subs',
     });
   } catch (error) {
@@ -72,15 +50,7 @@ export async function fetchSubscriptions() {
   }
 }
 
-export async function fetchSwipeProducts() {
-  if (!IAP) return [];
-  try {
-    return await IAP.fetchProducts({ skus: Object.values(PRODUCT_SKUS) });
-  } catch (error) {
-    console.error('Failed to fetch products:', error);
-    return [];
-  }
-}
+
 
 export async function buySubscription(sku: string, offerToken?: string): Promise<boolean> {
   if (!IAP) return false;
@@ -102,22 +72,7 @@ export async function buySubscription(sku: string, offerToken?: string): Promise
   }
 }
 
-export async function buyProduct(sku: string): Promise<boolean> {
-  if (!IAP) return false;
-  try {
-    await IAP.requestPurchase({
-      request: {
-        google: { skus: [sku] },
-        apple: { sku },
-      },
-      type: 'in-app',
-    });
-    return true;
-  } catch (error) {
-    console.error('Product purchase failed:', error);
-    return false;
-  }
-}
+
 
 export async function acknowledgePurchase(purchase: any): Promise<void> {
   if (!IAP) return;
@@ -128,14 +83,7 @@ export async function acknowledgePurchase(purchase: any): Promise<void> {
   }
 }
 
-export async function consumePurchase(purchase: any): Promise<void> {
-  if (!IAP) return;
-  try {
-    await IAP.finishTransaction({ purchase, isConsumable: true });
-  } catch (error) {
-    console.error('Failed to consume purchase:', error);
-  }
-}
+
 
 export async function restorePurchases() {
   if (!IAP) return [];

@@ -1336,24 +1336,22 @@ const MAJOR_CITIES = [
             onPress={() => router.push('/premium' as any)}
           >
             <LinearGradient
-              colors={subscriptionData?.subscription_type === 'premium' ? ['#BA68C8', '#8E24AA', '#6A1B9A'] : subscriptionData?.subscription_type === 'pro' ? ['#FF9D2F', '#E67E22', '#C0601A'] : ['#2D2B55', '#1B1A3E', '#0F0E2A']}
+              colors={subscriptionData?.subscription_type === 'premium' ? ['#BA68C8', '#8E24AA', '#6A1B9A'] : ['#2D2B55', '#1B1A3E', '#0F0E2A']}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.quickActionGradient}
             >
-              <Text style={styles.quickActionImpact}>
-                {dailySwipesLeft > 0 ? dailySwipesLeft : countdownText ? '⏳' : (subscriptionData?.applications_remaining ?? 0)}
-              </Text>
-              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>
-                {dailySwipesLeft > 0 ? 'swipes today' : countdownText ? '' : 'apps left'}
-              </Text>
-              {countdownText && dailySwipesLeft <= 0 ? (
-                <Text style={[styles.quickActionSub, { color: 'rgba(255,215,0,0.8)', fontSize: 11 }]}>
-                  {countdownText}
-                </Text>
+              {subscriptionData?.subscription_type === 'premium' ? (
+                <>
+                  <Text style={styles.quickActionImpact}>∞</Text>
+                  <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>swipes left</Text>
+                  <Text style={[styles.quickActionSub, { color: 'rgba(255,255,255,0.6)' }]}>✦ Premium</Text>
+                </>
               ) : (
-                <Text style={[styles.quickActionSub, { color: subscriptionData?.subscription_type === 'free' ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.6)' }]}>
-                  {subscriptionData?.subscription_type === 'premium' ? '✦ Premium' : subscriptionData?.subscription_type === 'pro' ? '✦ Pro · Tap to upgrade' : '⚡ Tap to upgrade plan'}
-                </Text>
+                <>
+                  <Text style={[styles.quickActionImpact, { fontSize: 20 }]}>⚡</Text>
+                  <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>Upgrade to</Text>
+                  <Text style={[styles.quickActionSub, { color: 'rgba(255,215,0,0.9)', fontSize: 13, fontWeight: '800' }]}>Premium</Text>
+                </>
               )}
             </LinearGradient>
           </Pressable>

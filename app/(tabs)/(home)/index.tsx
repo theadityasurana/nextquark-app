@@ -288,7 +288,7 @@ export default function HomeScreen() {
         jobRequirements: filters.jobRequirements.length > 0 ? filters.jobRequirements : undefined,
         postedWithin: filters.postedWithin.length > 0 ? filters.postedWithin : undefined,
       },
-      desiredRoles: (tab === 'foryou' && userProfile?.desiredRoles) ? userProfile.desiredRoles : undefined,
+      desiredRoles: userProfile?.desiredRoles || undefined,
     };
   }, [swipedJobIds, activeSearchTags, filters, userProfile]);
 
@@ -501,8 +501,7 @@ export default function HomeScreen() {
   const getResumeLimit = useCallback(() => {
     if (!subscriptionData) return 1;
     switch (subscriptionData.subscription_type) {
-      case 'premium': return 5;
-      case 'pro': return 3;
+      case 'premium': return 3;
       default: return 1;
     }
   }, [subscriptionData]);
@@ -513,10 +512,8 @@ export default function HomeScreen() {
     if (resumes.length >= limit) {
       const planType = subscriptionData?.subscription_type || 'free';
       const msg = planType === 'free'
-        ? 'Free users can have 1 resume. Upgrade to Pro (3 resumes) or Premium (5 resumes).'
-        : planType === 'pro'
-        ? 'Pro users can have up to 3 resumes. Upgrade to Premium for 5 resumes.'
-        : 'You have reached the maximum of 5 resumes.';
+        ? 'Free users can have 1 resume. Upgrade to Premium for 3 resumes.'
+        : 'You have reached the maximum of 3 resumes.';
       Alert.alert('Resume Limit Reached', msg,
         planType !== 'premium'
           ? [{ text: 'Cancel', style: 'cancel' }, { text: 'Upgrade', onPress: () => { closeResumeSheet(); router.push('/premium' as any); } }]
@@ -813,8 +810,8 @@ export default function HomeScreen() {
         console.log('right_swipe incremented successfully');
       });
 
-      // Decrement daily free swipe + paid application count
-      if (supabaseUserId) {
+      // Decrement daily free swipe (skip for premium - unlimited)
+      if (supabaseUserId && subscriptionData?.subscription_type !== 'premium') {
         const usedFree = await useDailySwipe(supabaseUserId);
         if (usedFree) {
           const updated = await getDailySwipes(supabaseUserId);
@@ -827,11 +824,6 @@ export default function HomeScreen() {
             scheduleSwipesRestoredNotification(secsLeft, firstName).catch(() => {});
           }
         }
-      }
-      if (supabaseUserId) {
-        decrementApplicationCount(supabaseUserId).then(() => {
-          queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
-        });
       }
 
       if (supabaseUserId && userProfile) {
@@ -978,7 +970,7 @@ export default function HomeScreen() {
       return;
     }
     // Block right swipe (apply) and up swipe (save) when out of daily free swipes AND paid swipes
-    const hasPaidSwipes = subscriptionData && subscriptionData.subscription_type !== 'free' && subscriptionData.applications_remaining > 0;
+    const hasPaidSwipes = subscriptionData && subscriptionData.subscription_type === 'premium';
     if ((direction === 'right' || direction === 'up') && dailySwipesLeft <= 0 && !hasPaidSwipes) {
       Animated.spring(positionRef, {
         toValue: { x: 0, y: 0 },
@@ -1286,6 +1278,8 @@ export default function HomeScreen() {
           <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>
             {isShowingLoader 
               ? 'Loading jobs...' 
+              : subscriptionData?.subscription_type === 'premium'
+              ? 'Unlimited swipes'
               : dailySwipesLeft > 0
               ? `${dailySwipesLeft} swipes left today`
               : countdownText
@@ -1316,7 +1310,6 @@ export default function HomeScreen() {
               <View style={[
                 styles.subscriptionBadge,
                 subscriptionData.subscription_type === 'free' && styles.subscriptionBadgeFree,
-                subscriptionData.subscription_type === 'pro' && styles.subscriptionBadgePro,
                 subscriptionData.subscription_type === 'premium' && styles.subscriptionBadgePremium,
               ]}>
                 <Text style={styles.subscriptionBadgeText}>
@@ -1535,7 +1528,7 @@ export default function HomeScreen() {
               <View style={styles.sheetActions}>
                 <Pressable style={[styles.sheetUpgradeBtn, { backgroundColor: isDark ? '#000000' : '#FFFFFF' }]} onPress={() => { closeOutOfSwipesSheet(); router.push('/premium' as any); }}>
                   <Crown size={16} color={isDark ? '#FFFFFF' : '#000000'} />
-                  <Text style={[styles.sheetUpgradeBtnText, { color: isDark ? '#FFFFFF' : '#000000' }]}>Upgrade to Pro</Text>
+                  <Text style={[styles.sheetUpgradeBtnText, { color: isDark ? '#FFFFFF' : '#000000' }]}>Upgrade to Premium</Text>
                 </Pressable>
                 <Pressable
                   style={styles.sheetGiftBtn}
@@ -2095,7 +2088,6 @@ const styles = StyleSheet.create({
   appName: { fontSize: 12, fontWeight: '800' as const, color: "#000", letterSpacing: 2, textTransform: 'uppercase' as const },
   subscriptionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   subscriptionBadgeFree: { backgroundColor: '#10B981' },
-  subscriptionBadgePro: { backgroundColor: '#FFD700' },
   subscriptionBadgePremium: { backgroundColor: '#9333EA' },
   subscriptionBadgeText: { fontSize: 9, fontWeight: '800' as const, color: '#FFFFFF', letterSpacing: 0.5 },
   headerTitle: { fontSize: 22, fontWeight: '800' as const, color: "#000" },

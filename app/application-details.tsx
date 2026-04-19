@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,11 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
+  Dimensions,
+  Share,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
@@ -39,6 +42,9 @@ import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { getCompanyLogoUrl, updateApplicationProgress } from '@/lib/jobs';
 import { SkeletonApplicationDetails } from '@/components/Skeleton';
+import { usePipStore } from '@/lib/pip-store';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending: { label: 'AI is cooking 🔥', color: '#92400E', bg: '#FEF3C7' },
@@ -67,6 +73,38 @@ interface FlowStep {
   description?: string;
 }
 
+function getEmbeddableUrl(url: string): { uri?: string; html?: string } {
+  if (!url) return { uri: '' };
+
+  // YouTube: convert watch/shorts/youtu.be links to embed
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]+)/);
+  if (ytMatch) {
+    return { uri: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&playsinline=1&rel=0` };
+  }
+
+  // Vimeo: convert to embed
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) {
+    return { uri: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1` };
+  }
+
+  // Loom: convert to embed
+  const loomMatch = url.match(/loom\.com\/share\/([\w-]+)/);
+  if (loomMatch) {
+    return { uri: `https://www.loom.com/embed/${loomMatch[1]}?autoplay=1` };
+  }
+
+  // Direct video file (.mp4, .webm, .mov, .m3u8) — wrap in HTML player
+  if (/\.(mp4|webm|mov|m3u8)(\?|$)/.test(url)) {
+    return {
+      html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0}body{background:#000;display:flex;align-items:center;justify-content:center;height:100vh}video{width:100%;height:100%;object-fit:contain}</style></head><body><video src="${url}" autoplay playsinline controls></video></body></html>`,
+    };
+  }
+
+  // Default: load URL directly
+  return { uri: url };
+}
+
 function getFlowSteps(): FlowStep[] {
   return [
     { label: 'You swiped right 👍', date: '', status: 'completed' },
@@ -86,7 +124,7 @@ function getFlowSteps(): FlowStep[] {
 export default function ApplicationDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, openModal } = useLocalSearchParams<{ id: string; openModal?: string }>();
   const colors = useColors();
 
   const { data: appData, isLoading } = useQuery({
@@ -176,13 +214,106 @@ export default function ApplicationDetailsScreen() {
 
 
 
-  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [showLiveModal, setShowLiveModal] = useState(false);
+  const [webViewKey, setWebViewKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState('00:00');
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const pixelAnim = useRef(new Animated.Value(0)).current;
+  const pipStore = usePipStore();
+
+  // Sync streamUrl with appData.live_url when it becomes available
+  useEffect(() => {
+    if (appData?.live_url && !streamUrl) {
+      setStreamUrl(appData.live_url);
+    }
+  }, [appData?.live_url]);
+
+  // Auto-open modal if navigated from PiP
+  useEffect(() => {
+    if (openModal === 'true' && !isLoading && application) {
+      setShowLiveModal(true);
+    }
+  }, [openModal, isLoading, application]);
+
+  // Elapsed timer
+  useEffect(() => {
+    if (!appData?.applied_at && !appData?.created_at) return;
+    const startTime = new Date(appData.applied_at || appData.created_at).getTime();
+    const tick = () => {
+      const diff = Math.floor((Date.now() - startTime) / 1000);
+      const mins = Math.floor(diff / 60).toString().padStart(2, '0');
+      const secs = (diff % 60).toString().padStart(2, '0');
+      setElapsedTime(`${mins}:${secs}`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [appData?.applied_at, appData?.created_at]);
+
+  const handleRefreshStream = async () => {
+    setIsRefreshing(true);
+    // Fetch the latest live_url from Supabase
+    let newUrl: string | null = null;
+    try {
+      const { data, error } = await supabase
+        .from('live_application_queue')
+        .select('live_url')
+        .eq('id', id)
+        .single();
+      if (!error && data?.live_url) {
+        newUrl = data.live_url;
+      }
+    } catch (e) {
+      console.log('Error fetching live_url:', e);
+    }
+    // Update state and bump key together so WebView re-renders with new URL
+    if (newUrl) {
+      setStreamUrl(newUrl);
+    }
+    setWebViewKey(k => k + 1);
+    Animated.sequence([
+      Animated.timing(pixelAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(pixelAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => {
+      setIsRefreshing(false);
+    });
+  };
+
+  const handleScreenshot = useCallback(async () => {
+    const url = streamUrl || appData?.live_url;
+    if (!url) {
+      Alert.alert('Not available', 'No live stream URL to share.');
+      return;
+    }
+    try {
+      await Share.share({
+        message: `Check out my AI applying to ${application?.job?.companyName || 'a company'} live! 🤖\n${url}`,
+        url: url,
+      });
+    } catch {
+      Alert.alert('Error', 'Could not share the stream link.');
+    }
+  }, [streamUrl, appData?.live_url, application?.job?.companyName]);
+
+  const handleMinimize = () => {
+    setShowLiveModal(false);
+    const startTime = appData?.applied_at || appData?.created_at;
+    pipStore.show(
+      streamUrl || appData?.live_url || '',
+      application?.job?.companyName || '',
+      !reachedEnd,
+      startTime ? new Date(startTime).getTime() : Date.now(),
+      id || ''
+    );
+  };
 
   // DB-driven progress tracking
   const [progressStep, setProgressStep] = useState(0);
   const [progressTimestamps, setProgressTimestamps] = useState<string[]>([]);
   const [reachedEnd, setReachedEnd] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
 
   // Poll progress from DB
   useEffect(() => {
@@ -208,6 +339,18 @@ export default function ApplicationDetailsScreen() {
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reachedEnd]);
+
+  useEffect(() => {
+    if (reachedEnd) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
       ])
     );
     loop.start();
@@ -264,37 +407,73 @@ export default function ApplicationDetailsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.companyCard}>
-          <Image source={{ uri: job.companyLogo }} style={styles.logo} />
-          <Text style={styles.jobTitle}>{job.jobTitle}</Text>
-          <Text style={styles.companyName}>{job.companyName}</Text>
-          <View style={styles.locationRow}>
-            <LocationIcon size={14} color={Colors.textSecondary} />
-            <Text style={styles.locationText}>{job.location}</Text>
-          </View>
-          <View style={[styles.statusBadgeLarge, { backgroundColor: status.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
+          <View style={styles.cardTopRow}>
+            <Image source={{ uri: job.companyLogo }} style={styles.logo} />
+            <View style={styles.cardInfo}>
+              <Text style={styles.jobTitle} numberOfLines={2}>{job.jobTitle}</Text>
+              <Text style={styles.companyName}>{job.companyName}</Text>
+              <View style={styles.locationRow}>
+                <LocationIcon size={13} color="#6B7280" />
+                <Text style={styles.locationText}>{job.location}</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.appliedRow}>
+          <View style={[styles.statusStrip, { backgroundColor: status.bg }]}>
+            <Text style={[styles.statusStripText, { color: status.color }]}>{status.label}</Text>
+          </View>
+
+          <View style={styles.actionsRow}>
             <View style={styles.appliedDateBox}>
-              <Ionicons name="calendar-outline" size={14} color="#065F46" />
-              <Text style={styles.appliedDateText}>Applied on {application.appliedDate}</Text>
+              <Ionicons name="calendar-outline" size={13} color="#065F46" />
+              <Text style={styles.appliedDateText}>{application.appliedDate}</Text>
             </View>
             {application.jobId && (
               <Pressable
                 style={styles.viewJobBtn}
                 onPress={() => router.push({ pathname: '/job-details', params: { id: application.jobId, hideApply: 'true' } })}
               >
-                <Briefcase size={14} color="#1565C0" />
-                <Text style={styles.viewJobBtnText}>View Full JD</Text>
-                <ChevronRight size={14} color="#1565C0" />
+                <Briefcase size={13} color="#1565C0" />
+                <Text style={styles.viewJobBtnText}>Full JD</Text>
+                <ChevronRight size={13} color="#1565C0" />
               </Pressable>
             )}
           </View>
         </View>
 
+        {/* Live Streaming Card - Always visible */}
+        <Pressable style={reachedEnd ? styles.liveCardCompleted : styles.liveCard} onPress={() => setShowLiveModal(true)}>
+          <View style={styles.liveCardLeft}>
+            <View style={reachedEnd ? styles.liveIconWrapCompleted : styles.liveIconWrap}>
+              {reachedEnd ? (
+                <Ionicons name="play" size={18} color="#E53935" />
+              ) : (
+                <Animated.View style={[styles.liveDot, { opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }]} />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={reachedEnd ? styles.liveCardTitleCompleted : styles.liveCardTitle}>
+                {reachedEnd ? 'Watch Recording' : 'AI is applying live'}
+              </Text>
+              <Text style={styles.liveCardSubtitle}>
+                {reachedEnd ? 'See how AI completed your application' : 'Tap to watch in real-time'}
+              </Text>
+            </View>
+          </View>
+
+        </Pressable>
+
+        {/* Progress Flow */}
         <View style={styles.progressCard}>
-          <Text style={styles.progressSectionTitle}>Application Progress</Text>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressSectionTitle}>Application Progress</Text>
+            <View style={[styles.progressBadge, reachedEnd && styles.progressBadgeDone]}>
+              <Text style={[styles.progressBadgeText, reachedEnd && styles.progressBadgeTextDone]}>
+                {reachedEnd ? 'Completed' : `Step ${progressStep + 1}/${flowSteps.length}`}
+              </Text>
+            </View>
+          </View>
+
           {flowSteps.map((step, idx) => {
             let isCompleted = false;
             let isCurrent = false;
@@ -323,31 +502,29 @@ export default function ApplicationDetailsScreen() {
               <View key={idx} style={styles.flowStep}>
                 <View style={styles.flowIndicator}>
                   {isCompleted ? (
-                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                    <View style={styles.flowDotCompleted}>
+                      <Ionicons name="checkmark" size={12} color="#FFF" />
+                    </View>
                   ) : isCurrent ? (
                     <Animated.View style={[styles.flowDotCurrent, { opacity: pulseAnim }]} />
                   ) : (
-                    <Ionicons name="ellipse-outline" size={20} color="rgba(255,255,255,0.2)" />
+                    <View style={styles.flowDotPending} />
                   )}
                   {!isLastVisible && (
                     <View style={[styles.flowLine, isCompleted && styles.flowLineCompleted]} />
                   )}
                 </View>
-                <View style={styles.flowContent}>
-                  <View style={styles.flowLabelRow}>
-                    <Text style={[styles.flowLabel, isCurrent && styles.flowLabelActive]}>{step.label}</Text>
-                  {isCompleted && dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : isCurrent && dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : null}
-                  </View>
-                  {step.description && isCurrent ? (
+                <View style={[styles.flowContent, isCurrent && styles.flowContentActive]}>
+                  <Text style={[styles.flowLabel, isCompleted && styles.flowLabelCompleted, isCurrent && styles.flowLabelActive]}>{step.label}</Text>
+                  {step.description && isCurrent && (
                     <Text style={styles.flowDesc}>{step.description}</Text>
-                  ) : null}
+                  )}
+                  {dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : null}
                 </View>
               </View>
             );
           })}
         </View>
-
-
 
         {application.verificationOtp && (
           <View style={styles.otpCard}>
@@ -367,16 +544,6 @@ export default function ApplicationDetailsScreen() {
           </View>
         )}
 
-        {appData?.live_url && (
-          <Pressable 
-            style={styles.watchVideoBtn} 
-            onPress={() => setShowVideoModal(true)}
-          >
-            <Ionicons name="videocam-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.watchVideoBtnText}>Watch the AI Apply Live</Text>
-          </Pressable>
-        )}
-
 
 
 
@@ -384,17 +551,125 @@ export default function ApplicationDetailsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={showVideoModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowVideoModal(false)}>
-        <View style={styles.videoModalOverlay}>
-          <Pressable onPress={() => setShowVideoModal(false)} style={styles.videoCloseBtn}>
-            <X size={28} color="#FFFFFF" />
+      {/* Live Stream Modal - proper Modal for back button handling */}
+      <Modal visible={showLiveModal} animationType="slide" transparent onRequestClose={() => setShowLiveModal(false)}>
+        <View style={styles.liveModalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowLiveModal(false)}>
+            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
           </Pressable>
-          <WebView
-            source={{ uri: appData?.live_url || '' }}
-            style={styles.webView}
-            allowsFullscreenVideo
-            mediaPlaybackRequiresUserAction={false}
-          />
+          <View style={styles.liveModalContent}>
+            <View style={styles.liveModalHandle} />
+            <View style={styles.liveModalHeader}>
+              <View style={styles.liveModalHeaderLeft}>
+                {!reachedEnd ? (
+                  <View style={styles.liveModalBadgeLive}>
+                    <View style={styles.liveModalBadgeDot} />
+                    <Text style={styles.liveModalBadgeLiveText}>LIVE</Text>
+                  </View>
+                ) : (
+                  <View style={styles.liveModalBadgeEnded}>
+                    <Ionicons name="stop-circle-outline" size={12} color="#8E8E93" />
+                    <Text style={styles.liveModalBadgeEndedText}>Ended</Text>
+                  </View>
+                )}
+                <View style={styles.elapsedBadge}>
+                  <Ionicons name="time-outline" size={11} color="#FFFFFF" />
+                  <Text style={styles.elapsedText}>{elapsedTime}</Text>
+                </View>
+              </View>
+              <View style={styles.liveModalHeaderRight}>
+                <Pressable onPress={handleScreenshot} style={styles.liveModalActionBtn} hitSlop={8}>
+                  <Ionicons name="share-outline" size={17} color="#FFFFFF" />
+                </Pressable>
+                <Pressable onPress={handleRefreshStream} style={styles.liveModalActionBtn} hitSlop={8} disabled={isRefreshing}>
+                  <Ionicons name="refresh" size={17} color={isRefreshing ? '#555' : '#FFFFFF'} />
+                </Pressable>
+                <Pressable onPress={handleMinimize} style={styles.liveModalActionBtn} hitSlop={8}>
+                  <Ionicons name="contract-outline" size={17} color="#FFFFFF" />
+                </Pressable>
+                <Pressable onPress={() => setShowLiveModal(false)} hitSlop={8}>
+                  <Text style={styles.liveModalDoneText}>Done</Text>
+                </Pressable>
+              </View>
+            </View>
+            <View style={styles.liveModalWebViewWrap} collapsable={false}>
+              {streamUrl ? (
+                (() => {
+                  const source = getEmbeddableUrl(streamUrl);
+                  return (
+                    <WebView
+                      key={webViewKey}
+                      source={source.html ? { html: source.html } : { uri: source.uri || '' }}
+                      style={styles.webView}
+                      allowsFullscreenVideo
+                      allowsInlineMediaPlayback
+                      mediaPlaybackRequiresUserAction={false}
+                      javaScriptEnabled
+                      domStorageEnabled
+                      startInLoadingState
+                      renderLoading={() => (
+                        <View style={styles.webViewLoading}>
+                          <ActivityIndicator size="large" color="#2196F3" />
+                          <Text style={styles.webViewLoadingText}>Loading stream...</Text>
+                        </View>
+                      )}
+                    />
+                  );
+                })()
+              ) : (
+                <View style={styles.liveModalPlaceholder}>
+                  <Ionicons name="videocam-outline" size={48} color="rgba(255,255,255,0.3)" />
+                  <Text style={styles.liveModalPlaceholderText}>Live stream will appear here once available. Tap refresh to check.</Text>
+                </View>
+              )}
+              {/* Pixelated refresh overlay */}
+              {isRefreshing && (
+                <Animated.View style={[styles.pixelOverlay, { opacity: pixelAnim }]}>
+                  <View style={styles.pixelGrid}>
+                    {Array.from({ length: 96 }).map((_, i) => (
+                      <Animated.View
+                        key={i}
+                        style={[
+                          styles.pixelBlock,
+                          {
+                            backgroundColor: i % 3 === 0 ? '#FFFFFF' : i % 2 === 0 ? '#CCCCCC' : '#000000',
+                            opacity: pixelAnim.interpolate({
+                              inputRange: [0, 0.5, 1],
+                              outputRange: [0, Math.random() > 0.4 ? 1 : 0.2, Math.random() > 0.5 ? 0.8 : 1],
+                            }),
+                          }
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <View style={styles.pixelLoaderWrap}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.pixelLoaderText}>Refreshing stream...</Text>
+                  </View>
+                </Animated.View>
+              )}
+            </View>
+            <View style={styles.liveModalFooter}>
+              <View style={styles.liveModalRetentionNotice}>
+                <Ionicons name="time-outline" size={13} color="#FF9800" />
+                <Text style={styles.liveModalRetentionText}>Recordings are available for 15 minutes before being deleted from our servers</Text>
+              </View>
+              <Text style={styles.liveModalFooterText}>
+                {reachedEnd
+                  ? 'Application was submitted successfully ✅'
+                  : progressStep <= 1
+                    ? '🚀 Initializing application...'
+                    : progressStep <= 4
+                      ? '✍️ Filling in your details...'
+                      : progressStep <= 7
+                        ? '📄 Uploading documents & answering questions...'
+                        : progressStep <= 9
+                          ? '🔍 Reviewing & finalizing...'
+                          : '⏳ Almost done...'
+                }
+              </Text>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -415,37 +690,86 @@ const styles = StyleSheet.create({
   credContent: { flex: 1, marginLeft: 12 },
   credTitle: { fontSize: 14, fontWeight: '700' as const, color: '#1565C0' },
   credSubtext: { fontSize: 12, color: '#42A5F5', marginTop: 2 },
-  companyCard: { backgroundColor: "#FFF", borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 12 },
-  logo: { width: 64, height: 64, borderRadius: 18, backgroundColor: "#FFF", marginBottom: 12 },
-  jobTitle: { fontSize: 20, fontWeight: '800' as const, color: "#000", textAlign: 'center' },
-  companyName: { fontSize: 14, color: "#000", fontWeight: '600' as const, marginTop: 4 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  locationText: { fontSize: 13, color: "#000" },
-  statusBadgeLarge: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10 },
-  statusBadgeText: { fontSize: 14, fontWeight: '700' as const },
-  appliedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, width: '100%' },
-  appliedDateBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#D1FAE5' },
+  companyCard: { backgroundColor: "#FFF", borderRadius: 20, padding: 20, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  cardInfo: { flex: 1 },
+  logo: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#F3F4F6' },
+  jobTitle: { fontSize: 18, fontWeight: '800' as const, color: '#111', lineHeight: 22 },
+  companyName: { fontSize: 14, color: '#374151', fontWeight: '600' as const, marginTop: 3 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  locationText: { fontSize: 13, color: '#6B7280' },
+  statusStrip: { marginTop: 16, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+  statusStripText: { fontSize: 14, fontWeight: '700' as const },
+  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, width: '100%' },
+  appliedDateBox: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: '#D1FAE5' },
   appliedDateText: { fontSize: 13, fontWeight: '600' as const, color: '#065F46' },
-  viewJobBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#E3F2FD' },
+  viewJobBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: '#E3F2FD' },
   viewJobBtnText: { fontSize: 13, fontWeight: '600' as const, color: '#1565C0' },
+  // Live streaming card
+  liveCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1C1C1E', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.08)', shadowColor: '#E53935', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 4 },
+  liveCardCompleted: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1C1C1E', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 0.5, borderColor: 'rgba(16,185,129,0.2)', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  liveCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  liveIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(229,57,53,0.12)', justifyContent: 'center', alignItems: 'center' },
+  liveIconWrapCompleted: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center' },
+  liveDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#E53935' },
+  liveCardTitle: { fontSize: 15, fontWeight: '600' as const, color: '#FFFFFF', letterSpacing: -0.2 },
+  liveCardTitleCompleted: { fontSize: 15, fontWeight: '600' as const, color: '#FFFFFF', letterSpacing: -0.2 },
+  liveCardSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2, letterSpacing: -0.1 },
+  liveCardChevron: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
+  // Progress card
   progressCard: { backgroundColor: '#111111', borderRadius: 16, padding: 18, marginBottom: 12 },
-  progressSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF', marginBottom: 14 },
-  flowStep: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 50 },
-  flowIndicator: { alignItems: 'center', width: 24 },
-  flowDotCurrent: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#2196F3', borderWidth: 3, borderColor: '#90CAF9' },
-  flowLine: { width: 2, flex: 1, minHeight: 20, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 2 },
+  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  progressSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
+  progressBadge: { backgroundColor: 'rgba(33,150,243,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  progressBadgeDone: { backgroundColor: 'rgba(16,185,129,0.15)' },
+  progressBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#2196F3' },
+  progressBadgeTextDone: { color: '#10B981' },
+  flowStep: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 48 },
+  flowIndicator: { alignItems: 'center', width: 28 },
+  flowDotCompleted: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center' },
+  flowDotCurrent: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#2196F3', borderWidth: 3, borderColor: '#90CAF9' },
+  flowDotPending: { width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)' },
+  flowLine: { width: 2, flex: 1, minHeight: 16, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 2 },
   flowLineCompleted: { backgroundColor: '#10B981' },
-  flowContent: { flex: 1, marginLeft: 12, paddingBottom: 12 },
-  flowLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  flowLabel: { fontSize: 13, fontWeight: '600' as const, color: 'rgba(255,255,255,0.5)', flex: 1 },
-  flowLabelActive: { color: '#FFFFFF', fontWeight: '700' as const },
-  flowDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 8 },
-  flowDesc: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, lineHeight: 17 },
-  watchVideoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1565C0', borderRadius: 12, paddingVertical: 14, marginBottom: 12 },
-  watchVideoBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFFFFF' },
-  videoModalOverlay: { flex: 1, backgroundColor: '#000' },
-  videoCloseBtn: { position: 'absolute' as const, top: 50, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  flowContent: { flex: 1, marginLeft: 12, paddingBottom: 10 },
+  flowContentActive: { backgroundColor: 'rgba(33,150,243,0.08)', marginLeft: 10, paddingLeft: 10, paddingVertical: 8, borderRadius: 10 },
+  flowLabel: { fontSize: 13, fontWeight: '600' as const, color: 'rgba(255,255,255,0.4)' },
+  flowLabelCompleted: { color: 'rgba(255,255,255,0.7)' },
+  flowLabelActive: { color: '#FFFFFF', fontWeight: '700' as const, fontSize: 14 },
+  flowDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 3 },
+  flowDesc: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 4, lineHeight: 17 },
+  // Live modal (resume-style popup)
+  liveModalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  liveModalContent: { backgroundColor: '#1C1C1E', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  liveModalHandle: { width: 36, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'center', marginTop: 8 },
+  liveModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  liveModalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveModalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  liveModalActionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  elapsedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  elapsedText: { fontSize: 12, fontWeight: '700' as const, color: '#FFFFFF', fontVariant: ['tabular-nums'] },
+  liveModalBadgeLive: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(229,57,53,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  liveModalBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#E53935' },
+  liveModalBadgeLiveText: { fontSize: 11, fontWeight: '800' as const, color: '#E53935', letterSpacing: 0.5 },
+  liveModalBadgeEnded: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(142,142,147,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  liveModalBadgeEndedText: { fontSize: 11, fontWeight: '700' as const, color: '#8E8E93' },
+  liveModalTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
+  liveModalDoneText: { fontSize: 16, fontWeight: '600' as const, color: '#2196F3' },
+  liveModalWebViewWrap: { height: SCREEN_HEIGHT * 0.28, margin: 12, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000', position: 'relative' as const },
+  pixelOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  pixelGrid: { flexDirection: 'row', flexWrap: 'wrap', position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
+  pixelBlock: { width: '12.5%', height: '8.33%' },
+  pixelLoaderWrap: { position: 'absolute' as const, alignItems: 'center', gap: 8 },
+  pixelLoaderText: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' as const },
+  liveModalPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  liveModalPlaceholderText: { fontSize: 14, color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingHorizontal: 40 },
+  liveModalFooter: { paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)', gap: 6 },
+  liveModalRetentionNotice: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,152,0,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  liveModalRetentionText: { fontSize: 11, color: '#FF9800', fontWeight: '500' as const, flex: 1 },
+  liveModalFooterText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' as const },
   webView: { flex: 1, backgroundColor: '#000' },
+  webViewLoading: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+  webViewLoadingText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 10 },
   infoCards: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   infoCard: { flex: 1, backgroundColor: "#FFF", borderRadius: 14, padding: 14, alignItems: 'center', gap: 4 },
   infoLabel: { fontSize: 11, color: "#000", fontWeight: '500' as const },

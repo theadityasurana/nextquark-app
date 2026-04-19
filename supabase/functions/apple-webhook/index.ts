@@ -2,21 +2,13 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SUBSCRIPTION_LIMITS: Record<string, number> = {
-  pro: 200,
-  premium: 500,
+  premium: 999999,
   free: 40,
 }
 
 const PRODUCT_TO_PLAN: Record<string, string> = {
-  nq_pro: 'pro',
-  nq_premium: 'premium',
-}
-
-const SWIPE_PRODUCT_COUNTS: Record<string, number> = {
-  nq_5swipes: 5,
-  nq_10swipes: 10,
-  nq_25swipes: 25,
-  nq_50swipes: 50,
+  nq_premium_monthly: 'premium',
+  nq_premium_weekly: 'premium',
 }
 
 function decodeJWSPayload(jws: string): any {
@@ -149,7 +141,6 @@ serve(async (req) => {
     const originalTransactionId = transactionInfo.originalTransactionId
     const productId = transactionInfo.productId
     const planType = PRODUCT_TO_PLAN[productId] || null
-    const swipeCount = SWIPE_PRODUCT_COUNTS[productId] || 0
 
     console.log(`Apple webhook: ${notificationType} ${subtype} for ${productId}`)
 
@@ -182,8 +173,13 @@ serve(async (req) => {
 
       const currentRemaining = profile?.applications_remaining || 0
       const applicationsLimit = SUBSCRIPTION_LIMITS[planType] || 0
+      const isWeekly = productId === 'nq_premium_weekly'
       const endDate = new Date()
-      endDate.setMonth(endDate.getMonth() + 1)
+      if (isWeekly) {
+        endDate.setDate(endDate.getDate() + 7)
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1)
+      }
 
       await supabase
         .from('profiles')
@@ -200,7 +196,7 @@ serve(async (req) => {
       await supabase.from('payment_history').insert({
         user_id: userId,
         subscription_type: planType,
-        amount: planType === 'pro' ? 1999 : 7599,
+        amount: isWeekly ? 999 : 3599,
         payment_id: originalTransactionId,
         order_id: productId,
         status: 'completed',

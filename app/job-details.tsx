@@ -42,7 +42,7 @@ export default function JobDetailsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
         <View style={styles.plainHeader}>
-          <Pressable style={[styles.closeButton, { backgroundColor: colors.background }]} onPress={() => router.back()}>
+          <Pressable style={[styles.closeButton, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
             <X size={22} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.headerActions} />
@@ -94,11 +94,11 @@ export default function JobDetailsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
       <View style={styles.plainHeader}>
-        <Pressable style={[styles.closeButton, { backgroundColor: colors.background }]} onPress={() => router.back()}>
+        <Pressable style={[styles.closeButton, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
           <X size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.headerActions}>
-          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.background }]} onPress={async () => {
+          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={async () => {
             if (!job) return;
             try {
               await Share.share({ message: `${job.jobTitle} at ${job.companyName}${job.portalUrl ? `\n${job.portalUrl}` : ''}` });
@@ -106,7 +106,7 @@ export default function JobDetailsScreen() {
           }}>
             <Share2 size={20} color={colors.textSecondary} />
           </Pressable>
-          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.background }]} onPress={async () => {
+          <Pressable style={[styles.headerActionBtn, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={async () => {
             if (!supabaseUserId || !id) return;
             const newSaved = !isSaved;
             setIsSaved(newSaved);
@@ -148,11 +148,6 @@ export default function JobDetailsScreen() {
             <Clock size={18} color="#1565C0" />
             <Text style={styles.infoLabel}>Level</Text>
             <Text style={styles.infoValue} numberOfLines={1}>{job.experienceLevel}</Text>
-          </View>
-          <View style={[styles.infoCard, { backgroundColor: '#F3E8FF' }]}>
-            <Users size={18} color="#7B1FA2" />
-            <Text style={styles.infoLabel}>Applicants</Text>
-            <Text style={styles.infoValue}>{job.applicantsCount}</Text>
           </View>
         </View>
 

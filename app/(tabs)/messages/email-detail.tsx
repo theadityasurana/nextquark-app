@@ -156,7 +156,7 @@ export default function EmailDetailScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       {/* Top bar */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={[styles.backBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.topBarActions}>
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: { padding: 6 },
+  backBtn: { padding: 6, borderRadius: 12, width: 40, height: 40, justifyContent: 'center' as const, alignItems: 'center' as const },
   topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   topBarIcon: { padding: 6 },
   subjectRow: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },

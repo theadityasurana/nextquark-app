@@ -12,7 +12,7 @@ export default function AttentionDetailsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+      <Pressable style={[styles.backBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
         <ArrowLeft size={24} color={colors.textPrimary} />
       </Pressable>
       <View style={styles.content}>
@@ -29,7 +29,7 @@ export default function AttentionDetailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  backBtn: { paddingHorizontal: 20, paddingVertical: 12 },
+  backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginLeft: 16 },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 12 },
   title: { fontSize: 24, fontWeight: '800', textAlign: 'center' },
   subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 24 },

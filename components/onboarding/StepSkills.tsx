@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { Search, X, Plus } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { suggestedSkills } from '@/constants/onboarding';
@@ -42,7 +42,7 @@ export default function StepSkills({ data, onUpdate, onNext }: StepProps) {
   const isValid = data.skills.length >= MIN_SKILLS;
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.titleRow}>
           <Text style={styles.emoji}>⚡</Text>
@@ -124,7 +124,7 @@ export default function StepSkills({ data, onUpdate, onNext }: StepProps) {
           </Text>
         </Pressable>
       </View>
-    </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
 

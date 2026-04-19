@@ -78,7 +78,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.counterCard}>
@@ -290,7 +290,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#000000' },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 16, justifyContent: 'space-between', backgroundColor: '#000000' },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40, backgroundColor: '#000000' },
   content: { paddingTop: 12 },
   counterCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,

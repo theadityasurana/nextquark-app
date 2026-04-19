@@ -56,7 +56,7 @@ export default function FriendProfileScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
-            <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}>
+            <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center' }}>
               <X size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
@@ -70,7 +70,12 @@ export default function FriendProfileScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
+            <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center' }}>
+              <X size={22} color={colors.textPrimary} />
+            </Pressable>
+          </View>
           <Text style={styles.errorText}>Profile not found</Text>
         </View>
       </>
@@ -96,7 +101,7 @@ export default function FriendProfileScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable style={styles.closeButton} onPress={() => router.back()}>
+        <Pressable style={[styles.closeButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
           <X size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={{ width: 40 }} />
@@ -256,7 +261,7 @@ export default function FriendProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
-  closeButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: "#FFF", justifyContent: 'center', alignItems: 'center' },
+  closeButton: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { paddingHorizontal: 20 },
   profileSection: { alignItems: 'center', paddingVertical: 20 },
   avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: "#FFF", marginBottom: 16 },

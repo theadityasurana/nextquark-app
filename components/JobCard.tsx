@@ -121,7 +121,6 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
             <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}><LocationIcon size={12} color={Colors.primary} /><Text style={[styles.metaText, { color: Colors.primary }]}>{job.locationType}</Text></View>
             <View style={[styles.metaChip, { backgroundColor: '#E3F2FD' }]}><GraduationCap size={12} color="#1565C0" /><Text style={[styles.metaText, { color: '#1565C0' }]}>{expBanner}</Text></View>
             <View style={[styles.metaChip, { backgroundColor: Colors.primarySoft }]}><Clock size={12} color={Colors.primary} /><Text style={[styles.metaText, { color: Colors.primary }]}>{job.postedDate}</Text></View>
-            <View style={[styles.metaChip, { backgroundColor: '#F3E5F5' }]}><Users size={12} color="#7B1FA2" /><Text style={[styles.metaText, { color: '#7B1FA2' }]}>{job.applicantsCount} applicants</Text></View>
             <View style={[styles.metaChip, { backgroundColor: '#EDF5FF' }]}><Text style={[styles.metaText, { color: Colors.secondary }]}>{formatSalary()} /{job.salaryPeriod}</Text></View>
             {job.jobLevel && (<View style={[styles.metaChip, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.metaText, { color: '#2E7D32' }]}>{job.jobLevel}</Text></View>)}
             {job.jobRequirements?.map((req, i) => (<View key={i} style={[styles.metaChip, { backgroundColor: '#FFF9C4' }]}><Text style={[styles.metaText, { color: '#F57F17' }]}>{req}</Text></View>))}
@@ -202,7 +201,6 @@ export default function JobCard({ job, backgroundColor, showMatchBadge = true }:
         <View style={styles.infoCards}>
           <View style={[styles.infoCard, { backgroundColor: '#FFF8F0' }]}><Briefcase size={16} color="#E65100" /><Text style={styles.infoLabel}>Type</Text><Text style={styles.infoValue}>{job.employmentType}</Text></View>
           <View style={[styles.infoCard, { backgroundColor: '#EDF5FF' }]}><Clock size={16} color="#1565C0" /><Text style={styles.infoLabel}>Level</Text><Text style={styles.infoValue} numberOfLines={1}>{job.experienceLevel}</Text></View>
-          <View style={[styles.infoCard, { backgroundColor: '#F3E8FF' }]}><Users size={16} color="#7B1FA2" /><Text style={styles.infoLabel}>Applicants</Text><Text style={styles.infoValue}>{job.applicantsCount}</Text></View>
         </View>
 
         {job.companySize && (

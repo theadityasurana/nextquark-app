@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, Platform, Modal, FlatList, Dimensions, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, Animated, ScrollView, Platform, Modal, FlatList, Dimensions, PanResponder, KeyboardAvoidingView } from 'react-native';
 import { Search, X, MapPin, Check } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { suggestedRoles, currencies, majorCities } from '@/constants/onboarding';
@@ -168,7 +168,7 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'roles') {
     return (
-      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { opacity: 1 }]} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.titleRow}>
             <Text style={styles.emoji}>🎯</Text>
@@ -210,7 +210,7 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
             <Text style={styles.nextButtonText}>Next →</Text>
           </Pressable>
         </View>
-      </Animated.View>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -302,7 +302,7 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'cities') {
     return (
-      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { opacity: 1 }]} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.titleRow}>
             <Text style={styles.emoji}>🌍</Text>
@@ -351,7 +351,7 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
             <Text style={styles.nextButtonText}>Next →</Text>
           </Pressable>
         </View>
-      </Animated.View>
+      </KeyboardAvoidingView>
     );
   }
 

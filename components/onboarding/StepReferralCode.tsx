@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Animated, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, Animated, Alert, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { Gift, Check, X } from '@/components/ProfileIcons';
 import * as Haptics from 'expo-haptics';
 import { StepProps } from '@/types/onboarding';
@@ -83,6 +83,8 @@ export default function StepReferralCode({ data, onUpdate, onNext }: StepProps) 
   };
 
   return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kavContainer} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.content}>
         <Text style={styles.title}>Got a referral code?</Text>
@@ -136,10 +138,14 @@ export default function StepReferralCode({ data, onUpdate, onNext }: StepProps) 
         </Pressable>
       </View>
     </Animated.View>
+    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  kavContainer: { flex: 1, backgroundColor: '#000000' },
+  scrollContent: { flexGrow: 1 },
   container: { flex: 1, backgroundColor: '#000000', paddingHorizontal: 20, justifyContent: 'space-between', paddingBottom: 16 },
   content: { paddingTop: 24 },
   title: { fontSize: 32, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },

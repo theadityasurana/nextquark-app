@@ -15,6 +15,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -218,7 +219,7 @@ export default function ApplicationDetailsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
-          <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable onPress={() => safeGoBack(router)} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}>
             <ArrowLeft size={22} color={colors.textPrimary} />
           </Pressable>
         </View>
@@ -231,7 +232,7 @@ export default function ApplicationDetailsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={() => safeGoBack(router)}>
             <ArrowLeft size={22} color={colors.textPrimary} />
           </Pressable>
         </View>
@@ -254,7 +255,7 @@ export default function ApplicationDetailsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => safeGoBack(router)}>
           <ArrowLeft size={22} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Application Details</Text>

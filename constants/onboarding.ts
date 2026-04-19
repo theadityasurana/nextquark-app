@@ -253,34 +253,6 @@ export const AuthColors = {
 ];
   
   export const majorCities = [
-  // United States
-  'San Francisco, CA, USA', 'New York, NY, USA', 'Seattle, WA, USA', 'Austin, TX, USA',
-  'Los Angeles, CA, USA', 'Chicago, IL, USA', 'Boston, MA, USA', 'Denver, CO, USA',
-  'Portland, OR, USA', 'Miami, FL, USA', 'Atlanta, GA, USA', 'Dallas, TX, USA',
-  'Houston, TX, USA', 'Phoenix, AZ, USA', 'San Diego, CA, USA', 'Philadelphia, PA, USA',
-  'Washington, DC, USA', 'Nashville, TN, USA', 'Detroit, MI, USA', 'Minneapolis, MN, USA',
-  // Canada
-  'Toronto, Canada', 'Vancouver, Canada', 'Montreal, Canada', 'Calgary, Canada',
-  'Ottawa, Canada', 'Edmonton, Canada', 'Winnipeg, Canada',
-  // United Kingdom
-  'London, UK', 'Manchester, UK', 'Birmingham, UK', 'Edinburgh, UK', 'Bristol, UK',
-  'Leeds, UK', 'Glasgow, UK', 'Liverpool, UK', 'Cambridge, UK', 'Oxford, UK',
-  // Germany
-  'Berlin, Germany', 'Munich, Germany', 'Frankfurt, Germany', 'Hamburg, Germany', 'Cologne, Germany',
-  // Netherlands
-  'Amsterdam, Netherlands', 'Rotterdam, Netherlands', 'The Hague, Netherlands', 'Utrecht, Netherlands',
-  // France
-  'Paris, France', 'Lyon, France', 'Marseille, France', 'Toulouse, France', 'Nice, France',
-  // Europe (Other)
-  'Barcelona, Spain', 'Madrid, Spain', 'Lisbon, Portugal', 'Porto, Portugal',
-  'Rome, Italy', 'Milan, Italy', 'Stockholm, Sweden', 'Copenhagen, Denmark',
-  'Oslo, Norway', 'Helsinki, Finland', 'Vienna, Austria', 'Zurich, Switzerland',
-  'Geneva, Switzerland', 'Brussels, Belgium', 'Prague, Czech Republic', 'Warsaw, Poland',
-  'Dublin, Ireland', 'Athens, Greece', 'Budapest, Hungary',
-  // Middle East
-  'Dubai, UAE', 'Abu Dhabi, UAE', 'Riyadh, Saudi Arabia', 'Jeddah, Saudi Arabia',
-  'Doha, Qatar', 'Kuwait City, Kuwait', 'Muscat, Oman', 'Manama, Bahrain',
-  'Tel Aviv, Israel', 'Jerusalem, Israel', 'Amman, Jordan', 'Beirut, Lebanon',
   // India — Major Metros
   'Bangalore, India', 'Mumbai, India', 'Delhi, India', 'Hyderabad, India', 'Pune, India',
   'Chennai, India', 'Kolkata, India', 'Gurugram, India', 'Noida, India', 'Ahmedabad, India',
@@ -327,6 +299,34 @@ export const AuthColors = {
   'Purnia, India', 'Begusarai, India',
   'Sambalpur, India', 'Balasore, India', 'Puri, India',
   'Silvassa, India', 'Daman, India', 'Kavaratti, India', 'Port Blair, India',
+  // United States
+  'San Francisco, CA, USA', 'New York, NY, USA', 'Seattle, WA, USA', 'Austin, TX, USA',
+  'Los Angeles, CA, USA', 'Chicago, IL, USA', 'Boston, MA, USA', 'Denver, CO, USA',
+  'Portland, OR, USA', 'Miami, FL, USA', 'Atlanta, GA, USA', 'Dallas, TX, USA',
+  'Houston, TX, USA', 'Phoenix, AZ, USA', 'San Diego, CA, USA', 'Philadelphia, PA, USA',
+  'Washington, DC, USA', 'Nashville, TN, USA', 'Detroit, MI, USA', 'Minneapolis, MN, USA',
+  // Canada
+  'Toronto, Canada', 'Vancouver, Canada', 'Montreal, Canada', 'Calgary, Canada',
+  'Ottawa, Canada', 'Edmonton, Canada', 'Winnipeg, Canada',
+  // United Kingdom
+  'London, UK', 'Manchester, UK', 'Birmingham, UK', 'Edinburgh, UK', 'Bristol, UK',
+  'Leeds, UK', 'Glasgow, UK', 'Liverpool, UK', 'Cambridge, UK', 'Oxford, UK',
+  // Germany
+  'Berlin, Germany', 'Munich, Germany', 'Frankfurt, Germany', 'Hamburg, Germany', 'Cologne, Germany',
+  // Netherlands
+  'Amsterdam, Netherlands', 'Rotterdam, Netherlands', 'The Hague, Netherlands', 'Utrecht, Netherlands',
+  // France
+  'Paris, France', 'Lyon, France', 'Marseille, France', 'Toulouse, France', 'Nice, France',
+  // Europe (Other)
+  'Barcelona, Spain', 'Madrid, Spain', 'Lisbon, Portugal', 'Porto, Portugal',
+  'Rome, Italy', 'Milan, Italy', 'Stockholm, Sweden', 'Copenhagen, Denmark',
+  'Oslo, Norway', 'Helsinki, Finland', 'Vienna, Austria', 'Zurich, Switzerland',
+  'Geneva, Switzerland', 'Brussels, Belgium', 'Prague, Czech Republic', 'Warsaw, Poland',
+  'Dublin, Ireland', 'Athens, Greece', 'Budapest, Hungary',
+  // Middle East
+  'Dubai, UAE', 'Abu Dhabi, UAE', 'Riyadh, Saudi Arabia', 'Jeddah, Saudi Arabia',
+  'Doha, Qatar', 'Kuwait City, Kuwait', 'Muscat, Oman', 'Manama, Bahrain',
+  'Tel Aviv, Israel', 'Jerusalem, Israel', 'Amman, Jordan', 'Beirut, Lebanon',
   // Southeast Asia
   'Singapore', 'Bangkok, Thailand', 'Jakarta, Indonesia', 'Kuala Lumpur, Malaysia',
   'Manila, Philippines', 'Ho Chi Minh City, Vietnam', 'Hanoi, Vietnam',

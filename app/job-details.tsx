@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Alert, Linking
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { safeGoBack } from '@/lib/navigation';
 import { X, MapPin, Briefcase, Clock, Users, Heart, Bookmark, Share2, Wifi, Building2, Camera, ExternalLink, Globe } from '@/components/ProfileIcons';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
@@ -42,7 +43,7 @@ export default function JobDetailsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
         <View style={styles.plainHeader}>
-          <Pressable style={[styles.closeButton, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
+          <Pressable style={[styles.closeButton, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => safeGoBack(router)}>
             <X size={22} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.headerActions} />
@@ -82,7 +83,7 @@ export default function JobDetailsScreen() {
     
     Alert.alert('Applied!', `Successfully applied to ${job.jobTitle} at ${job.companyName}`);
     setIsApplying(false);
-    router.back();
+    safeGoBack(router);
   };
 
   const formatSalary = () => {
@@ -94,7 +95,7 @@ export default function JobDetailsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.surface }]}>
       <View style={styles.plainHeader}>
-        <Pressable style={[styles.closeButton, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
+        <Pressable style={[styles.closeButton, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => safeGoBack(router)}>
           <X size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.headerActions}>

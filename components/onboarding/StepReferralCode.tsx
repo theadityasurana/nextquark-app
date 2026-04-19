@@ -83,8 +83,8 @@ export default function StepReferralCode({ data, onUpdate, onNext }: StepProps) 
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kavContainer} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kavContainer} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} automaticallyAdjustKeyboardInsets>
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.content}>
         <Text style={styles.title}>Got a referral code?</Text>

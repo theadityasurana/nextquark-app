@@ -16,8 +16,8 @@ export default function StepTitle({ data, onUpdate, onNext }: StepProps) {
     : [];
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.titleRow}>
             <Text style={styles.emoji}>💼</Text>

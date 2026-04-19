@@ -4,12 +4,12 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
-import { Plus, X, ChevronDown, Check, Search, Users, Building2, TrendingUp, Clock, Trophy } from '@/components/ProfileIcons';
+import { Plus, X, ChevronDown, Check, Search, Users, Building2, TrendingUp, Clock } from '@/components/ProfileIcons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/contexts/useColors';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchJobsByCompany } from '@/lib/jobs';
+import { mapSupabaseJobToJob } from '@/lib/jobs';
 import { Job } from '@/types';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { supabase } from '@/lib/supabase';
@@ -47,10 +47,7 @@ export default function DiscoverScreen() {
     useCallback(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
       animatedScrollRef.current?.scrollToTop();
-      queryClient.invalidateQueries({ queryKey: ['jobs-by-favorite-companies'] });
-      queryClient.invalidateQueries({ queryKey: ['recent-jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['all-profiles'] });
-    }, [queryClient])
+    }, [])
   );
 
   const { data: referralStats, refetch: refetchReferralStats } = useQuery({
@@ -95,22 +92,18 @@ export default function DiscoverScreen() {
 
   const { data: topCompanies = [] } = useQuery({
     queryKey: ['analytics-top-companies', analyticsTimeRange],
+    staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const timeRangeDate = getTimeRangeDate();
-      const query = supabase.from('jobs').select('company_name');
-      if (analyticsTimeRange !== 'all') query.gte('created_at', timeRangeDate);
-      const { data } = await query;
-      if (!data) return [];
-      const counts = data.reduce((acc: any, job) => {
-        acc[job.company_name] = (acc[job.company_name] || 0) + 1;
-        return acc;
-      }, {});
-      return Object.entries(counts).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5);
+      const since = getTimeRangeDate();
+      const { data, error } = await supabase.rpc('top_companies_hiring', { since });
+      if (error || !data) return [];
+      return data.map((r: any) => [r.company_name, r.job_count]);
     },
   });
 
   const { data: mostAppliedJobs = [] } = useQuery({
     queryKey: ['analytics-most-applied', analyticsTimeRange],
+    staleTime: 1000 * 60 * 10,
     queryFn: async () => {
       const { data } = await supabase.from('jobs').select('job_title, company_name, right_swipe').order('right_swipe', { ascending: false }).limit(5);
       return data || [];
@@ -119,22 +112,18 @@ export default function DiscoverScreen() {
 
   const { data: trendingLocations = [] } = useQuery({
     queryKey: ['analytics-trending-locations', analyticsTimeRange],
+    staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const timeRangeDate = getTimeRangeDate();
-      const query = supabase.from('jobs').select('location');
-      if (analyticsTimeRange !== 'all') query.gte('created_at', timeRangeDate);
-      const { data } = await query;
-      if (!data) return [];
-      const counts = data.reduce((acc: any, job) => {
-        acc[job.location] = (acc[job.location] || 0) + 1;
-        return acc;
-      }, {});
-      return Object.entries(counts).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5);
+      const since = getTimeRangeDate();
+      const { data, error } = await supabase.rpc('trending_locations', { since });
+      if (error || !data) return [];
+      return data.map((r: any) => [r.location, r.job_count]);
     },
   });
 
   const { data: hotJobs = [] } = useQuery({
     queryKey: ['analytics-hot-jobs', analyticsTimeRange],
+    staleTime: 1000 * 60 * 10,
     queryFn: async () => {
       const timeRangeDate = getTimeRangeDate();
       const query = supabase.from('jobs').select('job_title, company_name, right_swipe');
@@ -144,30 +133,37 @@ export default function DiscoverScreen() {
     },
   });
 
-  const { data: recentJobs = [], isLoading: isLoadingRecentJobs } = useQuery({
+  const { data: recentJobs = [], isFetching: isLoadingRecentJobs } = useQuery({
     queryKey: ['recent-jobs', recentJobsTimeRange, userProfile?.desiredRoles],
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
       const hours = recentJobsTimeRange === '24h' ? 24 : recentJobsTimeRange === '48h' ? 48 : recentJobsTimeRange === '7d' ? 168 : 720;
       const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
       const desiredRoles = userProfile?.desiredRoles || [];
-      // Fetch more to allow client-side filtering by desired roles
       const limit = desiredRoles.length > 0 ? 200 : 100;
-      const { data } = await supabase.from('jobs').select('*').gte('created_at', timeAgo).ilike('location', '%india%').order('created_at', { ascending: false }).limit(limit);
+      const { data, error } = await supabase.from('jobs')
+        .select('id, title, company_name, location, type, created_at, skills, description')
+        .gte('created_at', timeAgo)
+        .ilike('location', '%india%')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) { console.log('Recent jobs error:', error.message); return []; }
       if (!data) return [];
       if (desiredRoles.length === 0) return data;
       const expandedRoles = desiredRoles.map((r: string) => r.toLowerCase());
       const filtered = data.filter((job: any) => {
-        const jobText = `${job.job_title || ''} ${job.description || ''} ${Array.isArray(job.skills) ? job.skills.join(' ') : ''}`.toLowerCase();
+        const jobText = `${job.title || ''} ${job.description || ''} ${Array.isArray(job.skills) ? job.skills.join(' ') : ''}`.toLowerCase();
         return expandedRoles.some(keyword => jobText.includes(keyword));
       });
-      return filtered;
+      return filtered.length > 0 ? filtered : data;
     },
   });
 
   const { data: allProfiles = [], isLoading: isLoadingProfiles } = useQuery({
     queryKey: ['all-profiles'],
+    staleTime: 1000 * 60 * 15,
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, subscription_type, education').order('full_name');
+      const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, subscription_type').order('full_name').limit(50);
       if (error) {
         console.error('Error fetching profiles:', error);
         return [];
@@ -188,20 +184,22 @@ export default function DiscoverScreen() {
     setVisibleFriends(10);
   }, [friendSearch]);
 
-  useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ['jobs-by-favorite-companies'] });
-  }, [favoriteCompanies, queryClient]);
+  // favoriteCompanies is part of the query key, so React Query auto-refetches when it changes
 
   const { data: allCompaniesData = [] } = useQuery({
-    queryKey: ['all-companies-data'],
+    queryKey: ['fav-companies-data', favoriteCompanies],
+    staleTime: 1000 * 60 * 30,
     queryFn: async () => {
-      const { data } = await supabase.from('companies').select('name, logo_url, industry, location').order('name');
+      if (favoriteCompanies.length === 0) return [];
+      const { data } = await supabase.from('companies').select('name, logo_url, industry, location').in('name', favoriteCompanies);
       return data || [];
     },
+    enabled: favoriteCompanies.length > 0,
   });
 
   const { data: allCompaniesWithLogos = [], isLoading: isLoadingTopCompanies } = useQuery({
     queryKey: ['top-companies-logos'],
+    staleTime: 1000 * 60 * 30, // 30 min
     queryFn: async () => {
       const { data, error } = await supabase.from('companies').select('name, logo_url').not('logo_url', 'is', null).order('name');
       if (error) {
@@ -233,10 +231,22 @@ export default function DiscoverScreen() {
   const { data: jobsByCompany = {}, refetch: refetchJobs, isLoading: isLoadingFavJobs } = useQuery({
     queryKey: ['jobs-by-favorite-companies', favoriteCompanies],
     queryFn: async () => {
+      if (favoriteCompanies.length === 0) return {};
       const results: Record<string, Job[]> = {};
+      const allJobs: any[] = [];
+      // Single query: fetch jobs for all favorite companies at once
       for (const company of favoriteCompanies) {
-        const jobs = await fetchJobsByCompany(company);
-        results[company] = jobs;
+        const { data, error } = await supabase.from('jobs')
+          .select('id, title, company_name, location, type, salary_range, created_at')
+          .ilike('company_name', company)
+          .order('created_at', { ascending: false });
+        if (error) { console.log('Fav company jobs error:', error.message); }
+        if (data) allJobs.push(...data.map((j: any) => ({ ...j, _matchedCompany: company })));
+      }
+      for (const company of favoriteCompanies) {
+        results[company] = allJobs
+          .filter((j: any) => j._matchedCompany === company)
+          .map((j: any) => mapSupabaseJobToJob(j));
       }
       return results;
     },
@@ -279,9 +289,7 @@ export default function DiscoverScreen() {
               <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => setShowFriendSearch(!showFriendSearch)}>
                 <Search size={18} color={colors.textPrimary} />
               </Pressable>
-              <Pressable style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => router.push('/leaderboard' as any)}>
-                <Trophy size={18} color={colors.textPrimary} />
-              </Pressable>
+
               <Pressable style={[styles.inviteButton, { backgroundColor: isLight ? '#000' : '#FFF' }]} onPress={async () => {
                 if (!referralStats?.referralCode && supabaseUserId) {
                   const code = await createReferralCode(supabaseUserId, userProfile?.name || 'User');
@@ -419,7 +427,7 @@ export default function DiscoverScreen() {
             ) : recentJobs.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentJobsRow}>
                 {recentJobs.slice(0, visibleRecentJobs).map((job: any) => {
-                  const mappedJob = require('@/lib/jobs').mapSupabaseJobToJob(job);
+                  const mappedJob = mapSupabaseJobToJob(job);
                   return (
                     <Pressable key={job.id} style={styles.recentJobCard} onPress={() => handleJobPress(mappedJob)}>
                       <Image source={{ uri: mappedJob.companyLogo }} style={styles.recentJobLogo} />

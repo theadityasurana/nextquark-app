@@ -6,6 +6,7 @@ import { ChevronRight } from '@/components/ProfileIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
+import { safeGoBack } from '@/lib/navigation';
 
 type WizardStep = 'topskills' | 'education' | 'experience' | 'achievements' | 'certifications';
 
@@ -50,8 +51,7 @@ export function startWizardFlow(router: any, steps: WizardStep[]) {
 // Called from WizardFooter to move between steps — uses replace so we don't pile up screens
 function navigateToWizardStep(router: any, steps: WizardStep[], index: number) {
   if (index < 0 || index >= steps.length) {
-    // Done or went before first — go back to profile index
-    router.back();
+    safeGoBack(router, '/(tabs)/profile');
     return;
   }
   const step = steps[index];
@@ -69,7 +69,7 @@ export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps
 
   const handlePrevious = () => {
     if (isFirst) {
-      router.back();
+      safeGoBack(router, '/(tabs)/profile');
     } else {
       navigateToWizardStep(router, incompleteSteps, wizardIndex - 1);
     }
@@ -78,7 +78,7 @@ export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps
   const handleNext = async () => {
     await onSaveCurrent();
     if (isLast) {
-      router.back();
+      safeGoBack(router, '/(tabs)/profile');
     } else {
       navigateToWizardStep(router, incompleteSteps, wizardIndex + 1);
     }
@@ -86,7 +86,7 @@ export default function WizardFooter({ wizardIndex, wizardTotal, incompleteSteps
 
   const handleSkip = () => {
     if (isLast) {
-      router.back();
+      safeGoBack(router, '/(tabs)/profile');
     } else {
       navigateToWizardStep(router, incompleteSteps, wizardIndex + 1);
     }

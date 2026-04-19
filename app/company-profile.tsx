@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Linking } fr
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { Image } from 'expo-image';
 import { ArrowLeft, MapPin, Users, Briefcase, Building2, ExternalLink, ChevronRight, Clock, Globe } from '@/components/ProfileIcons';
 import { useQuery } from '@tanstack/react-query';
@@ -103,7 +104,7 @@ export default function CompanyProfileScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#F5F5F5' }]}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={() => safeGoBack(router)}>
             <ArrowLeft size={22} color={Colors.textPrimary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: Colors.textPrimary }]}>{companyName || 'Company'}</Text>
@@ -118,7 +119,7 @@ export default function CompanyProfileScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={() => safeGoBack(router)}>
             <ArrowLeft size={22} color={Colors.textPrimary} />
           </Pressable>
         </View>
@@ -317,7 +318,7 @@ export default function CompanyProfileScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.heroSection}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={() => safeGoBack(router)}>
             <ArrowLeft size={22} color={Colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle} numberOfLines={1}>{companyName}</Text>

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { WebView } from 'react-native-webview';
@@ -120,7 +121,7 @@ export default function EmailDetailScreen() {
       if (kind === 'inbound') return archiveInbound(emailId, true);
       return archiveSent(emailId, true);
     },
-    onSuccess: () => { invalidate(); router.back(); },
+    onSuccess: () => { invalidate(); safeGoBack(router, '/(tabs)/messages'); },
   });
 
   const deleteMutation = useMutation({
@@ -128,7 +129,7 @@ export default function EmailDetailScreen() {
       if (kind === 'inbound') return deleteInboundEmail(emailId);
       return deleteSentEmail(emailId);
     },
-    onSuccess: () => { invalidate(); router.back(); },
+    onSuccess: () => { invalidate(); safeGoBack(router, '/(tabs)/messages'); },
   });
 
   const handleStar = useCallback(() => {
@@ -145,18 +146,14 @@ export default function EmailDetailScreen() {
   }, [deleteMutation]);
 
   const handleReply = useCallback(() => {
-    router.back();
-    // Small delay so the inbox mounts before we try to trigger compose
-    setTimeout(() => {
-      // We pass reply params back — the inbox will pick them up
-    }, 100);
+    safeGoBack(router, '/(tabs)/messages');
   }, [router]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       {/* Top bar */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={[styles.backBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
+        <Pressable onPress={() => safeGoBack(router, '/(tabs)/messages')} hitSlop={10} style={[styles.backBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.topBarActions}>
@@ -213,10 +210,7 @@ export default function EmailDetailScreen() {
         {kind === 'inbound' && (
           <Pressable
             style={[styles.bottomBtn, { borderColor: colors.border }]}
-            onPress={() => {
-              router.back();
-              // Inbox will handle opening compose via params
-            }}
+            onPress={() => safeGoBack(router, '/(tabs)/messages')}
           >
             <Reply size={18} color={colors.textSecondary} />
             <Text style={[styles.bottomBtnText, { color: colors.textPrimary }]}>Reply</Text>
@@ -225,10 +219,7 @@ export default function EmailDetailScreen() {
         {kind === 'inbound' && (
           <Pressable
             style={[styles.bottomBtn, { borderColor: colors.border }]}
-            onPress={() => {
-              router.back();
-              // Inbox will handle opening compose via params
-            }}
+            onPress={() => safeGoBack(router, '/(tabs)/messages')}
           >
             <Forward size={18} color={colors.textSecondary} />
             <Text style={[styles.bottomBtnText, { color: colors.textPrimary }]}>Forward</Text>

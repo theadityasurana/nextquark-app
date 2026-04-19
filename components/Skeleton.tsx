@@ -39,20 +39,6 @@ export function SkeletonJobCard() {
   );
 }
 
-export function SkeletonLeaderboardRow() {
-  const colors = useColors();
-  return (
-    <View style={[sk.lbRow, { backgroundColor: colors.surface }]}>
-      <SkeletonPulse style={sk.rank} />
-      <SkeletonPulse style={sk.lbAvatar} />
-      <View style={sk.col}>
-        <SkeletonPulse style={sk.titleBar} />
-        <SkeletonPulse style={sk.smallBar} />
-      </View>
-      <SkeletonPulse style={sk.scoreBox} />
-    </View>
-  );
-}
 
 export function SkeletonAppCard() {
   const colors = useColors();
@@ -320,10 +306,7 @@ const sk = StyleSheet.create({
   chip: { height: 24, width: 70, borderRadius: 6 },
   chipSm: { height: 24, width: 50, borderRadius: 6 },
   badge: { height: 24, width: 60, borderRadius: 8 },
-  lbRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, marginBottom: 12, gap: 12 },
-  rank: { width: 32, height: 32, borderRadius: 16 },
-  lbAvatar: { width: 50, height: 50, borderRadius: 25 },
-  scoreBox: { width: 40, height: 30, borderRadius: 8 },
+
   friendWrap: { alignItems: 'center', width: 70, gap: 6 },
   friendAvatar: { width: 56, height: 56, borderRadius: 28 },
   friendName: { width: 50, height: 10, borderRadius: 5 },

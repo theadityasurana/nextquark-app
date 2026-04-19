@@ -168,8 +168,8 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'roles') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { opacity: 1 }]} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { opacity: 1 }]} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={styles.titleRow}>
             <Text style={styles.emoji}>🎯</Text>
             <Text style={styles.title}>What roles are you looking for?</Text>
@@ -302,8 +302,8 @@ export default function StepPreferences({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'cities') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { opacity: 1 }]} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { opacity: 1 }]} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={styles.titleRow}>
             <Text style={styles.emoji}>🌍</Text>
             <Text style={styles.title}>Where do you want to work?</Text>

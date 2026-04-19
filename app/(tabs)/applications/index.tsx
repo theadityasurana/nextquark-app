@@ -35,12 +35,12 @@ export default function ApplicationsScreen() {
   useFocusEffect(
     useCallback(() => {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-      queryClient.invalidateQueries({ queryKey: ['user-applications', supabaseUserId] });
-    }, [supabaseUserId, queryClient])
+    }, [])
   );
 
   const { data: applications = [], isLoading, refetch } = useQuery({
     queryKey: ['user-applications', supabaseUserId],
+    staleTime: 1000 * 60 * 3, // 3 min — applications update after swipes
     queryFn: async () => {
       if (!supabaseUserId) return [];
       await Promise.all([

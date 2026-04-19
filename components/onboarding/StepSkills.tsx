@@ -42,8 +42,8 @@ export default function StepSkills({ data, onUpdate, onNext }: StepProps) {
   const isValid = data.skills.length >= MIN_SKILLS;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={styles.titleRow}>
           <Text style={styles.emoji}>⚡</Text>
           <Text style={styles.titleText}>What are your superpowers?</Text>

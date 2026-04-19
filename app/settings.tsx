@@ -79,7 +79,7 @@ export default function SettingsScreen() {
   const menuItems: { icon: any; label: string; route?: string; highlight?: boolean; action?: () => void }[] = [
     { icon: Zap, label: 'Upgrade to Premium', route: '/premium', highlight: true },
     { icon: Lightbulb, label: 'Quick Tips', route: '/quick-tips' },
-    { icon: ShieldCheck, label: 'Privacy Policy', route: '/privacy-policy' },
+    { icon: ShieldCheck, label: 'Privacy Policy', action: () => Linking.openURL('https://nextquark.framer.website/privacy') },
     { icon: HelpCircle, label: 'Help & Support', route: '/help-support' },
     { icon: MessageSquareMore, label: 'FAQs', route: '/faq' },
     { icon: Info, label: 'About Us', route: '/about-us' },
@@ -104,7 +104,7 @@ export default function SettingsScreen() {
     { icon: () => <TwitterIcon size={20} />, label: 'Twitter', url: 'https://twitter.com/nextquark', appUrl: 'twitter://user?screen_name=nextquark' },
     { icon: () => <InstagramIcon size={20} />, label: 'Instagram', url: 'https://instagram.com/nextquark', appUrl: 'instagram://user?username=nextquark' },
     { icon: () => <LinkedInIcon size={20} />, label: 'LinkedIn', url: 'https://linkedin.com/company/nextquark', appUrl: 'linkedin://company/nextquark' },
-    { icon: () => <WebsiteIcon size={20} />, label: 'Website', url: 'https://nextquark.in' },
+    { icon: () => <WebsiteIcon size={20} />, label: 'Website', url: 'https://nextquark.framer.website/' },
   ];
 
   return (

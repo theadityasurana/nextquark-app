@@ -842,7 +842,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     } catch (e) {
       if (__DEV__) console.log('Supabase signOut error (non-critical):', e);
     }
-    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]);
+    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY, 'REACT_QUERY_CACHE']);
     setAuthState(defaultAuthState);
     setOnboardingData(defaultOnboardingData);
     setUserProfile(null);
@@ -876,7 +876,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     // Always clean up local state — even if edge function failed,
     // the auth user may already be deleted (zombie session)
     try { await supabase.auth.signOut(); } catch (_) {}
-    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY]);
+    await AsyncStorage.multiRemove([AUTH_KEY, ONBOARDING_KEY, SWIPED_JOBS_KEY, WELCOME_NOTIF_SENT_KEY, 'REACT_QUERY_CACHE']);
     setAuthState(defaultAuthState);
     setOnboardingData(defaultOnboardingData);
     setUserProfile(null);

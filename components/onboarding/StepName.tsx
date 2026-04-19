@@ -32,8 +32,8 @@ export default function StepName({ data, onUpdate, onNext }: StepProps) {
   const waveRotate = waveAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '20deg'] });
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.titleRow}>
             <Animated.Text style={[styles.emoji, { transform: [{ rotate: waveRotate }] }]}>👋</Animated.Text>

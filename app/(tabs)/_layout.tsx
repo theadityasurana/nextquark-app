@@ -48,6 +48,7 @@ export default function TabLayout() {
     queryKey: ['user-applications', supabaseUserId],
     queryFn: () => fetchUserApplications(supabaseUserId!),
     enabled: !!supabaseUserId,
+    staleTime: 1000 * 60 * 3, // 3 min
   });
 
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -107,16 +108,18 @@ export default function TabLayout() {
 
   const resetStackOnTabPress = ({ navigation }: any) => ({
     tabPress: (e: any) => {
-      const state = navigation.getState();
-      const currentRoute = state.routes[state.index];
-      if (currentRoute.state && currentRoute.state.index > 0) {
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: currentRoute.name }],
-          })
-        );
-      }
+      try {
+        const state = navigation.getState();
+        const currentRoute = state.routes[state.index];
+        if (currentRoute.state && currentRoute.state.index && currentRoute.state.index > 0) {
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: currentRoute.name }],
+            })
+          );
+        }
+      } catch {}
     },
   });
 

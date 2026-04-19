@@ -78,8 +78,8 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} automaticallyAdjustKeyboardInsets>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.counterCard}>
             <Text style={styles.counterEmoji}>🔥</Text>
@@ -174,7 +174,7 @@ export default function StepBasicInfo({ data, onUpdate, onNext }: StepProps) {
             <View style={styles.fieldRow}>
               <Link2 size={18} color="rgba(255,255,255,0.4)" />
               <TextInput
-                style={[styles.fieldInput, { marginLeft: 10 }]}
+                style={[styles.fieldInput, { marginLeft: 10, textAlign: 'left' }]}
                 placeholder="LinkedIn URL"
                 placeholderTextColor="rgba(255,255,255,0.25)"
                 value={data.linkedInUrl}

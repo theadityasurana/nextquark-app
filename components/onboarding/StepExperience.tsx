@@ -128,8 +128,8 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'title') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
-        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex} keyboardVerticalOffset={100}>
+        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 1/5</Text>
           <View style={styles.titleRow}>
             <Text style={styles.subStepEmoji}>✏️</Text>
@@ -162,8 +162,8 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'company') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
-        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex} keyboardVerticalOffset={100}>
+        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 2/5</Text>
           <View style={styles.titleRow}>
             <Text style={styles.subStepEmoji}>🏢</Text>
@@ -196,8 +196,8 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'type') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
-        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex} keyboardVerticalOffset={100}>
+        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 3/5</Text>
           <Text style={styles.typeLabel}>EMPLOYMENT TYPE</Text>
           <View style={styles.chipGrid}>
@@ -422,8 +422,8 @@ export default function StepExperience({ data, onUpdate, onNext }: StepProps) {
 
   if (subStep === 'description') {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
-        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex} keyboardVerticalOffset={100}>
+        <ScrollView contentContainerStyle={styles.subStepContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.subStepLabel}>WORK EXPERIENCE 5/5</Text>
           <View style={styles.titleRow}>
             <Text style={styles.subStepEmoji}>✍️</Text>

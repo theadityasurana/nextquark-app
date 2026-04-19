@@ -1,4 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -26,12 +28,19 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 30,
+      staleTime: 1000 * 60 * 5, // 5 min default
+      gcTime: 1000 * 60 * 60 * 24, // 24h — keep in memory/disk longer for persistence
       retry: 2,
       refetchOnWindowFocus: false,
+      refetchOnMount: 'always',
     },
   },
+});
+
+const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'REACT_QUERY_CACHE',
+  throttleTime: 2000, // only write to disk every 2s to avoid thrashing
 });
 
 
@@ -256,12 +265,7 @@ function RootLayoutNav() {
             headerShown: false,
           }}
         />
-        <Stack.Screen
-          name="leaderboard"
-          options={{
-            headerShown: false,
-          }}
-        />
+
         <Stack.Screen
           name="terms-of-service"
           options={{
@@ -298,7 +302,22 @@ function RootLayout() {
 
   return (
     <ErrorBoundary fallbackMessage="The app encountered an error. Tap below to restart.">
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: asyncStoragePersister,
+          maxAge: 1000 * 60 * 60 * 24, // persist cache for 24h
+          dehydrateOptions: {
+            shouldDehydrateQuery: (query) => {
+              // Don't persist mutation-heavy or realtime queries
+              const key = query.queryKey[0] as string;
+              if (key === 'nextquark-mail') return false; // messages use realtime
+              if (key === 'subscription-status') return false; // always fresh
+              return query.state.status === 'success';
+            },
+          },
+        }}
+      >
         <GestureHandlerRootView>
           <ThemeProvider>
             <AuthProvider>
@@ -306,7 +325,7 @@ function RootLayout() {
             </AuthProvider>
           </ThemeProvider>
         </GestureHandlerRootView>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ErrorBoundary>
   );
 }

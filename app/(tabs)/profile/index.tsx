@@ -212,9 +212,14 @@ export default function ProfileScreen() {
   // Create a fake scrollable ref for useScrollToTop
   const scrollToTopRef = useRef({ scrollToOffset: ({ offset, animated }: { offset: number; animated?: boolean }) => { animatedScrollRef.current?.scrollToTop(animated); } });
   useScrollToTop(scrollToTopRef as any);
+  const lastProfileFetchRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
       animatedScrollRef.current?.scrollToTop(false);
+      // Only refetch from Supabase if data is older than 2 minutes
+      const now = Date.now();
+      if (now - lastProfileFetchRef.current < 1000 * 60 * 2) return;
+      lastProfileFetchRef.current = now;
       setIsRefreshingSection(true);
       skeletonOpacity.setValue(0);
       Animated.timing(skeletonOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
@@ -232,6 +237,7 @@ export default function ProfileScreen() {
     queryKey: ['user-applications', supabaseUserId],
     queryFn: () => fetchUserApplications(supabaseUserId!),
     enabled: !!supabaseUserId,
+    staleTime: 1000 * 60 * 3, // 3 min
   });
 
   const { data: subscriptionData } = useQuery({
@@ -484,6 +490,7 @@ const MAJOR_CITIES = [
 
   const { data: allCompaniesData = [], isLoading: isLoadingCompanies, error: companiesError } = useQuery({
     queryKey: ['all-companies-data'],
+    staleTime: 1000 * 60 * 30, // 30 min — company list is very stable
     queryFn: async () => {
       console.log('Fetching companies from Supabase...');
       const { data, error } = await supabase
@@ -505,7 +512,6 @@ const MAJOR_CITIES = [
       }
       return data || [];
     },
-    staleTime: 1000 * 60 * 10,
     enabled: true,
     retry: false,
   });

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { Image } from 'expo-image';
 import { X, MapPin, Briefcase, GraduationCap, Trophy, Award, ChevronRight } from '@/components/ProfileIcons';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,7 +68,7 @@ export default function FriendProfileScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
-            <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center' }}>
+            <Pressable onPress={() => safeGoBack(router)} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center' }}>
               <X size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
@@ -83,7 +84,7 @@ export default function FriendProfileScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
-            <Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center' }}>
+            <Pressable onPress={() => safeGoBack(router)} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, justifyContent: 'center', alignItems: 'center' }}>
               <X size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
@@ -112,7 +113,7 @@ export default function FriendProfileScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable style={[styles.closeButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => router.back()}>
+        <Pressable style={[styles.closeButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight }]} onPress={() => safeGoBack(router)}>
           <X size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={{ width: 40 }} />

@@ -37,11 +37,12 @@ import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { getSubscriptionStatus, decrementApplicationCount, getSubscriptionDisplayName } from '@/lib/subscription';
+import { getDailySwipes, useDailySwipe, refreshDailySwipesFromServer, DAILY_SWIPES_LIMIT } from '@/lib/daily-swipes';
+import { sendWelcomeNotification, scheduleAllNotifications, scheduleSwipesRestoredNotification, cancelSwipesRestoredNotification } from '@/lib/notifications';
 import { Resume } from '@/types';
 import { WebView } from 'react-native-webview';
 import { useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendWelcomeNotification, scheduleAllNotifications } from '@/lib/notifications';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import FreeSwipesModal from '@/components/FreeSwipesModal';
 import { Share as RNShare, Clipboard } from 'react-native';
@@ -166,6 +167,9 @@ export default function HomeScreen() {
   const [resumeUploading, setResumeUploading] = useState(false);
   const [showOutOfSwipes, setShowOutOfSwipes] = useState(false);
   const [showFreeSwipes, setShowFreeSwipes] = useState(false);
+  const [dailySwipesLeft, setDailySwipesLeft] = useState(DAILY_SWIPES_LIMIT);
+  const [dailyResetAt, setDailyResetAt] = useState(0);
+  const [countdownText, setCountdownText] = useState('');
   const outOfSwipesAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const filterSlideAnim = useRef(new Animated.Value(300)).current;
   // Each card gets a fresh Animated position. We use a ref keyed by currentIndex
@@ -222,6 +226,39 @@ export default function HomeScreen() {
       }
     });
   }, [isOnboardingComplete, userName]);
+
+  // Load daily swipes on mount and on focus
+  const refreshDailySwipes = useCallback(async () => {
+    if (!supabaseUserId) return;
+    const data = await getDailySwipes(supabaseUserId);
+    setDailySwipesLeft(data.remaining);
+    setDailyResetAt(data.resetAt);
+  }, [supabaseUserId]);
+
+  useEffect(() => { refreshDailySwipes(); }, [refreshDailySwipes]);
+  useFocusEffect(useCallback(() => { refreshDailySwipes(); }, [refreshDailySwipes]));
+
+  // Countdown timer when daily swipes are exhausted
+  useEffect(() => {
+    if (dailySwipesLeft > 0 || dailyResetAt === 0) {
+      setCountdownText('');
+      return;
+    }
+    const tick = () => {
+      const ms = dailyResetAt - Date.now();
+      if (ms <= 0) {
+        refreshDailySwipes();
+        return;
+      }
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setCountdownText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [dailySwipesLeft, dailyResetAt, refreshDailySwipes]);
 
   // --- Batch loading state per tab ---
   const BATCH_SIZE = 10;
@@ -776,7 +813,21 @@ export default function HomeScreen() {
         console.log('right_swipe incremented successfully');
       });
 
-      // Decrement application count
+      // Decrement daily free swipe + paid application count
+      if (supabaseUserId) {
+        const usedFree = await useDailySwipe(supabaseUserId);
+        if (usedFree) {
+          const updated = await getDailySwipes(supabaseUserId);
+          setDailySwipesLeft(updated.remaining);
+          setDailyResetAt(updated.resetAt);
+          // Schedule restore notification when swipes hit 0
+          if (updated.remaining === 0 && updated.resetAt > 0) {
+            const secsLeft = Math.ceil((updated.resetAt - Date.now()) / 1000);
+            const firstName = (userName || '').split(' ')[0] || '';
+            scheduleSwipesRestoredNotification(secsLeft, firstName).catch(() => {});
+          }
+        }
+      }
       if (supabaseUserId) {
         decrementApplicationCount(supabaseUserId).then(() => {
           queryClient.invalidateQueries({ queryKey: ['subscription-status', supabaseUserId] });
@@ -926,8 +977,9 @@ export default function HomeScreen() {
       console.log('🚫 forceSwipe blocked - isSwipeEnabled:', isSwipeEnabled);
       return;
     }
-    // Block right swipe (apply) and up swipe (save) when out of swipes
-    if ((direction === 'right' || direction === 'up') && subscriptionData && subscriptionData.applications_remaining <= 0) {
+    // Block right swipe (apply) and up swipe (save) when out of daily free swipes AND paid swipes
+    const hasPaidSwipes = subscriptionData && subscriptionData.subscription_type !== 'free' && subscriptionData.applications_remaining > 0;
+    if ((direction === 'right' || direction === 'up') && dailySwipesLeft <= 0 && !hasPaidSwipes) {
       Animated.spring(positionRef, {
         toValue: { x: 0, y: 0 },
         friction: 5,
@@ -948,7 +1000,7 @@ export default function HomeScreen() {
     }).start(() => {
       handleSwipeComplete(direction, true);
     });
-  }, [positionRef, handleSwipeComplete, isSwipeEnabled, subscriptionData, openOutOfSwipesSheet]);
+  }, [positionRef, handleSwipeComplete, isSwipeEnabled, subscriptionData, dailySwipesLeft, openOutOfSwipesSheet]);
 
   const panResponder = useMemo(
     () => PanResponder.create({
@@ -1234,8 +1286,10 @@ export default function HomeScreen() {
           <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>
             {isShowingLoader 
               ? 'Loading jobs...' 
-              : subscriptionData 
-              ? `${subscriptionData.applications_remaining} applications left this month`
+              : dailySwipesLeft > 0
+              ? `${dailySwipesLeft} swipes left today`
+              : countdownText
+              ? `Swipes reset in ${countdownText}`
               : `${remainingJobCount} jobs left today`
             }
           </Text>
@@ -1464,42 +1518,45 @@ export default function HomeScreen() {
 
       {showOutOfSwipes && (
         <View style={styles.swipeModalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeOutOfSwipesSheet} />
-          <Animated.View style={[styles.swipeModalCard, { transform: [{ translateY: outOfSwipesAnim }] }]}>
-            <Heart size={28} color="#EF4444" fill="#EF4444" style={{ alignSelf: 'center', marginBottom: 12 }} />
-            <Text style={styles.sheetTitle}>You're all out buddy 💔</Text>
-            <Text style={styles.sheetSubtitle}>No more free swipes left. Level up your plan or share the vibe to keep swiping!</Text>
-            <Pressable style={styles.sheetUpgradeBtn} onPress={() => { closeOutOfSwipesSheet(); router.push('/premium' as any); }}>
-              <Text style={styles.sheetUpgradeBtnText}>Upgrade to Pro</Text>
-            </Pressable>
-            <Pressable
-              style={styles.sheetShareBtn}
-              onPress={async () => {
-                if (supabaseUserId) {
-                  const { getReferralStats, createReferralCode } = await import('@/lib/referral');
-                  const stats = await getReferralStats(supabaseUserId);
-                  if (!stats?.referralCode) {
-                    await createReferralCode(supabaseUserId, userName || 'User');
-                  }
-                  const updatedStats = await getReferralStats(supabaseUserId);
-                  if (updatedStats?.referralCode) {
-                    try {
-                      const { Share } = await import('react-native');
-                      await Share.share({
-                        message: `Hey! Check out NextQuark — a swipe-based job discovery app. Join with my referral code ${updatedStats.referralCode} and get 5 application swipes to get started. Download now!`,
-                      });
-                    } catch (error) {
-                      console.error('Error sharing:', error);
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeOutOfSwipesSheet}>
+            <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          </Pressable>
+          <Animated.View style={[styles.swipeModalSheet, { backgroundColor: isDark ? '#FFFFFF' : '#111111', transform: [{ translateY: outOfSwipesAnim }] }]}>
+            <View style={styles.swipeSheetHandle} />
+            <View style={styles.swipeSheetContent}>
+              <Text style={[styles.sheetTitle, { color: isDark ? '#000000' : '#FFFFFF' }]}>Out of swipes</Text>
+              {countdownText ? (
+                <View style={[styles.sheetTimerPill, { backgroundColor: isDark ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)' }]}>
+                  <Clock size={13} color={isDark ? '#8E8E93' : 'rgba(255,255,255,0.5)'} />
+                  <Text style={[styles.sheetTimerText, { color: isDark ? '#8E8E93' : 'rgba(255,255,255,0.5)' }]}>Resets in {countdownText}</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.sheetSubtitle, { color: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.45)' }]}>Upgrade your plan or earn free swipes</Text>
+              <View style={styles.sheetActions}>
+                <Pressable style={[styles.sheetUpgradeBtn, { backgroundColor: isDark ? '#000000' : '#FFFFFF' }]} onPress={() => { closeOutOfSwipesSheet(); router.push('/premium' as any); }}>
+                  <Crown size={16} color={isDark ? '#FFFFFF' : '#000000'} />
+                  <Text style={[styles.sheetUpgradeBtnText, { color: isDark ? '#FFFFFF' : '#000000' }]}>Upgrade to Pro</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.sheetGiftBtn}
+                  onPress={async () => {
+                    closeOutOfSwipesSheet();
+                    if (!referralStats?.referralCode && supabaseUserId) {
+                      await createReferralCode(supabaseUserId, userName || 'User');
+                      await refetchReferralStats();
                     }
-                  }
-                }
-              }}
-            >
-              <Text style={styles.sheetShareBtnText}>Share to Earn Free Swipes</Text>
-            </Pressable>
+                    setShowFreeSwipes(true);
+                  }}
+                >
+                  <Gift size={18} color="#FFFFFF" />
+                  <Text style={styles.sheetGiftBtnText}>Free Swipes</Text>
+                </Pressable>
+              </View>
+            </View>
           </Animated.View>
         </View>
       )}
+
 
       {showResumeSheet && (
         <View style={styles.resumeSheetOverlay}>
@@ -2011,11 +2068,11 @@ export default function HomeScreen() {
         colors={colors}
         referralStats={referralStats}
         userId={supabaseUserId}
-        onSwipesUpdated={() => refetchProfile()}
+        onSwipesUpdated={() => { refetchProfile(); if (supabaseUserId) refreshDailySwipesFromServer(supabaseUserId).then(d => { setDailySwipesLeft(d.remaining); setDailyResetAt(d.resetAt); }); }}
         onShare={async () => {
           if (referralStats?.referralCode) {
             try {
-              await RNShare.share({ message: `Hey! Check out NextQuark — a swipe-based job discovery app. Join with my referral code ${referralStats.referralCode} and get 5 application swipes to get started. Download now!` });
+              await RNShare.share({ message: `Hey! Check out NextQuark — think of it like Tinder for jobs. You swipe right on jobs you like and AI applies for you automatically. It's the fastest way to apply to hundreds of jobs. Join with my referral code ${referralStats.referralCode} and we both get 5 free swipes to get started. Download it here: https://nextquark.framer.website/#download` });
             } catch (error) { console.error('Error sharing:', error); }
           }
         }}
@@ -2173,14 +2230,19 @@ const styles = StyleSheet.create({
   searchTagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   searchTag: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: "#FFF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   searchTagText: { fontSize: 12, color: "#000", fontWeight: '600' as const },
-  swipeModalOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', zIndex: 998, justifyContent: 'center', alignItems: 'center' },
-  swipeModalCard: { width: SCREEN_WIDTH - 80, backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 20 },
-  sheetTitle: { fontSize: 20, fontWeight: '800' as const, color: '#000000', textAlign: 'center', marginBottom: 8 },
-  sheetSubtitle: { fontSize: 14, color: '#374151', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-  sheetUpgradeBtn: { backgroundColor: '#7C3AED', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 10 },
-  sheetUpgradeBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
-  sheetShareBtn: { backgroundColor: '#9CA3AF', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  sheetShareBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  swipeModalOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, justifyContent: 'flex-end' },
+  swipeModalSheet: { borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingBottom: Platform.OS === 'ios' ? 100 : 80 },
+  swipeSheetHandle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: '#C7C7CC', alignSelf: 'center', marginTop: 8, marginBottom: 6 },
+  swipeSheetContent: { paddingHorizontal: 20, paddingTop: 12, alignItems: 'center' },
+  sheetTitle: { fontSize: 17, fontWeight: '600' as const, textAlign: 'center', marginBottom: 6 },
+  sheetTimerPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginBottom: 4 },
+  sheetTimerText: { fontSize: 13, fontWeight: '600' as const, fontVariant: ['tabular-nums'] as any },
+  sheetSubtitle: { fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 16 },
+  sheetActions: { width: '100%', gap: 8 },
+  sheetUpgradeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 10 },
+  sheetUpgradeBtnText: { fontSize: 17, fontWeight: '600' as const },
+  sheetGiftBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#EF4444', paddingVertical: 14, borderRadius: 10 },
+  sheetGiftBtnText: { fontSize: 17, fontWeight: '600' as const, color: '#FFFFFF' },
   notificationContainer: { position: 'absolute' as const, left: 16, right: 16, zIndex: 1000 },
   notificationCard: { backgroundColor: "#FFF", borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 12, borderWidth: 1, borderColor: "#DDD" },
   notificationLogo: { width: 52, height: 52, borderRadius: 12, backgroundColor: "#FFF" },

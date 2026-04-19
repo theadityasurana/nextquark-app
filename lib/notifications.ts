@@ -82,6 +82,10 @@ export async function registerForPushNotifications(): Promise<string | null> {
         name: 'Festivals & Holidays',
         importance: Notifications.AndroidImportance.HIGH,
       });
+      await Notifications.setNotificationChannelAsync('swipes', {
+        name: 'Daily Swipes',
+        importance: Notifications.AndroidImportance.HIGH,
+      });
     }
 
     const token = await Notifications.getExpoPushTokenAsync({
@@ -704,6 +708,36 @@ export async function scheduleAllNotifications(firstName: string) {
   await scheduleFestivalNotifications(firstName);
   await scheduleMissYouNotification(firstName);
   await scheduleTrendingJobNotification(firstName);
+}
+
+// ============================================================
+// DAILY SWIPES RESTORED NOTIFICATION
+// ============================================================
+
+export async function scheduleSwipesRestoredNotification(secondsUntilReset: number, firstName: string) {
+  if (!Notifications || secondsUntilReset <= 0) return;
+  try {
+    await cancelByType('swipes_restored');
+    const name = firstName || 'there';
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `Your swipes are back, ${name}! 🎉`,
+        body: 'You have 15 fresh daily swipes ready to go. Start swiping and land your dream job! 🚀',
+        data: { type: 'swipes_restored' },
+        ...(Platform.OS === 'android' && { channelId: 'swipes' }),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, Math.ceil(secondsUntilReset)),
+      },
+    });
+  } catch (e) {
+    if (__DEV__) console.log('Error scheduling swipes restored notification:', e);
+  }
+}
+
+export async function cancelSwipesRestoredNotification() {
+  await cancelByType('swipes_restored');
 }
 
 // ============================================================

@@ -88,6 +88,7 @@ import TabTransitionWrapper from '@/components/TabTransitionWrapper';
 import { AnimatedHeaderScrollView, AnimatedHeaderScrollViewRef } from '@/components/AnimatedHeader';
 import { fetchUserApplications } from '@/lib/jobs';
 import { getSubscriptionStatus, type SubscriptionData, getSubscriptionDisplayName, getSubscriptionBadgeColor } from '@/lib/subscription';
+import { getDailySwipes, refreshDailySwipesFromServer, DAILY_SWIPES_LIMIT } from '@/lib/daily-swipes';
 import { supabase, SUPABASE_URL, getProfilePictureUrl, getCompanyLogoStorageUrl, getStorageUploadUrl } from '@/lib/supabase';
 import { getReferralStats, createReferralCode } from '@/lib/referral';
 import { Share, Clipboard } from 'react-native';
@@ -252,6 +253,35 @@ export default function ProfileScreen() {
     queryFn: () => getReferralStats(supabaseUserId!),
     enabled: !!supabaseUserId,
   });
+
+  const [dailySwipesLeft, setDailySwipesLeft] = useState(DAILY_SWIPES_LIMIT);
+  const [dailyResetAt, setDailyResetAt] = useState(0);
+  const [countdownText, setCountdownText] = useState('');
+
+  const refreshDailySwipes = useCallback(async () => {
+    if (!supabaseUserId) return;
+    const data = await getDailySwipes(supabaseUserId);
+    setDailySwipesLeft(data.remaining);
+    setDailyResetAt(data.resetAt);
+  }, [supabaseUserId]);
+
+  useEffect(() => { refreshDailySwipes(); }, [refreshDailySwipes]);
+  useFocusEffect(useCallback(() => { refreshDailySwipes(); }, [refreshDailySwipes]));
+
+  useEffect(() => {
+    if (dailySwipesLeft > 0 || dailyResetAt === 0) { setCountdownText(''); return; }
+    const tick = () => {
+      const ms = dailyResetAt - Date.now();
+      if (ms <= 0) { refreshDailySwipes(); return; }
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setCountdownText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [dailySwipesLeft, dailyResetAt, refreshDailySwipes]);
 
   const totalApplications = applications.length;
   const interviewsScheduled = applications.filter((app: { status?: string }) => 
@@ -1311,12 +1341,20 @@ const MAJOR_CITIES = [
               style={styles.quickActionGradient}
             >
               <Text style={styles.quickActionImpact}>
-                {subscriptionData?.applications_remaining ?? 0}
+                {dailySwipesLeft > 0 ? dailySwipesLeft : countdownText ? '⏳' : (subscriptionData?.applications_remaining ?? 0)}
               </Text>
-              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>apps left</Text>
-              <Text style={[styles.quickActionSub, { color: subscriptionData?.subscription_type === 'free' ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.6)' }]}>
-                {subscriptionData?.subscription_type === 'premium' ? '✦ Premium' : subscriptionData?.subscription_type === 'pro' ? '✦ Pro · Tap to upgrade' : '⚡ Tap to upgrade plan'}
+              <Text style={[styles.quickActionLabel, { color: 'rgba(255,255,255,0.9)' }]}>
+                {dailySwipesLeft > 0 ? 'swipes today' : countdownText ? '' : 'apps left'}
               </Text>
+              {countdownText && dailySwipesLeft <= 0 ? (
+                <Text style={[styles.quickActionSub, { color: 'rgba(255,215,0,0.8)', fontSize: 11 }]}>
+                  {countdownText}
+                </Text>
+              ) : (
+                <Text style={[styles.quickActionSub, { color: subscriptionData?.subscription_type === 'free' ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.6)' }]}>
+                  {subscriptionData?.subscription_type === 'premium' ? '✦ Premium' : subscriptionData?.subscription_type === 'pro' ? '✦ Pro · Tap to upgrade' : '⚡ Tap to upgrade plan'}
+                </Text>
+              )}
             </LinearGradient>
           </Pressable>
 
@@ -2374,11 +2412,11 @@ const MAJOR_CITIES = [
         colors={colors}
         referralStats={referralStats}
         userId={supabaseUserId}
-        onSwipesUpdated={() => refetchProfile()}
+        onSwipesUpdated={() => { refetchProfile(); if (supabaseUserId) refreshDailySwipesFromServer(supabaseUserId).then(d => { setDailySwipesLeft(d.remaining); setDailyResetAt(d.resetAt); }); }}
         onShare={async () => {
           if (referralStats?.referralCode) {
             try {
-              await Share.share({ message: `Hey! Check out NextQuark — a swipe-based job discovery app. Join with my referral code ${referralStats.referralCode} and get 5 application swipes to get started. Download now!` });
+              await Share.share({ message: `Hey! Check out NextQuark — think of it like Tinder for jobs. You swipe right on jobs you like and AI applies for you automatically. It's the fastest way to apply to hundreds of jobs. Join with my referral code ${referralStats.referralCode} and we both get 5 free swipes to get started. Download it here: https://nextquark.framer.website/#download` });
             } catch (error) { console.error('Error sharing:', error); }
           }
         }}

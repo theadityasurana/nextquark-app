@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { addBonusDailySwipes } from './daily-swipes';
 
 const SWIPES_PER_REFERRAL = 5;
 const SWIPES_PER_SOCIAL_FOLLOW = 2;
@@ -67,6 +68,7 @@ export async function claimSocialFollow(
       .eq('id', userId);
 
     if (updateErr) return { success: false, error: updateErr.message };
+    await addBonusDailySwipes(userId, SWIPES_PER_SOCIAL_FOLLOW);
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Unknown error' };
@@ -208,6 +210,7 @@ export async function applyReferralCode(
       if (__DEV__) console.log('❌ [REFERRAL] Full error:', JSON.stringify(referrerUpdateError));
     } else {
       if (__DEV__) console.log('✅ [REFERRAL] Referrer updated successfully');
+      await addBonusDailySwipes(referrer.id, SWIPES_PER_REFERRAL);
     }
 
     if (__DEV__) console.log('💰 [REFERRAL] Awarding swipes to new user...');
@@ -223,28 +226,26 @@ export async function applyReferralCode(
       applications_limit: newUser?.applications_limit
     });
 
-    // Calculate new user swipes: ensure they have 40 base + 5 referral bonus = 45 total
-    const baseSwipes = 40;
-    const totalSwipesForNewUser = baseSwipes + SWIPES_PER_REFERRAL; // 45 total
+    // Add referral bonus swipes to new user's existing balance
+    const newUserRemaining = (newUser?.applications_remaining || 0) + SWIPES_PER_REFERRAL;
     
     const { error: newUserUpdateError } = await supabase
       .from('profiles')
       .update({
-        applications_remaining: totalSwipesForNewUser,
-        applications_limit: totalSwipesForNewUser,
+        applications_remaining: newUserRemaining,
         referred_by: referrer.id,
       })
       .eq('id', newUserId);
 
     if (__DEV__) console.log('🔍 [REFERRAL] New user final swipes:', {
-      applications_remaining: totalSwipesForNewUser,
-      applications_limit: totalSwipesForNewUser
+      applications_remaining: newUserRemaining,
     });
 
     if (newUserUpdateError) {
       if (__DEV__) console.log('❌ [REFERRAL] Error updating new user:', newUserUpdateError.message);
     } else {
       if (__DEV__) console.log('✅ [REFERRAL] New user updated successfully');
+      await addBonusDailySwipes(newUserId, SWIPES_PER_REFERRAL);
     }
 
     if (__DEV__) console.log('📝 [REFERRAL] Recording referral...');
@@ -263,7 +264,7 @@ export async function applyReferralCode(
     }
 
     if (__DEV__) console.log('🎉 [REFERRAL] Referral process completed successfully!');
-    return { success: true, message: `Welcome! You received ${SWIPES_PER_REFERRAL} bonus swipes (${baseSwipes + SWIPES_PER_REFERRAL} total)!` };
+    return { success: true, message: `Welcome! You received ${SWIPES_PER_REFERRAL} bonus swipes!` };
   } catch (error) {
     console.error('💥 [REFERRAL] Exception in applyReferralCode:', error);
     return { success: false, message: 'Failed to apply referral code' };

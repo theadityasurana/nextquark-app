@@ -415,7 +415,7 @@ export default function ResumeManagementScreen() {
 
       <Modal visible={!!pendingFile || !!renamingResume} animationType="slide" transparent onRequestClose={() => { setPendingFile(null); setRenamingResume(null); }}>
         <View style={styles.renameOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.renameContent}>
+          <KeyboardAvoidingView behavior='padding' style={styles.renameContent}>
             <View style={styles.renameHeader}>
               <Text style={styles.renameTitle}>{renamingResume ? 'Rename Resume' : 'Name Your Resume'}</Text>
               <Pressable onPress={() => { setPendingFile(null); setRenamingResume(null); setRenameText(''); }}>

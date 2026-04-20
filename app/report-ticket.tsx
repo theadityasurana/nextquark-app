@@ -92,7 +92,7 @@ export default function ReportTicketScreen() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView behavior='padding' style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <ArrowLeft size={22} color={Colors.textPrimary} />

@@ -2183,7 +2183,7 @@ const MAJOR_CITIES = [
 
       <Modal visible={activeModal === 'skill'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+          <KeyboardAvoidingView behavior='padding' style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.secondary }]}>Add Skill</Text>
               <Pressable onPress={closeModal} style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}><X size={22} color={colors.textPrimary} /></Pressable>
@@ -2241,7 +2241,7 @@ const MAJOR_CITIES = [
 
       <Modal visible={activeModal === 'bio'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+          <KeyboardAvoidingView behavior='padding' style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Bio</Text>
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
@@ -2266,7 +2266,7 @@ const MAJOR_CITIES = [
 
       <Modal visible={activeModal === 'headline'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+          <KeyboardAvoidingView behavior='padding' style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Headline</Text>
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
@@ -2289,7 +2289,7 @@ const MAJOR_CITIES = [
 
       <Modal visible={activeModal === 'location'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+          <KeyboardAvoidingView behavior='padding' style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Location</Text>
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
@@ -2304,7 +2304,7 @@ const MAJOR_CITIES = [
 
       <Modal visible={activeModal === 'avatar'} animationType="slide" transparent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+          <KeyboardAvoidingView behavior='padding' style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Change Photo</Text>
               <Pressable onPress={closeModal} style={styles.modalCloseBtn}><X size={22} color={Colors.textPrimary} /></Pressable>
@@ -2334,7 +2334,7 @@ const MAJOR_CITIES = [
           <Pressable style={StyleSheet.absoluteFill} onPress={closeModal}>
             <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
           </Pressable>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.iosSheetContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7' }]}>
+          <KeyboardAvoidingView behavior='padding' style={[styles.iosSheetContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.iosSheetHandle} />
             <View style={styles.iosSheetNav}>
               <Pressable onPress={closeModal} hitSlop={8}>
@@ -2345,7 +2345,7 @@ const MAJOR_CITIES = [
                 <Text style={styles.iosNavSave}>Save</Text>
               </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosSheetScroll} contentContainerStyle={{ paddingBottom: 30 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosSheetScroll} contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
               <Text style={[styles.iosGroupLabel, { color: theme === 'dark' ? '#8E8E93' : '#6D6D72' }]}>PHONE</Text>
               <View style={[styles.iosFormGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFFFFF' }]}>
                 <View style={styles.iosFormRow}>
@@ -2428,7 +2428,7 @@ const MAJOR_CITIES = [
 
       <Modal visible={!!pendingDocFile} animationType="slide" transparent onRequestClose={() => setPendingDocFile(null)}>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+          <KeyboardAvoidingView behavior='padding' style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.secondary }]}>Name Your Document</Text>
               <Pressable onPress={() => setPendingDocFile(null)} style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}><X size={22} color={colors.textPrimary} /></Pressable>

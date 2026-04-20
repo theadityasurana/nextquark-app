@@ -135,7 +135,7 @@ export default function EditExperienceScreen() {
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editing ? 'Edit Experience' : 'Add Experience'}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
+        <KeyboardAvoidingView behavior='padding' style={{ flex: 1 }} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Job Title *</Text>
             <TextInput style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !expTitle.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Software Engineer" placeholderTextColor={colors.textTertiary} value={expTitle} onChangeText={setExpTitle} />

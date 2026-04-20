@@ -36,6 +36,8 @@ export default function PipOverlay() {
   const dismissScale = useRef(new Animated.Value(0)).current;
   const lastTap = useRef(0);
 
+  const isDraggingRef = useRef(false);
+
   const pan = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - PIP_WIDTH - 12, y: 60 + (insets.top || 50) })).current;
 
   const isInDismissZone = (moveY: number) => {
@@ -45,19 +47,18 @@ export default function PipOverlay() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
       onPanResponderGrant: () => {
         lastTap.current = Date.now();
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
+        // Show dismiss zone immediately on touch
+        isDraggingRef.current = true;
+        setIsDragging(true);
+        Animated.spring(dismissScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
       },
       onPanResponderMove: (_, g) => {
         pan.setValue({ x: g.dx, y: g.dy });
-        const dragging = Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5;
-        if (dragging && !isDragging) {
-          setIsDragging(true);
-          Animated.spring(dismissScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
-        }
         setIsOverDismiss(isInDismissZone(g.moveY));
       },
       onPanResponderRelease: (_, g) => {
@@ -65,6 +66,7 @@ export default function PipOverlay() {
         const wasDragging = Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5;
 
         // Hide dismiss zone
+        isDraggingRef.current = false;
         setIsDragging(false);
         setIsOverDismiss(false);
         Animated.timing(dismissScale, { toValue: 0, duration: 200, useNativeDriver: true }).start();

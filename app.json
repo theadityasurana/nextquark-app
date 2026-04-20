@@ -2,7 +2,7 @@
   "expo": {
     "name": "NextQuark",
     "slug": "hireswipe-v3-clone-ceuofke",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/applogo.png",
     "scheme": "nextquark",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.nextquark.hireswipe",
-      "buildNumber": "5",
+      "buildNumber": "7",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to let you take profile photos.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to let you choose a profile picture.",
@@ -31,7 +31,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "app.rork.hireswipe_v3_clone_ceuofke",
-      "versionCode": 7,
+      "versionCode": 9,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -44,6 +44,11 @@
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro"
     },
+    "assetBundlePatterns": [
+      "assets/videos/*",
+      "assets/images/*",
+      "assets/fonts/*"
+    ],
     "plugins": [
       [
         "expo-router",

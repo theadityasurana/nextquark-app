@@ -106,7 +106,7 @@ export default function EditEducationScreen() {
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editing ? 'Edit Education' : 'Add Education'}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
+        <KeyboardAvoidingView behavior='padding' style={{ flex: 1 }} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.label, { color: colors.textSecondary }]}>Institution *</Text>
             <View style={[styles.uniInputWrap, { backgroundColor: colors.surface, borderColor: formTouched && !institution.trim() ? '#EF4444' : colors.borderLight }]}>

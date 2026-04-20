@@ -78,7 +78,7 @@ export default function MobileSignUpScreen() {
     return (
       <View style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
+          <KeyboardAvoidingView behavior='padding' style={styles.flex} keyboardVerticalOffset={100}>
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
               <Pressable onPress={() => setStep('phone')} style={styles.backButton}>
                 <ArrowLeft size={24} color="#111111" />
@@ -139,7 +139,7 @@ export default function MobileSignUpScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={100}>
+        <KeyboardAvoidingView behavior='padding' style={styles.flex} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             <Pressable onPress={() => router.back()} style={styles.backButton}>
               <ArrowLeft size={24} color="#111111" />

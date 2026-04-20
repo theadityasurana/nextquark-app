@@ -1213,7 +1213,7 @@ function MessagesScreen() {
       <Modal visible={!!activeItem} animationType="slide" transparent={false} onRequestClose={closeItemAndReply}>
         <KeyboardAvoidingView
           style={[styles.gmailDetailContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior='padding'
         >
           {/* Fixed top bar */}
           {detailItem && <View style={[styles.gmailTopBar, { borderBottomColor: colors.border }]}>
@@ -1651,7 +1651,7 @@ function MessagesScreen() {
         >
           <KeyboardAvoidingView
             style={[styles.composeFullScreen, { backgroundColor: colors.background, paddingTop: insets.top }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior='padding'
           >
             <View style={[styles.composeHeader, { borderBottomColor: colors.border }]}>
               <Pressable onPress={closeCompose} hitSlop={8} style={styles.composeBackBtn}>

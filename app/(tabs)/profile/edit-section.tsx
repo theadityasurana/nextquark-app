@@ -668,7 +668,7 @@ export default function EditSectionScreen() {
           )}
         </View>
       )}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
+      <KeyboardAvoidingView behavior='padding' style={{ flex: 1 }} keyboardVerticalOffset={100}>
         <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
           {renderContent()}
         </ScrollView>

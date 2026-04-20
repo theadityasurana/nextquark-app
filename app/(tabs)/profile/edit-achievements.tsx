@@ -60,7 +60,7 @@ export default function EditAchievementsScreen() {
           <Text style={[s.headerTitle, { color: colors.textPrimary }]}>{editing ? 'Edit Achievement' : 'Add Achievement'}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={100}>
+        <KeyboardAvoidingView behavior='padding' style={{ flex: 1 }} keyboardVerticalOffset={100}>
           <ScrollView contentContainerStyle={s.formContent} keyboardShouldPersistTaps="handled">
             <Text style={[s.label, { color: colors.textSecondary }]}>Title *</Text>
             <TextInput style={[s.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: formTouched && !title.trim() ? '#EF4444' : colors.borderLight }]} placeholder="e.g. Best Innovation Award" placeholderTextColor={colors.textTertiary} value={title} onChangeText={setTitle} />

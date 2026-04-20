@@ -238,7 +238,7 @@ function ChatScreen() {
       ) : (
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior='padding'
           keyboardVerticalOffset={0}
         >
           <FlatList
@@ -264,7 +264,7 @@ function ChatScreen() {
           </View>
 
           <Modal visible={showReplyModal} animationType="slide" transparent onRequestClose={() => setShowReplyModal(false)}>
-            <KeyboardAvoidingView style={styles.replyModalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView style={styles.replyModalOverlay} behavior='padding'>
               <Pressable style={styles.replyModalBackdrop} onPress={closeReplyModal} />
               <View style={[styles.replyModalContent, { paddingBottom: Math.max(insets.bottom, 12) }]}>
                 <View style={styles.replyModalHandle} />

@@ -804,7 +804,7 @@ export default function HomeScreen() {
     extrapolate: 'clamp',
   });
 
-  const handleSwipeComplete = useCallback(async (direction: string, skipPositionReset?: boolean) => {
+  const handleSwipeComplete = useCallback(async (direction: string) => {
     const idx = currentIndexRef.current;
     const currentJob = jobs[idx];
     if (!currentJob) return;
@@ -937,10 +937,8 @@ export default function HomeScreen() {
     const nextIndex = currentIndexRef.current + 1;
     currentIndexRef.current = nextIndex;
     
-    if (!skipPositionReset) {
-      positionRef.setValue({ x: 0, y: 0 });
-    }
-    cardMountAnim.setValue(0);
+    // Don't reset position here - the card key change will mount a fresh card
+    cardMountAnim.setValue(1);
     
     setCardKey(prev => prev + 1);
     setCurrentIndex(nextIndex);
@@ -948,15 +946,9 @@ export default function HomeScreen() {
     // Check if we need to prefetch next batch
     checkAndPrefetch(feedMode as TabKey, nextIndex, jobs.length);
 
-    // If we just ran out of jobs but more exist, reset index to 0 for the new batch
-    // This is handled by the render logic showing the loader
-    
-    // Scale-up fade-in: 0.92 scale + 0 opacity -> 1.0 scale + 1 opacity
-    Animated.timing(cardMountAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
+    // Reset position after state update so the NEW card starts at center
+    // Use requestAnimationFrame to ensure React has re-rendered with new card
+    requestAnimationFrame(() => {
       positionRef.setValue({ x: 0, y: 0 });
       setIsSwipeEnabled(true);
     });
@@ -1019,7 +1011,7 @@ export default function HomeScreen() {
       duration: 250,
       useNativeDriver: true,
     }).start(() => {
-      handleSwipeComplete(direction, true);
+      handleSwipeComplete(direction);
     });
   }, [positionRef, handleSwipeComplete, isSwipeEnabled, subscriptionData, dailySwipesLeft, openOutOfSwipesSheet]);
 
@@ -1676,7 +1668,7 @@ export default function HomeScreen() {
 
       <Modal visible={!!resumePendingFile || !!resumeRenamingResume} animationType="slide" transparent onRequestClose={() => { setResumePendingFile(null); setResumeRenamingResume(null); setResumeRenameText(''); }}>
         <View style={styles.resumeRenameOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.resumeRenameContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+          <KeyboardAvoidingView behavior='padding' style={[styles.resumeRenameContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.resumeRenameHeader}>
               <Text style={[styles.resumeRenameTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>{resumeRenamingResume ? 'Rename Resume' : 'Name Your Resume'}</Text>
               <Pressable onPress={() => { setResumePendingFile(null); setResumeRenamingResume(null); setResumeRenameText(''); }} hitSlop={8}>

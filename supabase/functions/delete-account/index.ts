@@ -44,7 +44,31 @@ serve(async (req) => {
       )
     }
 
-    const userId = user.id
+    // Support cleaning up a different incomplete account
+    let userId = user.id
+    try {
+      const body = await req.json()
+      if (body?.target_user_id && body.target_user_id !== user.id) {
+        // Only allow deleting accounts that never completed onboarding
+        const { data: targetProfile } = await supabase
+          .from('profiles')
+          .select('is_onboarding_complete')
+          .eq('id', body.target_user_id)
+          .single()
+        if (targetProfile && !targetProfile.is_onboarding_complete) {
+          userId = body.target_user_id
+          console.log('[delete-account] Cleaning up incomplete account:', userId)
+        } else {
+          console.log('[delete-account] Target account is complete or not found, skipping')
+          return new Response(
+            JSON.stringify({ success: false, error: 'Target account is not incomplete' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+    } catch (_) {
+      // No body or invalid JSON — delete the caller's own account
+    }
     console.log('[delete-account] Deleting all data for user:', userId)
 
     // Delete from tables that use user_id column

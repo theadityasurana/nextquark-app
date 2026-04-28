@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { Job, UserProfile } from '@/types';
 import { getRoleSynonyms, expandRolesWithSynonyms } from '@/constants/role-synonyms';
+import { DOMAIN_GROUPS, getExpandedKeywords } from '@/constants/domains';
 
 export interface SupabaseJob {
   id: string;
@@ -254,215 +255,74 @@ export interface BatchFetchResult {
   jobs: Job[];
   serverHadMore: boolean;
   serverRowCount: number;
+  titleKeywords?: string[];
 }
 
 export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFetchResult> {
   try {
     const { tab, limit, offset, excludeIds, searchTags, filters, desiredRoles } = params;
 
-    let query = supabase
-      .from('jobs')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    // Exclude already-swiped jobs server-side
-    if (excludeIds && excludeIds.length > 0) {
-      const idsToExclude = excludeIds.slice(0, 500);
-      query = query.not('id', 'in', `(${idsToExclude.join(',')})`);
-    }
-
-    // Tab-level server-side filters
-    if (tab === 'india') {
-      query = query.ilike('location', '%india%');
-    } else if (tab === 'remote') {
-      query = query.or('type.ilike.%remote%,location.ilike.%remote%');
-    } else if (tab === 'foryou') {
-      query = query.ilike('location', '%india%');
-    }
-
-    // Desired roles — server-side filter with synonym expansion (applies to ALL tabs)
+    // --- Build title keywords ---
+    let titleKeywords: string[] = [];
     if (desiredRoles && desiredRoles.length > 0) {
-      const expandedKeywords = expandRolesWithSynonyms(desiredRoles);
-      const orClauses = expandedKeywords.map(kw => {
-        const escaped = kw.replace(/'/g, "''");
-        return `title.ilike.%${escaped}%`;
-      }).join(',');
-      query = query.or(orClauses);
-    }
+      // Match each role to at most ONE domain group using strict matching
+      const domainMatched: string[] = [];
+      const unmatched: string[] = [];
+      for (const role of desiredRoles) {
+        const roleLower = role.toLowerCase();
+        // Strict match: only match if the domain name itself matches the role
+        const matchedDomain = DOMAIN_GROUPS.find(g =>
+          g.domain.toLowerCase() === roleLower ||
+          g.domain.toLowerCase().includes(roleLower) ||
+          roleLower.includes(g.domain.toLowerCase())
+        );
+        if (matchedDomain) {
+          // Only add if not already matched (avoid duplicates from multiple roles matching same domain)
+          if (!domainMatched.includes(matchedDomain.domain)) {
+            domainMatched.push(matchedDomain.domain);
+          }
+        } else {
+          unmatched.push(role);
+        }
+      }
+      const domainKeywords = domainMatched.length > 0 ? getExpandedKeywords(domainMatched) : [];
+      const synonymKeywords = unmatched.length > 0 ? expandRolesWithSynonyms(unmatched) : [];
+      // Also add the raw role names as keywords (exact role title matching)
+      const rawRoleKeywords = desiredRoles.filter(r => r.length > 3);
+      titleKeywords = [...new Set([...domainKeywords, ...synonymKeywords, ...rawRoleKeywords])]
+        .filter(kw => kw.length > 3);
 
-    // Search tags — filter by company name or title
-    if (searchTags && searchTags.length > 0) {
-      const orClauses = searchTags.map(tag => {
-        const escaped = tag.replace(/'/g, "''");
-        return `company_name.ilike.%${escaped}%,title.ilike.%${escaped}%`;
-      }).join(',');
-      query = query.or(orClauses);
+      if (__DEV__) {
+        console.log(`[QUERY] ===== fetchJobsBatch (${tab}, offset=${offset}) =====`);
+        console.log(`[QUERY] desiredRoles expansion:`);
+        if (domainMatched.length) console.log(`[QUERY]   domain matched:`, domainMatched, `\u2192 ${domainKeywords.length} keywords`);
+        if (unmatched.length) console.log(`[QUERY]   unmatched (synonym fallback):`, unmatched, `\u2192 ${synonymKeywords.length} keywords`);
+        console.log(`[QUERY]   total title keywords: ${titleKeywords.length}`, titleKeywords.slice(0, 15), titleKeywords.length > 15 ? `...+${titleKeywords.length - 15} more` : '');
+      }
     }
-
-    if (filters?.companies && filters.companies.length > 0) {
-      const orClauses = filters.companies.map(c => `company_name.ilike.%${c.replace(/'/g, "''")}%`).join(',');
-      query = query.or(orClauses);
-    }
-
     if (filters?.roles && filters.roles.length > 0) {
-      const orClauses = filters.roles.flatMap(r => {
-        const synonyms = getRoleSynonyms(r);
-        return synonyms.map(s => `title.ilike.%${s.replace(/'/g, "''")}%`);
-      }).join(',');
-      query = query.or(orClauses);
+      titleKeywords = [...new Set([...titleKeywords, ...filters.roles])];
     }
 
-    if (filters?.locations && filters.locations.length > 0) {
-      const orClauses = filters.locations.map(l => `location.ilike.%${l.replace(/'/g, "''")}%`).join(',');
-      query = query.or(orClauses);
-    }
-
-    if (filters?.workModes && filters.workModes.length > 0) {
-      const orClauses = filters.workModes.map(m => `type.ilike.%${m.replace(/'/g, "''")}%`).join(',');
-      query = query.or(orClauses);
-    }
-
-    if (filters?.jobTypes && filters.jobTypes.length > 0) {
-      const orClauses = filters.jobTypes.map(t => `employment_type.ilike.%${t.replace(/'/g, "''")}%`).join(',');
-      query = query.or(orClauses);
-    }
-
+    // --- Build experience keywords ---
+    let expKeywords: string[] = [];
     if (filters?.jobLevels && filters.jobLevels.length > 0) {
-      const levelKeywords: Record<string, string[]> = {
-        'Internship': [
-          'intern', 'internship', 'summer intern', 'winter intern', 'spring intern',
-          'co-op', 'coop', 'placement', 'industrial training', 'trainee',
-          'apprentice', 'apprenticeship', 'student', 'undergraduate',
-          'summer associate', 'summer analyst', 'intern program',
-          'internship program', 'paid intern', 'research intern',
-          'engineering intern', 'design intern', 'marketing intern',
-          'data intern', 'product intern', 'software intern',
-          'business intern', 'finance intern', 'hr intern',
-          'operations intern', 'sales intern', 'content intern',
-          'ux intern', 'ui intern', 'qa intern', 'test intern',
-          'devops intern', 'cloud intern', 'ml intern', 'ai intern',
-          'analytics intern', 'consulting intern', 'strategy intern',
-        ],
-        'Entry Level': [
-          'entry level', 'entry-level', 'fresher', 'fresh graduate', 'early career',
-          'graduate', 'junior', '0-2 years', '0-1 years', 'new grad',
-          'recent graduate', 'campus hire', 'graduate program', 'graduate scheme',
-          'associate', 'analyst', 'trainee', 'junior developer',
-          'junior engineer', 'junior designer', 'junior analyst',
-          'level 1', 'level i', 'l1', 'tier 1', 'beginner',
-          'no experience required', 'minimal experience', 'fresh talent',
-          'freshers welcome', 'college graduate', 'university graduate',
-          'new graduate', 'grad program', 'early professional',
-          'starting career', 'first job', 'career starter',
-          'junior associate', 'graduate trainee', 'management trainee',
-          'graduate engineer', 'graduate analyst', 'sde 1', 'sde i',
-          'software engineer i', 'engineer i', 'developer i',
-          'less than 2 years', '1 year experience', '1+ years',
-          'entry position', 'starter role', 'foundational role',
-        ],
-        'Mid Level': [
-          'mid level', 'mid-level', 'intermediate', '3-5 years', '2-5 years', '3+ years',
-          '4+ years', '2-4 years', '3-4 years', '4-6 years', 'mid-senior',
-          'sde 2', 'sde ii', 'software engineer ii', 'engineer ii', 'developer ii',
-          'level 2', 'level ii', 'l2', 'l3', 'tier 2',
-          'experienced professional', 'professional', 'specialist',
-          'individual contributor', 'ic2', 'ic3', 'mid career',
-          'mid-career', '2+ years', 'some experience',
-          'moderate experience', 'established professional',
-          'career growth', 'growing professional', 'solid experience',
-          'proven experience', 'demonstrated experience',
-          'working knowledge', 'hands-on experience',
-          'competent', 'proficient', 'skilled professional',
-          'experienced developer', 'experienced engineer',
-          'experienced designer', 'experienced analyst',
-        ],
-        'Senior Level': [
-          'senior', 'sr.', '5+ years', '5-8 years', '6+ years', 'experienced',
-          '7+ years', '8+ years', '6-8 years', '5-7 years', '7-10 years',
-          'sr ', 'senior engineer', 'senior developer', 'senior designer',
-          'senior analyst', 'senior consultant', 'senior specialist',
-          'sde 3', 'sde iii', 'software engineer iii', 'engineer iii',
-          'level 3', 'level iii', 'l4', 'l5', 'tier 3',
-          'ic4', 'ic5', 'advanced', 'expert level',
-          'highly experienced', 'seasoned', 'veteran',
-          'deep expertise', 'extensive experience', 'significant experience',
-          'strong background', 'proven track record', 'subject matter expert',
-          'domain expert', 'technical expert', 'senior individual contributor',
-          'senior ic', 'senior member', 'senior professional',
-          'accomplished', 'mature professional',
-        ],
-        'Lead': [
-          'lead', 'team lead', 'tech lead', 'staff',
-          'engineering lead', 'design lead', 'product lead', 'project lead',
-          'technical lead', 'development lead', 'frontend lead', 'backend lead',
-          'fullstack lead', 'data lead', 'analytics lead', 'qa lead',
-          'test lead', 'devops lead', 'infrastructure lead', 'platform lead',
-          'staff engineer', 'staff developer', 'staff designer',
-          'l6', 'ic6', 'level 6', 'senior staff',
-          'team leader', 'squad lead', 'pod lead', 'chapter lead',
-          'group lead', 'module lead', 'feature lead',
-          'people lead', 'delivery lead', 'scrum master',
-          'engineering manager', 'dev manager', 'technical manager',
-          '8+ years', '9+ years', '10+ years', '8-12 years',
-        ],
-        'Principal': [
-          'principal', 'staff engineer', 'distinguished',
-          'principal engineer', 'principal developer', 'principal architect',
-          'principal designer', 'principal consultant', 'principal scientist',
-          'distinguished engineer', 'distinguished architect',
-          'fellow', 'technical fellow', 'senior staff engineer',
-          'l7', 'l8', 'ic7', 'ic8', 'level 7', 'level 8',
-          'architect', 'chief architect', 'solutions architect',
-          'enterprise architect', 'system architect', 'software architect',
-          'thought leader', 'industry expert', 'domain authority',
-          '12+ years', '15+ years', '10-15 years',
-          'senior principal', 'advisory', 'senior advisory',
-        ],
-        'Director': [
-          'director', 'senior director', 'associate director',
-          'managing director', 'executive director', 'group director',
-          'regional director', 'divisional director', 'creative director',
-          'technical director', 'engineering director', 'product director',
-          'design director', 'operations director', 'program director',
-          'director of engineering', 'director of product', 'director of design',
-          'director of operations', 'director of technology', 'director of data',
-          'head of engineering', 'head of product', 'head of design',
-          'head of technology', 'head of data', 'head of',
-          'department head', 'division head',
-        ],
-        'VP': [
-          'vice president', 'vp', 'svp', 'evp', 'avp',
-          'senior vice president', 'executive vice president',
-          'assistant vice president', 'associate vice president',
-          'vp of engineering', 'vp of product', 'vp of design',
-          'vp of technology', 'vp of operations', 'vp of sales',
-          'vp of marketing', 'vp of data', 'vp of growth',
-          'vice president of engineering', 'vice president of product',
-          'vice president of technology', 'vice president of operations',
-        ],
-        'C-Level': [
-          'cto', 'ceo', 'cfo', 'coo', 'cmo', 'cpo', 'cio', 'cso', 'cdo',
-          'chief', 'c-level', 'c-suite', 'csuite',
-          'chief technology officer', 'chief executive officer',
-          'chief financial officer', 'chief operating officer',
-          'chief marketing officer', 'chief product officer',
-          'chief information officer', 'chief strategy officer',
-          'chief data officer', 'chief design officer',
-          'chief people officer', 'chief revenue officer',
-          'chief growth officer', 'chief digital officer',
-          'co-founder', 'cofounder', 'founder',
-          'president', 'managing partner', 'general manager',
-          'executive', 'senior executive', 'top executive',
-        ],
+      const experienceKeywords: Record<string, string[]> = {
+        'Internship': ['intern', 'internship', 'trainee', 'apprentice', 'co-op', 'coop', 'placement', 'student'],
+        'Entry Level': ['entry', 'fresher', 'junior', '0-1', '0-2', 'graduate', 'new grad', 'early career', 'beginner'],
+        'Mid Level': ['mid', 'intermediate', '2-5', '3-5', '2-4', '3-4', '4-6', '3+', '4+'],
+        'Senior Level': ['senior', '5+', '5-8', '6+', '7+', '8+', '5-7', '6-8', '7-10'],
+        'Lead': ['lead', 'staff', 'manager', '8+', '9+', '10+', '8-12'],
+        'Principal': ['principal', 'distinguished', 'fellow', 'architect', '12+', '15+', '10-15'],
+        'Director': ['director', 'head of', 'department head'],
+        'VP': ['vice president', 'vp', 'svp', 'evp', 'avp'],
+        'C-Level': ['cto', 'ceo', 'cfo', 'coo', 'cmo', 'cpo', 'chief', 'c-level', 'founder', 'president', 'executive'],
       };
-      const allKeywords = filters.jobLevels.flatMap(level => levelKeywords[level] || [level.toLowerCase()]);
-      const orClauses = allKeywords.map(kw => {
-        const escaped = kw.replace(/'/g, "''");
-        return `title.ilike.%${escaped}%,description.ilike.%${escaped}%`;
-      }).join(',');
-      query = query.or(orClauses);
+      expKeywords = filters.jobLevels.flatMap(level => experienceKeywords[level] || [level.toLowerCase()]);
     }
 
+    // --- Build posted-after cutoff ---
+    let postedAfter: string | null = null;
     if (filters?.postedWithin && filters.postedWithin.length > 0) {
       const maxMs = Math.max(...filters.postedWithin.map(range => {
         switch (range) {
@@ -474,33 +334,59 @@ export async function fetchJobsBatch(params: BatchFetchParams): Promise<BatchFet
           default: return 90 * 24 * 60 * 60 * 1000;
         }
       }));
-      const cutoff = new Date(Date.now() - maxMs).toISOString();
-      query = query.gte('created_at', cutoff);
+      postedAfter = new Date(Date.now() - maxMs).toISOString();
     }
 
-    // Fetch exact limit since desired roles are now filtered server-side
-    const fetchLimit = limit;
-    query = query.range(offset, offset + fetchLimit - 1);
+    if (__DEV__) {
+      if (!titleKeywords.length) console.log(`[QUERY] ===== fetchJobsBatch (${tab}, offset=${offset}) =====`);
+      if (titleKeywords.length) console.log(`[QUERY] title keywords: ${titleKeywords.length}`);
+      if (expKeywords.length) console.log(`[QUERY] experience keywords:`, expKeywords);
+      if (filters?.locations?.length) console.log(`[QUERY] locations:`, filters.locations);
+      if (filters?.workModes?.length) console.log(`[QUERY] workModes:`, filters.workModes);
+      if (filters?.jobTypes?.length) console.log(`[QUERY] jobTypes:`, filters.jobTypes);
+      if (filters?.companies?.length) console.log(`[QUERY] companies:`, filters.companies);
+      console.log(`[QUERY] Using RPC search_jobs (title AND experience on server)`);
+    }
 
-    const { data, error } = await query;
+    // --- Call the RPC ---
+    const rpcParams: Record<string, any> = {
+      p_tab: tab,
+      p_limit: limit,
+      p_offset: offset,
+    };
+    if (titleKeywords.length > 0) rpcParams.p_title_keywords = titleKeywords;
+    if (expKeywords.length > 0) rpcParams.p_exp_keywords = expKeywords;
+    if (excludeIds && excludeIds.length > 0) rpcParams.p_exclude_ids = excludeIds.slice(-100);
+    if (searchTags && searchTags.length > 0) rpcParams.p_search_tags = searchTags;
+    if (filters?.companies && filters.companies.length > 0) rpcParams.p_company_names = filters.companies;
+    if (filters?.locations && filters.locations.length > 0) rpcParams.p_location_keywords = filters.locations;
+    if (filters?.workModes && filters.workModes.length > 0) rpcParams.p_work_modes = filters.workModes;
+    if (filters?.jobTypes && filters.jobTypes.length > 0) rpcParams.p_job_types = filters.jobTypes;
+    if (postedAfter) rpcParams.p_posted_after = postedAfter;
+
+    const { data, error } = await supabase.rpc('search_jobs', rpcParams);
 
     if (error || !data || data.length === 0) {
       console.log(`Batch fetch (${tab}, offset=${offset}): ${error?.message || 'no data'}`);
-      return { jobs: [], serverHadMore: false, serverRowCount: 0 };
+      return { jobs: [], serverHadMore: false, serverRowCount: 0, titleKeywords };
     }
 
     const serverRowCount = data.length;
-    // serverHadMore is based on raw DB row count vs what we asked for
-    const serverHadMore = serverRowCount >= fetchLimit;
+    const serverHadMore = serverRowCount >= limit;
 
     console.log(`Batch fetch (${tab}, offset=${offset}): ${serverRowCount} jobs from DB, serverHadMore=${serverHadMore}`);
+
+    if (__DEV__ && serverRowCount > 0) {
+      const titles = data.slice(0, 5).map((j: any) => j.title || j.job_title).filter(Boolean);
+      console.log(`[QUERY] First ${titles.length} job titles returned:`, titles);
+    }
 
     let rows = data as SupabaseJob[];
 
     const uniqueCompanies = [...new Set(rows.map(j => j.company_name).filter(Boolean))];
     const companyDataMap = await buildCompanyDataMap(uniqueCompanies);
     const jobs = enrichWithCompanyData(rows, companyDataMap);
-    return { jobs, serverHadMore, serverRowCount };
+    return { jobs, serverHadMore, serverRowCount, titleKeywords };
   } catch (e) {
     console.log('Exception in fetchJobsBatch:', e);
     return { jobs: [], serverHadMore: false, serverRowCount: 0 };

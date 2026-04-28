@@ -51,7 +51,7 @@ export default function EditSectionScreen() {
   const isWizard = params.wizardMode === '1';
   const wizardIndex = parseInt(params.wizardIndex || '0', 10);
   const wizardTotal = parseInt(params.wizardTotal || '0', 10);
-  const { userProfile: supabaseProfile, saveProfile } = useAuth();
+  const { userProfile: supabaseProfile, saveProfile, refetchProfile } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
   const incompleteSteps = isWizard ? getIncompleteSteps(supabaseProfile) : [];
@@ -195,6 +195,7 @@ export default function EditSectionScreen() {
       case 'favoritecompanies': updates.favoriteCompanies = favCompanies; break;
     }
     await saveProfile(updates);
+    await refetchProfile();
     router.back();
   };
 
@@ -730,7 +731,7 @@ const s = StyleSheet.create({
   optionText: { fontSize: 14, fontWeight: '500', flex: 1 },
   searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, borderWidth: 1 },
   searchInput: { flex: 1, fontSize: 15 },
-  searchBoxThin: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8, gap: 6, borderWidth: 1 },
+  searchBoxThin: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8, gap: 6, borderWidth: 1, overflow: 'hidden' },
   searchInputThin: { flex: 1, fontSize: 13, paddingVertical: 0 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10 },
   saveBtnText: { fontSize: 14, fontWeight: '700' },

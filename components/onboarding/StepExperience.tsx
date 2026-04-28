@@ -520,6 +520,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     height: 54, borderRadius: 14, paddingHorizontal: 16,
     backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
+    overflow: 'hidden',
   },
   inputFlex: { flex: 1, color: '#111111', fontSize: 16 },
   typeLabel: { fontSize: 12, fontWeight: '700' as const, color: '#616161', letterSpacing: 1, marginBottom: 12 },

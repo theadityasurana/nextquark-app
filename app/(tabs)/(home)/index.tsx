@@ -30,8 +30,10 @@ import Colors, { darkColors } from '@/constants/colors';
 import { Job } from '@/types';
 import JobCard from '@/components/JobCard';
 import { MAJOR_CITIES } from '@/constants/cities';
+import { JOB_DOMAINS, getExpandedKeywords } from '@/constants/domains';
+import { LOCATION_MAPPINGS, getAllCountries, getAllCities, getCitiesForCountries, buildLocationFilterKeywords } from '@/constants/location-mappings';
 import { mockUser } from '@/mocks/user';
-import { fetchJobsBatch, BatchFetchParams, BatchFetchResult, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, fetchUniqueJobTitles, fetchUniqueLocations, saveJob } from '@/lib/jobs';
+import { fetchJobsBatch, BatchFetchParams, BatchFetchResult, incrementRightSwipe, addToLiveApplicationQueue, fetchAllCompanies, saveJob } from '@/lib/jobs';
 import { computeMatchScores } from '@/lib/match-scoring';
 import { supabase, getStorageUploadUrl } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,7 +51,20 @@ import { Share as RNShare, Clipboard } from 'react-native';
 
 const SEARCH_TAGS_KEY = 'nextquark_search_tags';
 const WELCOME_NOTIF_SENT_KEY = 'nextquark_welcome_notif_sent';
-const JOB_LEVEL_FILTER_MANUAL_KEY = 'nextquark_job_level_filter_manual';
+
+function spreadByCompany(jobs: Job[]): Job[] {
+  if (jobs.length <= 1) return jobs;
+  const result: Job[] = [];
+  const remaining = [...jobs];
+  let lastCompany = '';
+  while (remaining.length > 0) {
+    const idx = remaining.findIndex(j => j.companyName !== lastCompany);
+    const pick = idx >= 0 ? remaining.splice(idx, 1)[0] : remaining.shift()!;
+    lastCompany = pick.companyName;
+    result.push(pick);
+  }
+  return result;
+}
 
 function getDefaultJobLevelsFromExperience(experienceLevel?: string): string[] {
   if (!experienceLevel) return [];
@@ -68,7 +83,7 @@ function getDefaultJobLevelsFromExperience(experienceLevel?: string): string[] {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-function EmptyState({ colors, emptyFadeAnim, emptySlideAnim }: { colors: any; emptyFadeAnim: Animated.Value; emptySlideAnim: Animated.Value }) {
+function EmptyState({ colors, emptyFadeAnim, emptySlideAnim, onAdjustPreferences }: { colors: any; emptyFadeAnim: Animated.Value; emptySlideAnim: Animated.Value; onAdjustPreferences: () => void }) {
   useEffect(() => {
     emptyFadeAnim.setValue(0);
     emptySlideAnim.setValue(30);
@@ -83,6 +98,9 @@ function EmptyState({ colors, emptyFadeAnim, emptySlideAnim }: { colors: any; em
       <Animated.View style={{ opacity: emptyFadeAnim, transform: [{ translateY: emptySlideAnim }], alignItems: 'center' }}>
         <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>All caught up!</Text>
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>You've reviewed all available jobs. Check back later or adjust your filters for more matches.</Text>
+        <Pressable style={{ marginTop: 20, backgroundColor: colors.secondary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }} onPress={onAdjustPreferences}>
+          <Text style={{ color: colors.textInverse, fontSize: 15, fontWeight: '700' }}>Adjust Your Preferences</Text>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -90,7 +108,6 @@ function EmptyState({ colors, emptyFadeAnim, emptySlideAnim }: { colors: any; em
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 const JOB_TYPES = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
-const WORK_MODES = ['Remote', 'Onsite', 'Hybrid'];
 const JOB_LEVELS = ['Internship', 'Entry Level', 'Mid Level', 'Senior Level', 'Lead', 'Principal', 'Director', 'VP', 'C-Level'];
 const POSTED_OPTIONS = [
   { label: 'Last 24 hours', value: '1d' },
@@ -107,7 +124,6 @@ const POSTED_OPTIONS = [
 interface Filters {
   cities: string[];
   jobTypes: string[];
-  workModes: string[];
   postedWithin: string[];
   roles: string[];
   companies: string[];
@@ -115,12 +131,14 @@ interface Filters {
   searchKeyword: string;
   searchTags: string[];
   jobLevels: string[];
+  selectedCountries: string[];
+  selectedCities: string[];
+  remoteOnly: boolean;
 }
 
 const DEFAULT_FILTERS: Filters = {
   cities: [],
   jobTypes: [],
-  workModes: [],
   postedWithin: [],
   roles: [],
   companies: [],
@@ -128,6 +146,9 @@ const DEFAULT_FILTERS: Filters = {
   searchKeyword: '',
   searchTags: [],
   jobLevels: [],
+  selectedCountries: [],
+  selectedCities: [],
+  remoteOnly: false,
 };
 
 function getGreeting(): string {
@@ -155,13 +176,16 @@ export default function HomeScreen() {
   const [showCityPicker, setShowCityPicker] = useState(false);
 
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showCityFilterPicker, setShowCityFilterPicker] = useState(false);
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [filters, setFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [tempFilters, setTempFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [roleSearch, setRoleSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
-  const [locationSearch, setLocationSearch] = useState('');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [cityFilterSearch, setCityFilterSearch] = useState('');
   const [feedMode, setFeedMode] = useState<'discover' | 'india' | 'foryou' | 'remote'>('india');
   const [notification, setNotification] = useState<{ visible: boolean; job?: Job } | null>(null);
   const [isSwipeEnabled, setIsSwipeEnabled] = useState(true);
@@ -238,20 +262,11 @@ export default function HomeScreen() {
     });
   }, [isOnboardingComplete, userName]);
 
-  // Auto-apply Job Level filter based on onboarding experience level (only if user hasn't manually changed it)
-  const autoJobLevelAppliedRef = useRef(false);
-  useEffect(() => {
-    if (autoJobLevelAppliedRef.current || !userProfile?.experienceLevel) return;
-    autoJobLevelAppliedRef.current = true;
-    AsyncStorage.getItem(JOB_LEVEL_FILTER_MANUAL_KEY).then(manual => {
-      if (manual === 'true') return;
-      const defaultLevels = getDefaultJobLevelsFromExperience(userProfile.experienceLevel);
-      if (defaultLevels.length > 0) {
-        setFilters(prev => ({ ...prev, jobLevels: defaultLevels }));
-        setTempFilters(prev => ({ ...prev, jobLevels: defaultLevels }));
-      }
-    });
-  }, [userProfile?.experienceLevel]);
+  // Baseline job levels derived from onboarding — always active, never clearable
+  const baselineJobLevels = useMemo(() => 
+    getDefaultJobLevelsFromExperience(userProfile?.experienceLevel),
+    [userProfile?.experienceLevel]
+  );
 
   // Load daily swipes on mount and on focus
   const refreshDailySwipes = useCallback(async () => {
@@ -298,6 +313,36 @@ export default function HomeScreen() {
   const prefetchingRef = useRef<Record<TabKey, boolean>>({ discover: false, india: false, foryou: false, remote: false });
 
   const buildBatchParams = useCallback((tab: TabKey, offset: number): BatchFetchParams => {
+    // If user has set role filters, expand domains into keywords and override onboarding desiredRoles
+    const expandedRoleKeywords = filters.roles.length > 0 ? getExpandedKeywords(filters.roles) : undefined;
+    const effectiveDesiredRoles = filters.roles.length > 0 ? undefined : (userProfile?.desiredRoles || undefined);
+    
+    // Build location keywords from selected countries and cities
+    const locationKeywords = buildLocationFilterKeywords(filters.selectedCountries, filters.selectedCities);
+    // Combine with legacy locations if any
+    const effectiveLocations = locationKeywords.length > 0 ? locationKeywords : (filters.locations.length > 0 ? filters.locations : undefined);
+    
+    // Build work modes from remote toggle
+    const workModes = filters.remoteOnly ? ['Remote'] : undefined;
+    
+    // Job levels: use user's manual selection if set, otherwise always use baseline from onboarding
+    const effectiveJobLevels = filters.jobLevels.length > 0 ? filters.jobLevels : (baselineJobLevels.length > 0 ? baselineJobLevels : undefined);
+
+    if (__DEV__) {
+      console.log(`[FILTERS] ===== buildBatchParams (${tab}, offset=${offset}) =====`);
+      console.log(`[FILTERS] Source: ${filters.roles.length > 0 ? 'FILTER PANEL roles' : effectiveDesiredRoles ? 'PROFILE desiredRoles' : 'NONE (no role filter)'}`);
+      if (filters.roles.length > 0) console.log(`[FILTERS] Filter panel domains:`, filters.roles);
+      if (expandedRoleKeywords) console.log(`[FILTERS] Expanded role keywords (${expandedRoleKeywords.length}):`, expandedRoleKeywords.slice(0, 10), expandedRoleKeywords.length > 10 ? `...+${expandedRoleKeywords.length - 10} more` : '');
+      if (effectiveDesiredRoles) console.log(`[FILTERS] Profile desiredRoles:`, effectiveDesiredRoles);
+      if (effectiveLocations) console.log(`[FILTERS] Locations:`, effectiveLocations);
+      if (workModes) console.log(`[FILTERS] Work modes:`, workModes);
+      if (filters.jobTypes.length > 0) console.log(`[FILTERS] Job types:`, filters.jobTypes);
+      if (effectiveJobLevels) console.log(`[FILTERS] Job levels:`, effectiveJobLevels);
+      if (filters.companies.length > 0) console.log(`[FILTERS] Companies:`, filters.companies);
+      if (filters.postedWithin.length > 0) console.log(`[FILTERS] Posted within:`, filters.postedWithin);
+      console.log(`[FILTERS] Excluded swiped IDs: ${swipedJobIds.length}`);
+    }
+    
     return {
       tab,
       limit: BATCH_SIZE,
@@ -306,16 +351,16 @@ export default function HomeScreen() {
       searchTags: activeSearchTags.length > 0 ? activeSearchTags : (filters.searchTags.length > 0 ? filters.searchTags : undefined),
       filters: {
         companies: filters.companies.length > 0 ? filters.companies : undefined,
-        roles: filters.roles.length > 0 ? filters.roles : undefined,
-        locations: filters.locations.length > 0 ? filters.locations : undefined,
-        workModes: filters.workModes.length > 0 ? filters.workModes : undefined,
+        roles: expandedRoleKeywords,
+        locations: effectiveLocations,
+        workModes: workModes,
         jobTypes: filters.jobTypes.length > 0 ? filters.jobTypes : undefined,
-        jobLevels: filters.jobLevels.length > 0 ? filters.jobLevels : undefined,
+        jobLevels: effectiveJobLevels,
         postedWithin: filters.postedWithin.length > 0 ? filters.postedWithin : undefined,
       },
-      desiredRoles: userProfile?.desiredRoles || undefined,
+      desiredRoles: effectiveDesiredRoles,
     };
-  }, [swipedJobIds, activeSearchTags, filters, userProfile]);
+  }, [swipedJobIds, activeSearchTags, filters, userProfile, baselineJobLevels]);
 
   // Refs to hold latest values for fetch functions (avoids stale closures & dependency churn)
   const buildBatchParamsRef = useRef(buildBatchParams);
@@ -329,7 +374,11 @@ export default function HomeScreen() {
   const tabJobsRef = useRef(tabJobs);
   tabJobsRef.current = tabJobs;
 
-  const doFetchBatch = useCallback(async (tab: TabKey, offset: number, append: boolean) => {
+  // Generation counter to invalidate in-flight fetches when preferences/filters change
+  const fetchGenerationRef = useRef(0);
+
+  const doFetchBatch = useCallback(async (tab: TabKey, offset: number, append: boolean, generation?: number) => {
+    const gen = generation ?? fetchGenerationRef.current;
     setTabLoading(prev => {
       if (prev[tab] && append) return prev; // already fetching
       return { ...prev, [tab]: true };
@@ -337,18 +386,47 @@ export default function HomeScreen() {
     try {
       const params = buildBatchParamsRef.current(tab, offset);
       const result = await fetchJobsBatch(params);
+      // Discard results if a newer generation has started (preferences changed mid-flight)
+      if (gen !== fetchGenerationRef.current) {
+        if (__DEV__) console.log(`[FILTERS] ⚠️ DISCARDED stale fetch for ${tab} (gen ${gen} vs current ${fetchGenerationRef.current})`);
+        return;
+      }
       let batch = computeMatchScores(userProfileRef.current || null, result.jobs);
+
+      // Sanity check: verify each job's title matches at least one expanded keyword
+      // This catches leaks from overly broad domain keywords
+      if (result.titleKeywords && result.titleKeywords.length > 0) {
+        const checkKeywords = result.titleKeywords
+          .filter(kw => kw.length > 4) // skip short keywords that cause false positives
+          .map(kw => kw.toLowerCase());
+        if (checkKeywords.length > 0) {
+          const beforeCount = batch.length;
+          batch = batch.filter(job => {
+            const title = (job.jobTitle || '').toLowerCase();
+            return checkKeywords.some(kw => title.includes(kw));
+          });
+          if (__DEV__ && batch.length < beforeCount) {
+            console.log(`[SANITY] Removed ${beforeCount - batch.length} non-matching jobs (${batch.length} remaining)`);
+          }
+        }
+      }
       for (let i = batch.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [batch[i], batch[j]] = [batch[j], batch[i]];
       }
+      batch = spreadByCompany(batch);
       const newOffset = offset + result.serverRowCount;
-      setTabJobs(prev => ({
-        ...prev,
-        [tab]: append ? [...prev[tab], ...batch] : batch,
-      }));
+      setTabJobs(prev => {
+        if (append && prev[tab].length > 0 && batch.length > 0) {
+          const lastCompany = prev[tab][prev[tab].length - 1].companyName;
+          if (batch[0].companyName === lastCompany) {
+            const swapIdx = batch.findIndex(j => j.companyName !== lastCompany);
+            if (swapIdx > 0) [batch[0], batch[swapIdx]] = [batch[swapIdx], batch[0]];
+          }
+        }
+        return { ...prev, [tab]: append ? [...prev[tab], ...batch] : batch };
+      });
       setTabOffsets(prev => ({ ...prev, [tab]: newOffset }));
-      // Use serverHadMore (raw DB count) not client-filtered batch.length
       setTabHasMore(prev => ({ ...prev, [tab]: result.serverHadMore }));
 
       // Auto-backfill: if client-filtered batch is small but server has more, keep fetching
@@ -357,27 +435,29 @@ export default function HomeScreen() {
           ? (tabJobsRef.current[tab] || []).length + batch.length
           : batch.length;
         if (currentTotal < BATCH_SIZE) {
-          // Schedule next fetch without blocking
-          setTimeout(() => doFetchBatch(tab, newOffset, true), 0);
+          setTimeout(() => doFetchBatch(tab, newOffset, true, gen), 0);
         }
       }
     } catch (e) {
       console.log(`Error fetching batch for ${tab}:`, e);
     } finally {
-      setTabLoading(prev => ({ ...prev, [tab]: false }));
+      if (gen === fetchGenerationRef.current) {
+        setTabLoading(prev => ({ ...prev, [tab]: false }));
+      }
       prefetchingRef.current[tab] = false;
     }
   }, []); // stable — no deps, uses refs
 
-  // Initial load: fetch first batch for all tabs (runs exactly once)
+  // Initial load: fetch first batch for all tabs (runs once when both userId and profile are ready)
   const initialLoadDone = useRef(false);
   useEffect(() => {
-    if (!supabaseUserId || initialLoadDone.current) return;
+    if (!supabaseUserId || initialLoadDone.current || !userProfile) return;
     initialLoadDone.current = true;
     setInitialLoaded(true);
+    if (__DEV__) console.log(`[FILTERS] ===== INITIAL LOAD (profile ready, desiredRoles: ${JSON.stringify(userProfile.desiredRoles)}, expLevel: ${userProfile.experienceLevel}) =====`);
     const tabs: TabKey[] = ['discover', 'india', 'foryou', 'remote'];
     tabs.forEach(tab => doFetchBatch(tab, 0, false));
-  }, [supabaseUserId, doFetchBatch]);
+  }, [supabaseUserId, userProfile, doFetchBatch]);
 
   // Prefetch next batch when user has swiped through PREFETCH_THRESHOLD cards
   const checkAndPrefetch = useCallback((tab: TabKey, swipedInBatch: number, totalInTab: number) => {
@@ -392,20 +472,21 @@ export default function HomeScreen() {
   // Auto-refetch when current tab has fewer than 10 jobs (or 0) after initial load
   const autoRefetchTriggeredRef = useRef<Record<TabKey, boolean>>({ discover: false, india: false, foryou: false, remote: false });
   useEffect(() => {
-    if (!initialLoaded || !supabaseUserId) return;
+    if (!initialLoaded || !supabaseUserId || !userProfile) return;
     const tab = feedMode as TabKey;
     const currentJobs = tabJobs[tab] || [];
     const isLoading = tabLoading[tab];
     // If we have < 10 jobs, not currently loading, have more to fetch, and haven't auto-refetched yet
     if (currentJobs.length < BATCH_SIZE && !isLoading && tabHasMore[tab] && !autoRefetchTriggeredRef.current[tab]) {
       autoRefetchTriggeredRef.current[tab] = true;
+      if (__DEV__) console.log(`[FILTERS] AUTO-REFETCH triggered for ${tab} (${currentJobs.length} jobs, offset=${tabOffsets[tab]})`);
       doFetchBatch(tab, tabOffsets[tab], true);
     }
     // Reset the flag when we get enough jobs
     if (currentJobs.length >= BATCH_SIZE) {
       autoRefetchTriggeredRef.current[tab] = false;
     }
-  }, [initialLoaded, supabaseUserId, feedMode, tabJobs, tabLoading, tabHasMore, tabOffsets, doFetchBatch]);
+  }, [initialLoaded, supabaseUserId, userProfile, feedMode, tabJobs, tabLoading, tabHasMore, tabOffsets, doFetchBatch]);
 
   // Show loader when: auth loading, initial load, OR current tab has 0 jobs and is still fetching/has more to fetch
   const isShowingLoader = !supabaseUserId || isAuthLoading || (!initialLoaded) || (tabJobs[feedMode].length === 0 && (tabLoading[feedMode] || tabHasMore[feedMode]));
@@ -438,17 +519,8 @@ export default function HomeScreen() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: allJobTitles = [] } = useQuery({
-    queryKey: ['all-job-titles'],
-    queryFn: fetchUniqueJobTitles,
-    staleTime: 1000 * 60 * 10,
-  });
+  const allJobTitles = JOB_DOMAINS;
 
-  const { data: allLocations = [] } = useQuery({
-    queryKey: ['all-locations'],
-    queryFn: fetchUniqueLocations,
-    staleTime: 1000 * 60 * 10,
-  });
 
   const { data: referralStats, refetch: refetchReferralStats } = useQuery({
     queryKey: ['referral-stats-home', supabaseUserId],
@@ -703,34 +775,59 @@ export default function HomeScreen() {
   const prevFiltersRef = useRef(filters);
   const prevActiveSearchTagsRef = useRef(activeSearchTags);
   const prevDesiredRolesRef = useRef(userProfile?.desiredRoles);
+  const prevBaselineJobLevelsRef = useRef(baselineJobLevels);
   useEffect(() => {
     const feedModeChanged = prevFeedModeRef.current !== feedMode;
     const filtersChanged = prevFiltersRef.current !== filters;
     const searchTagsChanged = prevActiveSearchTagsRef.current !== activeSearchTags;
     const desiredRolesChanged = JSON.stringify(prevDesiredRolesRef.current) !== JSON.stringify(userProfile?.desiredRoles);
+    const baselineChanged = JSON.stringify(prevBaselineJobLevelsRef.current) !== JSON.stringify(baselineJobLevels);
     
-    if (feedModeChanged || filtersChanged || searchTagsChanged || desiredRolesChanged) {
+    if (feedModeChanged || filtersChanged || searchTagsChanged || desiredRolesChanged || baselineChanged) {
+      if (__DEV__) {
+        const reasons = [
+          feedModeChanged && 'feedMode',
+          filtersChanged && 'filters',
+          searchTagsChanged && 'searchTags',
+          desiredRolesChanged && 'desiredRoles',
+          baselineChanged && 'baselineJobLevels',
+        ].filter(Boolean);
+        console.log(`[FILTERS] ===== DECK REBUILD triggered by: ${reasons.join(', ')} =====`);
+        if (desiredRolesChanged) {
+          console.log(`[FILTERS] desiredRoles OLD:`, prevDesiredRolesRef.current);
+          console.log(`[FILTERS] desiredRoles NEW:`, userProfile?.desiredRoles);
+        }
+        if (baselineChanged) {
+          console.log(`[FILTERS] baselineJobLevels OLD:`, prevBaselineJobLevelsRef.current);
+          console.log(`[FILTERS] baselineJobLevels NEW:`, baselineJobLevels);
+        }
+      }
       prevFeedModeRef.current = feedMode;
       prevFiltersRef.current = filters;
       prevActiveSearchTagsRef.current = activeSearchTags;
       prevDesiredRolesRef.current = userProfile?.desiredRoles;
+      prevBaselineJobLevelsRef.current = baselineJobLevels;
       setDeckSwipedSnapshot(new Set(swipedJobIds));
       setCurrentIndex(0);
       currentIndexRef.current = 0;
       positionRef.setValue({ x: 0, y: 0 });
       setCardKey(prev => prev + 1);
 
-      // Re-fetch all tabs with updated filters/search/desired roles
-      if (filtersChanged || searchTagsChanged || desiredRolesChanged) {
+      // Re-fetch all tabs with updated filters/search/desired roles/baseline
+      if (filtersChanged || searchTagsChanged || desiredRolesChanged || baselineChanged) {
+        // Bump generation to invalidate any in-flight or queued fetches from old preferences
+        const newGen = ++fetchGenerationRef.current;
         const tabs: TabKey[] = ['discover', 'india', 'foryou', 'remote'];
+        // Clear all cards immediately so loader shows during fetch
         setTabJobs({ discover: [], india: [], foryou: [], remote: [] });
         setTabOffsets({ discover: 0, india: 0, foryou: 0, remote: 0 });
         setTabHasMore({ discover: true, india: true, foryou: true, remote: true });
+        setTabLoading({ discover: true, india: true, foryou: true, remote: true });
         autoRefetchTriggeredRef.current = { discover: false, india: false, foryou: false, remote: false };
-        tabs.forEach(tab => doFetchBatch(tab, 0, false));
+        tabs.forEach(tab => doFetchBatch(tab, 0, false, newGen));
       }
     }
-  }, [feedMode, filters, activeSearchTags, userProfile?.desiredRoles, positionRef, swipedJobIds, doFetchBatch]);
+  }, [feedMode, filters, activeSearchTags, userProfile?.desiredRoles, baselineJobLevels, positionRef, swipedJobIds, doFetchBatch]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -1060,11 +1157,30 @@ export default function HomeScreen() {
     }));
   }, []);
 
-  const toggleWorkMode = useCallback((mode: string) => {
+  const toggleCountry = useCallback((country: string) => {
+    setTempFilters((prev) => {
+      const newCountries = prev.selectedCountries.includes(country)
+        ? prev.selectedCountries.filter((c) => c !== country)
+        : [...prev.selectedCountries, country];
+      // Remove cities that no longer belong to selected countries (only if countries are selected)
+      let newCities = prev.selectedCities;
+      if (newCountries.length > 0) {
+        const validCities = getCitiesForCountries(newCountries).map(c => c.name);
+        newCities = prev.selectedCities.filter(c => validCities.includes(c));
+      }
+      return { ...prev, selectedCountries: newCountries, selectedCities: newCities };
+    });
+  }, []);
+
+  const toggleCityFilter = useCallback((city: string) => {
     setTempFilters((prev) => ({
       ...prev,
-      workModes: prev.workModes.includes(mode) ? prev.workModes.filter((m) => m !== mode) : [...prev.workModes, mode],
+      selectedCities: prev.selectedCities.includes(city) ? prev.selectedCities.filter((c) => c !== city) : [...prev.selectedCities, city],
     }));
+  }, []);
+
+  const toggleRemoteOnly = useCallback(() => {
+    setTempFilters((prev) => ({ ...prev, remoteOnly: !prev.remoteOnly }));
   }, []);
 
   const togglePostedWithin = useCallback((value: string) => {
@@ -1095,12 +1211,7 @@ export default function HomeScreen() {
     }));
   }, []);
 
-  const toggleLocation = useCallback((location: string) => {
-    setTempFilters((prev) => ({
-      ...prev,
-      locations: prev.locations.includes(location) ? prev.locations.filter((l) => l !== location) : [...prev.locations, location],
-    }));
-  }, []);
+
 
   const toggleJobLevel = useCallback((level: string) => {
     setTempFilters((prev) => ({
@@ -1123,7 +1234,6 @@ export default function HomeScreen() {
   const handleApplyFilters = useCallback(() => {
     setFilters({ ...tempFilters });
     setShowFilters(false);
-    AsyncStorage.setItem(JOB_LEVEL_FILTER_MANUAL_KEY, 'true').catch(() => {});
     console.log('Filters applied:', tempFilters);
   }, [tempFilters]);
 
@@ -1131,7 +1241,6 @@ export default function HomeScreen() {
     setTempFilters({ ...DEFAULT_FILTERS });
     setFilters({ ...DEFAULT_FILTERS });
     setShowFilters(false);
-    AsyncStorage.setItem(JOB_LEVEL_FILTER_MANUAL_KEY, 'true').catch(() => {});
   }, []);
 
   const clearSearchTags = useCallback(async () => {
@@ -1139,17 +1248,22 @@ export default function HomeScreen() {
     await AsyncStorage.removeItem(SEARCH_TAGS_KEY);
   }, []);
 
+  // Count only user-applied filters (exclude baseline job levels — those are always active)
+  const hasManualJobLevels = filters.jobLevels.length > 0 && 
+    JSON.stringify([...filters.jobLevels].sort()) !== JSON.stringify([...baselineJobLevels].sort());
   const activeFilterCount = [
     filters.cities.length > 0,
     filters.jobTypes.length > 0,
-    filters.workModes.length > 0,
     filters.postedWithin.length > 0,
     filters.roles.length > 0,
     filters.companies.length > 0,
     filters.locations.length > 0,
     filters.searchKeyword.trim().length > 0,
     filters.searchTags.length > 0,
-    filters.jobLevels.length > 0,
+    hasManualJobLevels,
+    filters.selectedCountries.length > 0,
+    filters.selectedCities.length > 0,
+    filters.remoteOnly,
     activeSearchTags.length > 0,
   ].filter(Boolean).length;
 
@@ -1183,18 +1297,7 @@ export default function HomeScreen() {
     }
   }, [roleSearch, allJobTitles]);
 
-  const handleLocationSearchSubmit = useCallback(() => {
-    if (locationSearch.trim()) {
-      const matchingLocations = allLocations.filter(loc => 
-        loc.toLowerCase().includes(locationSearch.toLowerCase())
-      );
-      setTempFilters(prev => ({
-        ...prev,
-        locations: [...new Set([...prev.locations, ...matchingLocations])],
-      }));
-      setLocationSearch('');
-    }
-  }, [locationSearch, allLocations]);
+
 
   const filteredRoles = roleSearch
     ? allJobTitles.filter((r) => r.toLowerCase().includes(roleSearch.toLowerCase()))
@@ -1204,9 +1307,7 @@ export default function HomeScreen() {
     ? allCompaniesData.filter((c: any) => c.name.toLowerCase().includes(companySearch.toLowerCase()))
     : allCompaniesData;
 
-  const filteredLocations = locationSearch
-    ? allLocations.filter((l) => l.toLowerCase().includes(locationSearch.toLowerCase()))
-    : allLocations;
+
 
   // Mount animation interpolations
   const mountScale = cardMountAnim.interpolate({
@@ -1350,7 +1451,6 @@ export default function HomeScreen() {
               onPress={() => {
                 setFilters({ ...DEFAULT_FILTERS });
                 setTempFilters({ ...DEFAULT_FILTERS });
-                AsyncStorage.setItem(JOB_LEVEL_FILTER_MANUAL_KEY, 'true').catch(() => {});
               }}
             >
               <X size={12} color={isDark ? '#FFFFFF' : '#000000'} />
@@ -1529,8 +1629,8 @@ export default function HomeScreen() {
               </View>
             );
           })()
-        ) : currentIndex >= jobs.length ? (
-          <EmptyState colors={colors} emptyFadeAnim={emptyFadeAnim} emptySlideAnim={emptySlideAnim} />
+        ) : currentIndex >= jobs.length && !tabHasMore[feedMode] && !tabLoading[feedMode] ? (
+          <EmptyState colors={colors} emptyFadeAnim={emptyFadeAnim} emptySlideAnim={emptySlideAnim} onAdjustPreferences={() => router.push('/(tabs)/profile' as any)} />
         ) : (
           renderCards()
         )}
@@ -1720,69 +1820,25 @@ export default function HomeScreen() {
 
 
             <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>POSTED WITHIN</Text>
-              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
-                <View style={styles.chipGrid}>
-                  {POSTED_OPTIONS.map((opt) => {
-                    const selected = tempFilters.postedWithin.includes(opt.value);
-                    return (
-                      <Pressable key={opt.value} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => togglePostedWithin(opt.value)}>
-                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{opt.label}</Text>
-                      </Pressable>
-                    );
-                  })}
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>ROLE</Text>
+              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowRolePicker(true)}>
+                <Ionicons name="person-outline" size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                <Text style={[styles.iosFilterPickerText, { color: tempFilters.roles.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
+                  {tempFilters.roles.length > 0 ? `${tempFilters.roles.length} roles selected` : 'Select roles...'}
+                </Text>
+                <ChevronDown size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+              </Pressable>
+              {tempFilters.roles.length > 0 && (
+                <View style={styles.selectedCitiesWrap}>
+                  {tempFilters.roles.map((role) => (
+                    <Pressable key={role} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleRole(role)}>
+                      <Text style={styles.iosFilterChipTextActive}>{role}</Text>
+                      <X size={10} color="#FFFFFF" />
+                    </Pressable>
+                  ))}
                 </View>
-              </View>
+              )}
             </View>
-
-            <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>WORK MODE</Text>
-              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
-                <View style={styles.chipGrid}>
-                  {WORK_MODES.map((mode) => {
-                    const selected = tempFilters.workModes.includes(mode);
-                    return (
-                      <Pressable key={mode} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleWorkMode(mode)}>
-                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{mode}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB TYPE</Text>
-              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
-                <View style={styles.chipGrid}>
-                  {JOB_TYPES.map((type) => {
-                    const selected = tempFilters.jobTypes.includes(type);
-                    return (
-                      <Pressable key={type} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobType(type)}>
-                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{type}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB LEVEL</Text>
-              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
-                <View style={styles.chipGrid}>
-                  {JOB_LEVELS.map((level) => {
-                    const selected = tempFilters.jobLevels.includes(level);
-                    return (
-                      <Pressable key={level} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobLevel(level)}>
-                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{level}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
 
             <View style={styles.iosFilterSection}>
               <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>COMPANY</Text>
@@ -1806,19 +1862,35 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>ROLE</Text>
-              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowRolePicker(true)}>
-                <Ionicons name="person-outline" size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
-                <Text style={[styles.iosFilterPickerText, { color: tempFilters.roles.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
-                  {tempFilters.roles.length > 0 ? `${tempFilters.roles.length} roles selected` : 'Select roles...'}
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB LEVEL</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {JOB_LEVELS.map((level) => {
+                    const selected = tempFilters.jobLevels.includes(level);
+                    return (
+                      <Pressable key={level} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobLevel(level)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{level}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>COUNTRY</Text>
+              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowCountryPicker(true)}>
+                <Globe size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
+                <Text style={[styles.iosFilterPickerText, { color: tempFilters.selectedCountries.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
+                  {tempFilters.selectedCountries.length > 0 ? `${tempFilters.selectedCountries.length} countries selected` : 'Select countries...'}
                 </Text>
                 <ChevronDown size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
               </Pressable>
-              {tempFilters.roles.length > 0 && (
+              {tempFilters.selectedCountries.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
-                  {tempFilters.roles.map((role) => (
-                    <Pressable key={role} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleRole(role)}>
-                      <Text style={styles.iosFilterChipTextActive}>{role}</Text>
+                  {tempFilters.selectedCountries.map((country) => (
+                    <Pressable key={country} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleCountry(country)}>
+                      <Text style={styles.iosFilterChipTextActive}>{country}</Text>
                       <X size={10} color="#FFFFFF" />
                     </Pressable>
                   ))}
@@ -1827,25 +1899,71 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.iosFilterSection}>
-              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>LOCATION</Text>
-              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowLocationPicker(true)}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>CITY</Text>
+              <Pressable style={[styles.iosFilterPickerRow, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]} onPress={() => setShowCityFilterPicker(true)}>
                 <MapPin size={18} color={isDark ? '#8E8E93' : '#C7C7CC'} />
-                <Text style={[styles.iosFilterPickerText, { color: tempFilters.locations.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
-                  {tempFilters.locations.length > 0 ? `${tempFilters.locations.length} locations selected` : 'Select locations...'}
+                <Text style={[styles.iosFilterPickerText, { color: tempFilters.selectedCities.length > 0 ? (isDark ? '#FFFFFF' : '#000000') : '#C7C7CC' }]}>
+                  {tempFilters.selectedCities.length > 0 ? `${tempFilters.selectedCities.length} cities selected` : 'Select cities...'}
                 </Text>
                 <ChevronDown size={16} color={isDark ? '#8E8E93' : '#C7C7CC'} />
               </Pressable>
-              {tempFilters.locations.length > 0 && (
+              {tempFilters.selectedCities.length > 0 && (
                 <View style={styles.selectedCitiesWrap}>
-                  {tempFilters.locations.map((location) => (
-                    <Pressable key={location} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleLocation(location)}>
-                      <Text style={styles.iosFilterChipTextActive}>{location}</Text>
+                  {tempFilters.selectedCities.map((city) => (
+                    <Pressable key={city} style={[styles.iosFilterChip, styles.iosFilterChipActive]} onPress={() => toggleCityFilter(city)}>
+                      <Text style={styles.iosFilterChipTextActive}>{city}</Text>
                       <X size={10} color="#FFFFFF" />
                     </Pressable>
                   ))}
                 </View>
               )}
             </View>
+
+            <View style={styles.iosFilterSection}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 12, marginBottom: 6 }}>
+                <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72', marginTop: 0, marginBottom: 0, marginLeft: 0 }]}>REMOTE ONLY</Text>
+                <Pressable
+                  style={[{ width: 51, height: 31, borderRadius: 16, justifyContent: 'center', padding: 2 }, tempFilters.remoteOnly ? { backgroundColor: '#34C759' } : { backgroundColor: isDark ? '#39393D' : '#E5E5EA' }]}
+                  onPress={toggleRemoteOnly}
+                >
+                  <View style={[{ width: 27, height: 27, borderRadius: 14, backgroundColor: '#FFFFFF' }, tempFilters.remoteOnly ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]} />
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>JOB TYPE</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {JOB_TYPES.map((type) => {
+                    const selected = tempFilters.jobTypes.includes(type);
+                    return (
+                      <Pressable key={type} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => toggleJobType(type)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{type}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.iosFilterSection}>
+              <Text style={[styles.iosFilterSectionLabel, { color: isDark ? '#8E8E93' : '#6D6D72' }]}>POSTED WITHIN</Text>
+              <View style={[styles.iosFilterGroupBox, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                <View style={styles.chipGrid}>
+                  {POSTED_OPTIONS.map((opt) => {
+                    const selected = tempFilters.postedWithin.includes(opt.value);
+                    return (
+                      <Pressable key={opt.value} style={[styles.iosFilterChip, selected && styles.iosFilterChipActive]} onPress={() => togglePostedWithin(opt.value)}>
+                        <Text style={[styles.iosFilterChipText, selected && styles.iosFilterChipTextActive]}>{opt.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+
 
               <View style={{ height: 20 }} />
             </ScrollView>
@@ -1948,13 +2066,13 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showLocationPicker} animationType="slide" transparent onRequestClose={() => setShowLocationPicker(false)}>
+      <Modal visible={showCountryPicker} animationType="slide" transparent onRequestClose={() => setShowCountryPicker(false)}>
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
             <View style={styles.iosPickerNav}>
               <View style={{ width: 50 }} />
-              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Locations</Text>
-              <Pressable onPress={() => setShowLocationPicker(false)} hitSlop={8}>
+              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Countries</Text>
+              <Pressable onPress={() => setShowCountryPicker(false)} hitSlop={8}>
                 <Text style={styles.iosPickerDone}>Done</Text>
               </Pressable>
             </View>
@@ -1963,26 +2081,24 @@ export default function HomeScreen() {
                 <Search size={16} color="#8E8E93" />
                 <TextInput
                   style={[styles.iosPickerSearchInput, { color: isDark ? '#FFFFFF' : '#000000' }]}
-                  placeholder="Search locations..."
+                  placeholder="Search countries..."
                   placeholderTextColor="#8E8E93"
-                  value={locationSearch}
-                  onChangeText={setLocationSearch}
-                  onSubmitEditing={handleLocationSearchSubmit}
-                  returnKeyType="done"
+                  value={countrySearch}
+                  onChangeText={setCountrySearch}
                 />
-                {locationSearch.length > 0 && (
-                  <Pressable onPress={() => setLocationSearch('')} hitSlop={8}>
+                {countrySearch.length > 0 && (
+                  <Pressable onPress={() => setCountrySearch('')} hitSlop={8}>
                     <View style={styles.iosPickerSearchClear}><X size={10} color={isDark ? '#2C2C2E' : '#FFFFFF'} strokeWidth={3} /></View>
                   </Pressable>
                 )}
               </View>
             </View>
-            {tempFilters.locations.length > 0 && (
+            {tempFilters.selectedCountries.length > 0 && (
               <View style={styles.iosPickerSelectedWrap}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iosPickerSelectedScroll}>
-                  {tempFilters.locations.map((location) => (
-                    <Pressable key={location} style={styles.iosPickerSelectedChip} onPress={() => toggleLocation(location)}>
-                      <Text style={styles.iosPickerSelectedText}>{location}</Text>
+                  {tempFilters.selectedCountries.map((country) => (
+                    <Pressable key={country} style={styles.iosPickerSelectedChip} onPress={() => toggleCountry(country)}>
+                      <Text style={styles.iosPickerSelectedText}>{country}</Text>
                       <X size={12} color="#FFFFFF" strokeWidth={2.5} />
                     </Pressable>
                   ))}
@@ -1991,15 +2107,76 @@ export default function HomeScreen() {
             )}
             <ScrollView showsVerticalScrollIndicator={false} style={styles.iosPickerList}>
               <View style={[styles.iosPickerGroup, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
-                {filteredLocations.map((location, idx) => {
-                  const selected = tempFilters.locations.includes(location);
-                  return (
-                    <Pressable key={location} style={[styles.iosPickerRow, idx < filteredLocations.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleLocation(location)}>
-                      <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{location}</Text>
-                      {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                {getAllCountries()
+                  .filter(c => !countrySearch || c.toLowerCase().includes(countrySearch.toLowerCase()))
+                  .map((country, idx, arr) => {
+                    const selected = tempFilters.selectedCountries.includes(country);
+                    return (
+                      <Pressable key={country} style={[styles.iosPickerRow, idx < arr.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleCountry(country)}>
+                        <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{country}</Text>
+                        {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                      </Pressable>
+                    );
+                  })}
+              </View>
+              <View style={{ height: 20 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showCityFilterPicker} animationType="slide" transparent onRequestClose={() => setShowCityFilterPicker(false)}>
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
+            <View style={styles.iosPickerNav}>
+              <View style={{ width: 50 }} />
+              <Text style={[styles.iosPickerTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>Select Cities</Text>
+              <Pressable onPress={() => setShowCityFilterPicker(false)} hitSlop={8}>
+                <Text style={styles.iosPickerDone}>Done</Text>
+              </Pressable>
+            </View>
+            <View style={styles.iosPickerSearchWrap}>
+              <View style={[styles.iosPickerSearchBar, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(118,118,128,0.12)' }]}>
+                <Search size={16} color="#8E8E93" />
+                <TextInput
+                  style={[styles.iosPickerSearchInput, { color: isDark ? '#FFFFFF' : '#000000' }]}
+                  placeholder="Search cities..."
+                  placeholderTextColor="#8E8E93"
+                  value={cityFilterSearch}
+                  onChangeText={setCityFilterSearch}
+                />
+                {cityFilterSearch.length > 0 && (
+                  <Pressable onPress={() => setCityFilterSearch('')} hitSlop={8}>
+                    <View style={styles.iosPickerSearchClear}><X size={10} color={isDark ? '#2C2C2E' : '#FFFFFF'} strokeWidth={3} /></View>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+            {tempFilters.selectedCities.length > 0 && (
+              <View style={styles.iosPickerSelectedWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iosPickerSelectedScroll}>
+                  {tempFilters.selectedCities.map((city) => (
+                    <Pressable key={city} style={styles.iosPickerSelectedChip} onPress={() => toggleCityFilter(city)}>
+                      <Text style={styles.iosPickerSelectedText}>{city}</Text>
+                      <X size={12} color="#FFFFFF" strokeWidth={2.5} />
                     </Pressable>
-                  );
-                })}
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.iosPickerList}>
+              <View style={[styles.iosPickerGroup, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+                {getAllCities(tempFilters.selectedCountries.length > 0 ? tempFilters.selectedCountries : undefined)
+                  .filter(c => !cityFilterSearch || c.toLowerCase().includes(cityFilterSearch.toLowerCase()))
+                  .map((city, idx, arr) => {
+                    const selected = tempFilters.selectedCities.includes(city);
+                    return (
+                      <Pressable key={city} style={[styles.iosPickerRow, idx < arr.length - 1 && styles.iosPickerRowBorder]} onPress={() => toggleCityFilter(city)}>
+                        <Text style={[styles.iosPickerRowText, { color: isDark ? '#FFFFFF' : '#000000' }]}>{city}</Text>
+                        {selected && <Check size={18} color="#007AFF" strokeWidth={2.5} />}
+                      </Pressable>
+                    );
+                  })}
               </View>
               <View style={{ height: 20 }} />
             </ScrollView>
@@ -2179,7 +2356,7 @@ const styles = StyleSheet.create({
   iosPickerTitle: { fontSize: 17, fontWeight: '600' as const, flex: 1, textAlign: 'center' },
   iosPickerDone: { fontSize: 17, fontWeight: '600' as const, color: '#007AFF' },
   iosPickerSearchWrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  iosPickerSearchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, height: 36, gap: 6 },
+  iosPickerSearchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, height: 36, gap: 6, overflow: 'hidden' },
   iosPickerSearchInput: { flex: 1, fontSize: 17, padding: 0 },
   iosPickerSearchClear: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#8E8E93', justifyContent: 'center', alignItems: 'center' },
   iosPickerList: { paddingHorizontal: 16, maxHeight: 420 },

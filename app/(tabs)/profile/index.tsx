@@ -2698,7 +2698,7 @@ const styles = StyleSheet.create({
   companySelectLogo: { width: 18, height: 18, borderRadius: 4 },
   companySelectText: { fontSize: 13, color: Colors.textPrimary, fontWeight: '600' as const },
   companySelectTextActive: { color: Colors.surface },
-  roleSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, borderWidth: 1, borderColor: Colors.borderLight },
+  roleSearchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, borderWidth: 1, borderColor: Colors.borderLight, overflow: 'hidden' },
   roleSearchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
   cityDoneBtn: { backgroundColor: Colors.secondary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
   cityDoneBtnText: { fontSize: 16, fontWeight: '700' as const, color: Colors.surface },

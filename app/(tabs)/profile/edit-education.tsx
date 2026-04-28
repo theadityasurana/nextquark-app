@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: 'row', gap: 12 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 10, marginTop: 16 },
   saveBtnText: { fontSize: 14, fontWeight: '700' },
-  uniInputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8, borderWidth: 1 },
+  uniInputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8, borderWidth: 1, overflow: 'hidden' },
   uniInput: { flex: 1, fontSize: 15 },
   dropdown: { borderRadius: 12, borderWidth: 1, marginBottom: 8, maxHeight: 220 },
   dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#EEE' },

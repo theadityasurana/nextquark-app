@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   fieldRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 12, paddingHorizontal: 16,
-    minHeight: 48,
+    minHeight: 48, overflow: 'hidden',
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,

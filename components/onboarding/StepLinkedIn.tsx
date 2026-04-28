@@ -92,6 +92,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     height: 54, borderRadius: 14, paddingHorizontal: 16,
     backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
+    overflow: 'hidden',
   },
   input: { flex: 1, color: '#111111', fontSize: 15 },
   bottomSection: { paddingTop: 24 },

@@ -2,6 +2,10 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
+function getRandomJobCount(): number {
+  return Math.floor(Math.random() * 201) + 100;
+}
+
 let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
 
@@ -436,14 +440,14 @@ export async function scheduleMorningMotivation(firstName: string) {
   if (!Notifications) return;
   try {
     await cancelByType('morning_motivation');
-    const idx = await getAndAdvanceIndex(IDX_MORNING, GOOD_MORNING_MESSAGES.length);
     const name = firstName || 'there';
-    const msg = GOOD_MORNING_MESSAGES[idx];
+    const count = getRandomJobCount();
+    const body = `${count} new jobs were added while you were sleeping. Start swiping to find your perfect match! 🚀`;
 
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `Good morning, ${name}! ☀️`,
-        body: msg,
+        body,
         data: { type: 'morning_motivation' },
         ...(Platform.OS === 'android' && { channelId: 'morning' }),
       },
@@ -720,7 +724,7 @@ export async function scheduleSwipesRestoredNotification(secondsUntilReset: numb
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `Your swipes are back, ${name}! 🎉`,
-        body: 'You have 15 fresh daily swipes ready to go. Start swiping and land your dream job! 🚀',
+        body: 'You have 10 fresh daily swipes ready to go. Start swiping and land your dream job! 🚀',
         data: { type: 'swipes_restored' },
         ...(Platform.OS === 'android' && { channelId: 'swipes' }),
       },

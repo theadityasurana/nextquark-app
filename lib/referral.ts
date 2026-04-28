@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, SUPABASE_FUNCTIONS_URL } from './supabase';
 import { addBonusDailySwipes } from './daily-swipes';
 
 const SWIPES_PER_REFERRAL = 5;
@@ -263,11 +263,48 @@ export async function applyReferralCode(
       if (__DEV__) console.log('✅ [REFERRAL] Referral recorded successfully');
     }
 
+    // Send push notification to referrer
+    sendReferralNotification(referrer.id, newUserId).catch(() => {});
+
     if (__DEV__) console.log('🎉 [REFERRAL] Referral process completed successfully!');
     return { success: true, message: `Welcome! You received ${SWIPES_PER_REFERRAL} bonus swipes!` };
   } catch (error) {
     console.error('💥 [REFERRAL] Exception in applyReferralCode:', error);
     return { success: false, message: 'Failed to apply referral code' };
+  }
+}
+
+// Send push notification to referrer when someone uses their code
+async function sendReferralNotification(referrerId: string, newUserId: string) {
+  try {
+    const { data: newUser } = await supabase
+      .from('profiles')
+      .select('full_name, first_name')
+      .eq('id', newUserId)
+      .single();
+
+    const friendName = newUser?.full_name || newUser?.first_name || 'Someone';
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+
+    await fetch(`${SUPABASE_FUNCTIONS_URL}/send-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: '🎉 Referral Bonus!',
+        body: `${friendName} just signed up using your referral code! Enjoy ${SWIPES_PER_REFERRAL} free swipes.`,
+        targetUserId: referrerId,
+        type: 'referral',
+        data: { type: 'referral', refereeId: newUserId },
+      }),
+    });
+  } catch (e) {
+    if (__DEV__) console.log('[REFERRAL] Notification error (non-critical):', e);
   }
 }
 

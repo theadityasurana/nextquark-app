@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-const DAILY_SWIPES_LIMIT = 15;
+const DAILY_SWIPES_LIMIT = 10;
 
 interface DailySwipeData {
   remaining: number;

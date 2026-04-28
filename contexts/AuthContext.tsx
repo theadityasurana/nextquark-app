@@ -5,6 +5,13 @@ import { OnboardingData, defaultOnboardingData } from '@/types/onboarding';
 import { UserProfile, Project, UserDocument } from '@/types';
 import { supabase, getProfilePictureUrl, handleStaleSession } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import * as AppleAuth from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import { SUPABASE_URL } from '@/lib/supabase';
+import { nativeGoogleSignIn } from '@/lib/firebase';
 import { registerForPushNotifications, savePushToken, scheduleAllNotifications } from '@/lib/notifications';
 import { getOrCreateProxyEmail } from '@/lib/resend';
 
@@ -12,6 +19,9 @@ const AUTH_KEY = 'nextquark_auth';
 const ONBOARDING_KEY = 'nextquark_onboarding';
 const SWIPED_JOBS_KEY = 'nextquark_swiped_jobs';
 const WELCOME_NOTIF_SENT_KEY = 'nextquark_welcome_notif_sent';
+const LAST_EMAIL_KEY = 'nextquark_last_email';
+const LAST_PROVIDER_KEY = 'nextquark_last_provider';
+const LAST_USER_ID_KEY = 'nextquark_last_user_id';
 
 // Only cache the most recent swiped IDs locally to avoid CursorWindow overflow.
 // The full list is persisted in Supabase.
@@ -121,6 +131,27 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
   const [swipedJobIds, setSwipedJobIds] = useState<string[]>([]);
   const initDoneRef = useRef(false);
+  const switchingAccountRef = useRef(false);
+  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
+
+  // Clean up a previous incomplete account when user signs in with a different identity
+  const cleanupPreviousIncompleteAccount = useCallback(async (newUserId: string, previousUserId: string | null) => {
+    try {
+      const oldUserId = previousUserId;
+      console.log('[AUTH] Cleanup check — oldUserId:', oldUserId, 'newUserId:', newUserId);
+      if (!oldUserId || oldUserId === newUserId) {
+        console.log('[AUTH] Cleanup skipped — same user or no previous user');
+        return;
+      }
+      console.log('[AUTH] Cleaning up previous incomplete account:', oldUserId);
+      const { data, error } = await supabase.functions.invoke('delete-account', {
+        body: { target_user_id: oldUserId },
+      });
+      console.log('[AUTH] Cleanup result:', JSON.stringify({ data, error: error?.message }));
+    } catch (e) {
+      console.log('[AUTH] Cleanup of previous account failed:', e);
+    }
+  }, []);
 
   const fetchAndSetProfile = useCallback(async (userId: string, session: Session) => {
     try {
@@ -197,6 +228,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         };
         setAuthState(newAuthState);
         await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(newAuthState));
+        await AsyncStorage.setItem(LAST_EMAIL_KEY, profileEmail).catch(() => {});
+        await AsyncStorage.setItem(LAST_USER_ID_KEY, userId).catch(() => {});
         
         setUserProfile(mapDbToUserProfile(newProfile, userId));
 
@@ -254,6 +287,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           authMethod: 'email',
         };
         setAuthState(currentAuthState);
+
+        // Persist last email for "Continue as" on welcome page
+        const lastEmail = profile.email || session.user.email || '';
+        if (lastEmail) await AsyncStorage.setItem(LAST_EMAIL_KEY, lastEmail).catch(() => {});
+        await AsyncStorage.setItem(LAST_USER_ID_KEY, userId).catch(() => {});
 
         if (profile.onboarding_data && typeof profile.onboarding_data === 'object' && Object.keys(profile.onboarding_data).length > 0) {
           setOnboardingData({ ...defaultOnboardingData, ...profile.onboarding_data });
@@ -323,6 +361,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (event === 'INITIAL_SESSION' && session?.user) {
         await handleSession(session, 'onAuthStateChange-INITIAL_SESSION');
       } else if (event === 'SIGNED_IN' && session?.user) {
+        switchingAccountRef.current = false;
+        setIsSwitchingAccount(false);
         await handleSession(session, 'onAuthStateChange-SIGNED_IN');
       } else if (event === 'INITIAL_SESSION' && !session) {
         if (__DEV__) console.log('[AUTH] INITIAL_SESSION with no session, clearing stale data');
@@ -331,6 +371,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           initialResolved = true;
         }
       } else if (event === 'SIGNED_OUT') {
+        if (switchingAccountRef.current) {
+          if (__DEV__) console.log('[AUTH] SIGNED_OUT ignored — switching accounts');
+          return;
+        }
         if (__DEV__) console.log('[AUTH] Signed out');
         initialResolved = true;
         await clearStaleState();
@@ -360,8 +404,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     try {
       if (__DEV__) console.log('signUpWithEmail called:', email, name);
 
+      // Capture old user ID before clearing data
+      const previousUserId = await AsyncStorage.getItem(LAST_USER_ID_KEY).catch(() => null);
+      console.log('[AUTH] signUpWithEmail — previousUserId from storage:', previousUserId);
+
       // Clear any existing user data before signing up
       if (__DEV__) console.log('[AUTH] Clearing previous user data before signup');
+      switchingAccountRef.current = true;
+      setIsSwitchingAccount(true);
+      try { await supabase.auth.signOut(); } catch (_) {}
       setUserProfile(null);
       setOnboardingData(defaultOnboardingData);
       setSwipedJobIds([]);
@@ -380,10 +431,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (error) {
         if (__DEV__) console.log('Supabase signUp error:', error.message);
+        switchingAccountRef.current = false;
+        setIsSwitchingAccount(false);
         return { success: false, error: error.message };
       }
 
       if (!data.user) {
+        switchingAccountRef.current = false;
+        setIsSwitchingAccount(false);
         return { success: false, error: 'Sign up failed. Please try again.' };
       }
 
@@ -437,19 +492,213 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       // Welcome notification and scheduled notifications are now triggered
       // when the user reaches the home screen after completing onboarding.
 
+      await AsyncStorage.setItem(LAST_PROVIDER_KEY, 'email').catch(() => {});
+      await AsyncStorage.setItem(LAST_USER_ID_KEY, data.user.id).catch(() => {});
+      await AsyncStorage.setItem(LAST_EMAIL_KEY, profileEmail).catch(() => {});
+      // Clean up old incomplete account (awaited to ensure it completes)
+      await cleanupPreviousIncompleteAccount(data.user.id, previousUserId);
       return { success: true, userId: data.user.id };
     } catch (e: any) {
       if (__DEV__) console.log('signUpWithEmail exception:', e);
+      switchingAccountRef.current = false;
+      setIsSwitchingAccount(false);
       return { success: false, error: e?.message || 'An unexpected error occurred' };
     }
   }, []);
+
+  const signInWithApple = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (Platform.OS !== 'ios') return { success: false, error: 'Apple Sign In is only available on iOS' };
+    try {
+      const previousUserId = await AsyncStorage.getItem(LAST_USER_ID_KEY).catch(() => null);
+      const rawNonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce
+      );
+
+      const credential = await AppleAuth.signInAsync({
+        requestedScopes: [
+          AppleAuth.AppleAuthenticationScope.FULL_NAME,
+          AppleAuth.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+
+      if (!credential.identityToken) {
+        return { success: false, error: 'No identity token returned from Apple' };
+      }
+
+      // Clear previous user data
+      switchingAccountRef.current = true;
+      setIsSwitchingAccount(true);
+      try { await supabase.auth.signOut(); } catch (_) {}
+      setUserProfile(null);
+      setOnboardingData(defaultOnboardingData);
+      setSwipedJobIds([]);
+      await AsyncStorage.multiRemove([ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+        nonce: rawNonce,
+      });
+
+      if (error) return { success: false, error: error.message };
+      if (!data.user) return { success: false, error: 'Sign in failed' };
+
+      // Apple only sends name on first sign-in, store it in user metadata
+      if (credential.fullName?.givenName) {
+        const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ');
+        await supabase.auth.updateUser({ data: { full_name: fullName } });
+      }
+
+      await AsyncStorage.setItem(LAST_PROVIDER_KEY, 'apple').catch(() => {});
+      await AsyncStorage.setItem(LAST_USER_ID_KEY, data.user.id).catch(() => {});
+      setSupabaseUserId(data.user.id);
+      if (data.session) {
+        await fetchAndSetProfile(data.user.id, data.session);
+      }
+      cleanupPreviousIncompleteAccount(data.user.id, previousUserId).catch(() => {});
+      return { success: true };
+    } catch (e: any) {
+      if (e?.code === 'ERR_REQUEST_CANCELED') return { success: false, error: 'Cancelled' };
+      return { success: false, error: e?.message || 'Apple Sign In failed' };
+    } finally {
+      switchingAccountRef.current = false;
+      setIsSwitchingAccount(false);
+    }
+  }, [fetchAndSetProfile]);
+
+  const signInWithGoogle = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const previousUserId = await AsyncStorage.getItem(LAST_USER_ID_KEY).catch(() => null);
+      const result = await nativeGoogleSignIn();
+
+      if (!result) return { success: false, error: 'Google Sign In failed' };
+
+      // Clear previous user data
+      switchingAccountRef.current = true;
+      setIsSwitchingAccount(true);
+      try { await supabase.auth.signOut(); } catch (_) {}
+      setUserProfile(null);
+      setOnboardingData(defaultOnboardingData);
+      setSwipedJobIds([]);
+      await AsyncStorage.multiRemove([ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+
+      // Use the Google ID token directly with Supabase (not the Firebase JWT)
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: result.googleIdToken,
+      });
+
+      if (error) return { success: false, error: error.message };
+      if (!data.user) return { success: false, error: 'Sign in failed' };
+
+      await AsyncStorage.setItem(LAST_PROVIDER_KEY, 'google').catch(() => {});
+      await AsyncStorage.setItem(LAST_USER_ID_KEY, data.user.id).catch(() => {});
+      setSupabaseUserId(data.user.id);
+      if (data.session) {
+        await fetchAndSetProfile(data.user.id, data.session);
+      }
+      cleanupPreviousIncompleteAccount(data.user.id, previousUserId).catch(() => {});
+      return { success: true };
+    } catch (e: any) {
+      if (e?.code === 'SIGN_IN_CANCELLED') return { success: false, error: 'Cancelled' };
+      return { success: false, error: e?.message || 'Google Sign In failed' };
+    } finally {
+      switchingAccountRef.current = false;
+      setIsSwitchingAccount(false);
+    }
+  }, [fetchAndSetProfile]);
+
+  const signInWithLinkedIn = useCallback(async (): Promise<{ success: boolean; error?: string; isNewUser?: boolean }> => {
+    try {
+      const previousUserId = await AsyncStorage.getItem(LAST_USER_ID_KEY).catch(() => null);
+
+      if (Platform.OS === 'web') {
+        const redirectTo = window.location.origin;
+        if (__DEV__) console.log('[AUTH] LinkedIn OAuth redirectTo:', redirectTo);
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'linkedin_oidc',
+          options: { redirectTo },
+        });
+        if (error) return { success: false, error: error.message };
+        // Web does a full page redirect; AuthGuard handles navigation on reload
+        return { success: true };
+      }
+
+      // Native: use expo-web-browser
+      const redirectUrl = AuthSession.makeRedirectUri({ scheme: 'nextquark' });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error || !data.url) return { success: false, error: error?.message || 'Failed to start LinkedIn sign in' };
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      if (result.type !== 'success' || !('url' in result)) return { success: false, error: 'Cancelled' };
+
+      const url = new URL(result.url);
+      const params = new URLSearchParams(url.hash.substring(1));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (!accessToken || !refreshToken) return { success: false, error: 'No tokens returned' };
+
+      // Clear previous user data
+      switchingAccountRef.current = true;
+      setIsSwitchingAccount(true);
+      try { await supabase.auth.signOut(); } catch (_) {}
+      setUserProfile(null);
+      setOnboardingData(defaultOnboardingData);
+      setSwipedJobIds([]);
+      await AsyncStorage.multiRemove([ONBOARDING_KEY, SWIPED_JOBS_KEY]);
+
+      // setSession triggers onAuthStateChange -> SIGNED_IN which calls
+      // fetchAndSetProfile and updates auth state. AuthGuard then navigates.
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (sessionError) return { success: false, error: sessionError.message };
+
+      await AsyncStorage.setItem(LAST_PROVIDER_KEY, 'linkedin').catch(() => {});
+      // Directly fetch profile instead of relying on async onAuthStateChange
+      const { data: { session: linkedInSession } } = await supabase.auth.getSession();
+      if (linkedInSession?.user) {
+        await AsyncStorage.setItem(LAST_USER_ID_KEY, linkedInSession.user.id).catch(() => {});
+        setSupabaseUserId(linkedInSession.user.id);
+        await fetchAndSetProfile(linkedInSession.user.id, linkedInSession);
+        cleanupPreviousIncompleteAccount(linkedInSession.user.id, previousUserId).catch(() => {});
+      }
+      return { success: true };
+    } catch (e: any) {
+      if (e?.code === 'ERR_REQUEST_CANCELED') return { success: false, error: 'Cancelled' };
+      return { success: false, error: e?.message || 'LinkedIn Sign In failed' };
+    } finally {
+      switchingAccountRef.current = false;
+      setIsSwitchingAccount(false);
+    }
+  }, [fetchAndSetProfile]);
 
   const signInWithEmail = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       if (__DEV__) console.log('signInWithEmail called:', email);
 
+      const previousUserId = await AsyncStorage.getItem(LAST_USER_ID_KEY).catch(() => null);
+
       // Clear any existing user data before signing in
       if (__DEV__) console.log('[AUTH] Clearing previous user data before signin');
+      switchingAccountRef.current = true;
+      setIsSwitchingAccount(true);
+      try { await supabase.auth.signOut(); } catch (_) {}
       setUserProfile(null);
       setOnboardingData(defaultOnboardingData);
       setSwipedJobIds([]);
@@ -462,19 +711,28 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (error) {
         if (__DEV__) console.log('Supabase signIn error:', error.message);
+        switchingAccountRef.current = false;
+        setIsSwitchingAccount(false);
         return { success: false, error: error.message };
       }
 
       if (!data.user) {
+        switchingAccountRef.current = false;
+        setIsSwitchingAccount(false);
         return { success: false, error: 'Sign in failed. Please try again.' };
       }
 
       if (__DEV__) console.log('Supabase signIn success, user:', data.user.id);
+      await AsyncStorage.setItem(LAST_PROVIDER_KEY, 'email').catch(() => {});
+      await AsyncStorage.setItem(LAST_USER_ID_KEY, data.user.id).catch(() => {});
       setSupabaseUserId(data.user.id);
       await fetchAndSetProfile(data.user.id, data.session!);
+      cleanupPreviousIncompleteAccount(data.user.id, previousUserId).catch(() => {});
       return { success: true };
     } catch (e: any) {
       if (__DEV__) console.log('signInWithEmail exception:', e);
+      switchingAccountRef.current = false;
+      setIsSwitchingAccount(false);
       return { success: false, error: e?.message || 'An unexpected error occurred' };
     }
   }, []);
@@ -852,7 +1110,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'nextquark://reset-password',
+      });
       if (error) return { success: false, error: error.message };
       return { success: true };
     } catch (e: any) {
@@ -913,10 +1173,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     onboardingData,
     userProfile,
     isLoading,
+    isSwitchingAccount,
     supabaseUserId,
     swipedJobIds,
     signUpWithEmail,
     signInWithEmail,
+    signInWithApple,
+    signInWithGoogle,
+    signInWithLinkedIn,
     resetPassword,
     completeOnboarding,
     updateOnboardingData,

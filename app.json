@@ -2,21 +2,23 @@
   "expo": {
     "name": "NextQuark",
     "slug": "hireswipe-v3-clone-ceuofke",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
-    "icon": "./assets/images/applogo.png",
+    "icon": "./assets/images/money1.png",
     "scheme": "nextquark",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
+      "image": "./assets/images/startup.png",
+      "resizeMode": "cover",
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "googleServicesFile": "./GoogleService-Info.plist",
       "supportsTablet": true,
       "bundleIdentifier": "app.nextquark.hireswipe",
-      "buildNumber": "7",
+      "buildNumber": "24",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to let you take profile photos.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to let you choose a profile picture.",
@@ -26,13 +28,24 @@
       }
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/applogo.png",
+        "foregroundImage": "./assets/images/money1.png",
+        "backgroundColor": "#ffffff"
+      },
+      "splash": {
+        "image": "./assets/images/startup.png",
+        "resizeMode": "cover",
         "backgroundColor": "#ffffff"
       },
       "package": "app.rork.hireswipe_v3_clone_ceuofke",
-      "versionCode": 9,
+      "versionCode": 13,
       "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
@@ -44,11 +57,6 @@
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro"
     },
-    "assetBundlePatterns": [
-      "assets/videos/*",
-      "assets/images/*",
-      "assets/fonts/*"
-    ],
     "plugins": [
       [
         "expo-router",
@@ -59,12 +67,34 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/applogo.png",
+          "icon": "./assets/images/money1.png",
           "color": "#000000"
         }
       ],
+      "expo-apple-authentication",
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/startup.png",
+          "imageWidth": 1284,
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff",
+          "android": {
+            "image": "./assets/images/startup.png",
+            "imageWidth": 1284,
+            "resizeMode": "native",
+            "backgroundColor": "#ffffff"
+          }
+        }
+      ],
       "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.785222584965-tcpko2baut7ousr2rbju31ms6vurgllk"
+        }
+      ],
       [
         "react-native-iap",
         {
@@ -80,15 +110,15 @@
         "origin": "https://nextquark.app/"
       },
       "eas": {
-        "projectId": "0e5b98f7-311b-433c-8e7f-4b0f2d8f9dc9"
+        "projectId": "bda316a6-62e0-4f87-a0f7-1950e6026035"
       }
     },
-    "owner": "adityasuranadft",
+    "owner": "sk8aditya",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/0e5b98f7-311b-433c-8e7f-4b0f2d8f9dc9"
+      "url": "https://u.expo.dev/bda316a6-62e0-4f87-a0f7-1950e6026035"
     }
   }
 }

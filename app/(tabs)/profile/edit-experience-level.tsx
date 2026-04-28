@@ -23,7 +23,7 @@ const LEVELS = [
 export default function EditExperienceLevelScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userProfile, saveProfile } = useAuth();
+  const { userProfile, saveProfile, refetchProfile } = useAuth();
   const { theme } = useTheme();
   const colors = theme === 'dark' ? darkColors : lightColors;
   const [selected, setSelected] = useState(userProfile?.experienceLevel || '');
@@ -32,6 +32,7 @@ export default function EditExperienceLevelScreen() {
   const handleSave = async () => {
     if (!userProfile) return;
     await saveProfile({ ...userProfile, experienceLevel: selected });
+    await refetchProfile();
     router.back();
   };
 

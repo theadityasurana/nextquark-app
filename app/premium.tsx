@@ -31,7 +31,7 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COMPARISON_FEATURES = [
-  { label: 'Job applications', free: '15/day', premium: 'Unlimited' },
+  { label: 'Job applications', free: '10/day', premium: 'Unlimited' },
   { label: 'Resume uploads', free: '1', premium: '3' },
   { label: 'AI auto-fill', free: true, premium: true },
   { label: 'Priority support', free: false as const, premium: true },
@@ -498,7 +498,7 @@ export default function PremiumScreen() {
                 <Zap size={16} color="#7C3AED" />
                 <Text style={[styles.subMgmtLabel, { color: themeColors.textSecondary }]}>Applications</Text>
               </View>
-              <Text style={[styles.subMgmtValue, { color: themeColors.accent, fontWeight: '800' }]}>{currentSubscription === 'premium' ? 'Unlimited' : '15 / day'}</Text>
+              <Text style={[styles.subMgmtValue, { color: themeColors.accent, fontWeight: '800' }]}>{currentSubscription === 'premium' ? 'Unlimited' : '10 / day'}</Text>
             </View>
 
             {currentSubscription === 'premium' && (

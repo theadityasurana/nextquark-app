@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingVertical: 12, paddingHorizontal: 16,
-    minHeight: 50,
+    minHeight: 50, overflow: 'hidden',
   },
   input: { flex: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '600', letterSpacing: 2 },
   validatingText: { color: 'rgba(255,255,255,0.4)', fontSize: 16, fontWeight: '700' },

@@ -48,7 +48,7 @@ const asyncStoragePersister = createAsyncStoragePersister({
 const APP_OPENED_KEY = 'nextquark_app_opened';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isOnboardingComplete, isLoading } = useAuth();
+  const { isAuthenticated, isOnboardingComplete, isLoading, isSwitchingAccount } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -86,10 +86,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   useEffect(() => {
-    if (isLoading || !appOpenedChecked) return;
+    if (isLoading || !appOpenedChecked || isSwitchingAccount) return;
 
     const seg = segments[0] as string;
-    const inAuthGroup = seg === 'welcome' || seg === 'sign-up' || seg === 'sign-in' || seg === 'email-verification' || seg === 'mobile-signup';
+    const inAuthGroup = seg === 'welcome' || seg === 'sign-up' || seg === 'sign-in' || seg === 'email-verification' || seg === 'mobile-signup' || seg === 'reset-password';
     const inOnboarding = seg === 'onboarding';
     const inTabs = seg === '(tabs)';
     const inWelcomeBack = seg === 'welcome-back';
@@ -97,14 +97,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated && !inAuthGroup && !inOnboarding) {
       console.log('Redirecting to welcome - not authenticated');
       router.replace('/welcome' as any);
-    } else if (isAuthenticated && !isOnboardingComplete && !inOnboarding) {
+    } else if (isAuthenticated && !isOnboardingComplete && !inOnboarding && !inAuthGroup) {
       console.log('Redirecting to onboarding - profile incomplete');
       router.replace('/onboarding' as any);
     } else if (isAuthenticated && isOnboardingComplete && (inAuthGroup || inOnboarding)) {
       console.log('Redirecting to home - fully authenticated');
       router.replace('/(tabs)' as any);
     }
-  }, [isAuthenticated, isOnboardingComplete, isLoading, segments, appOpenedChecked]);
+  }, [isAuthenticated, isOnboardingComplete, isLoading, isSwitchingAccount, segments, appOpenedChecked]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -159,6 +159,7 @@ function RootLayoutNav() {
         <Stack.Screen name="mobile-signup" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false, contentStyle: { backgroundColor: '#111111' } }} />
         <Stack.Screen name="email-verification" options={{ headerShown: false }} />
+        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
@@ -182,6 +183,12 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="application-details"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="application-logs"
           options={{
             headerShown: false,
           }}

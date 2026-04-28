@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   phoneInput: {
     flex: 1, height: 54, borderRadius: 14, paddingHorizontal: 16,
     backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
-    color: '#111111', fontSize: 16,
+    color: '#111111', fontSize: 16, overflow: 'hidden',
   },
   dividerSection: { paddingTop: 12 },
   locationTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },

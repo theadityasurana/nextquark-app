@@ -108,7 +108,7 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 },
-  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, height: 44, gap: 6, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8' },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, height: 44, gap: 6, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C6C6C8', overflow: 'hidden' },
   searchInput: { flex: 1, fontSize: 17, padding: 0, lineHeight: 22 },
   clearButton: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#8E8E93', justifyContent: 'center', alignItems: 'center' },
   cancelText: { fontSize: 17, color: '#007AFF' },

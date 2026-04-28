@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   replyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   replyLabel: { fontSize: 14, fontWeight: '700' as const, color: Colors.secondary },
   emailFieldsContainer: { backgroundColor: Colors.background, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderLight, overflow: 'hidden' as const },
-  emailFieldRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
+  emailFieldRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, overflow: 'hidden' },
   emailFieldLabel: { fontSize: 12, fontWeight: '600' as const, color: Colors.textTertiary, width: 36 },
   emailFieldValue: { fontSize: 13, color: Colors.textPrimary, flex: 1 },
   emailFieldInput: { fontSize: 13, color: Colors.textPrimary, flex: 1, padding: 0 },

@@ -310,13 +310,6 @@ export default function DiscoverScreen() {
               <View style={[styles.searchBar, { backgroundColor: isLight ? 'rgba(118,118,128,0.12)' : '#2C2C2E' }]}>
                 <Search size={16} color="#8E8E93" />
                 <TextInput style={[styles.searchInput, { color: isLight ? '#000000' : '#FFFFFF' }]} placeholder="Search friends..." placeholderTextColor="#8E8E93" value={friendSearch} onChangeText={setFriendSearch} autoFocus />
-                {friendSearch.length > 0 && (
-                  <Pressable onPress={() => setFriendSearch('')} hitSlop={8}>
-                    <View style={styles.searchClearBtn}>
-                      <X size={10} color={isLight ? '#FFFFFF' : '#2C2C2E'} strokeWidth={3} />
-                    </View>
-                  </Pressable>
-                )}
                 <Pressable onPress={() => { setShowFriendSearch(false); setFriendSearch(''); }} hitSlop={8}>
                   <Text style={styles.searchCancelText}>Cancel</Text>
                 </Pressable>
@@ -689,7 +682,7 @@ const styles = StyleSheet.create({
   iconBadgeText: { fontSize: 9, fontWeight: '700', color: "#000" },
   inviteButton: { backgroundColor: "#000", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   inviteButtonText: { fontSize: 12, fontWeight: '700', color: "#FFF" },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, paddingHorizontal: 10, height: 36, marginHorizontal: 20, marginBottom: 12 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, paddingHorizontal: 10, height: 36, marginHorizontal: 20, marginBottom: 12, overflow: 'hidden' },
   searchInput: { flex: 1, fontSize: 17, padding: 0 },
   searchClearBtn: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#8E8E93', justifyContent: 'center', alignItems: 'center' },
   searchCancelText: { fontSize: 17, color: '#007AFF', marginLeft: 4 },

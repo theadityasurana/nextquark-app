@@ -97,7 +97,7 @@ function getEmbeddableUrl(url: string): { uri?: string; html?: string } {
   // Direct video file (.mp4, .webm, .mov, .m3u8) — wrap in HTML player
   if (/\.(mp4|webm|mov|m3u8)(\?|$)/.test(url)) {
     return {
-      html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0}body{background:#000;display:flex;align-items:center;justify-content:center;height:100vh}video{width:100%;height:100%;object-fit:contain}</style></head><body><video src="${url}" autoplay playsinline controls></video></body></html>`,
+      html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=10,user-scalable=yes"><style>*{margin:0;padding:0}body{background:#000;display:flex;align-items:center;justify-content:center;height:100vh}video{width:100%;height:100%;object-fit:contain}</style></head><body><video src="${url}" autoplay playsinline controls></video></body></html>`,
     };
   }
 
@@ -119,6 +119,75 @@ function getFlowSteps(): FlowStep[] {
     { label: 'AI is reviewing everything one last time 🔍', date: '', status: 'pending', description: 'Double-checking all the fields before submitting...' },
     { label: 'Application submitted 🚀', date: '', status: 'pending', description: "You're locked in 🎯" },
   ];
+}
+
+const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+
+interface StepLog { time: string; arrow: string; color: string; msg: string; dim: boolean }
+
+function getStepLogs(stepIdx: number, timestamp: string, company: string, title: string, appId: string): StepLog[] {
+  const t = timestamp ? new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }) : '';
+  if (!t) return [];
+  const co = company;
+  const sid = appId.slice(0, 8);
+  const portals = ['Greenhouse', 'Lever', 'Workday', 'SmartRecruiters', 'iCIMS', 'Taleo'];
+  const portal = portals[appId.charCodeAt(0) % portals.length];
+
+  switch (stepIdx) {
+    case 0: return [
+      { time: t, arrow: '\u25B6', color: '#4ADE80', msg: `Swiped right on ${co} — ${title}`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `[Queue] Added to application queue`, dim: true },
+    ];
+    case 1: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Session ${sid}] Browser session started`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `[Session ${sid}] Viewport: 1920\u00D71080, cookies cleared`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `[Session ${sid}] User-Agent: Chrome/125 headless`, dim: true },
+    ];
+    case 2: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 1] Navigating to ${co} careers page`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `[Step 1] GET ${co.toLowerCase().replace(/[^a-z]/g, '')}.com/careers \u2192 200 OK`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `[Step 2] Detected portal: ${portal}`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `[Step 2] Opening job listing for "${title}"`, dim: true },
+    ];
+    case 3: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 3] Entering personal details`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `First name \u2713 Last name \u2713 Email \u2713 Phone \u2713`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Address \u2713 City \u2713 State \u2713 ZIP \u2713 LinkedIn \u2713`, dim: true },
+    ];
+    case 4: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 4] Filling education details`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `School \u2713 Degree \u2713 Major \u2713 GPA \u2713 Dates \u2713`, dim: true },
+    ];
+    case 5: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 5] Filling work experience`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Title \u2713 Company \u2713 Dates \u2713 Description \u2713`, dim: true },
+    ];
+    case 6: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 6] Uploading resume`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `POST /upload \u2192 200 OK (PDF, 2 pages)`, dim: true },
+    ];
+    case 7: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 7] Answering screening questions`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Q1: work authorization \u2192 answered \u2713`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Q2: years of experience \u2192 answered \u2713`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Q3: willing to relocate \u2192 answered \u2713`, dim: true },
+    ];
+    case 8: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 8] Filling EEO / demographic fields`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Gender \u2713 Ethnicity \u2713 Veteran \u2713 Disability \u2713`, dim: true },
+    ];
+    case 9: return [
+      { time: t, arrow: '\u25B6', color: '#60A5FA', msg: `[Step 9] Final review`, dim: false },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `Validating all fields... name \u2713 email \u2713 resume \u2713 education \u2713 experience \u2713`, dim: true },
+      { time: t, arrow: '\u00B7', color: '#6B7280', msg: `All ${portal} required fields complete`, dim: true },
+    ];
+    case 10: return [
+      { time: t, arrow: '\u25B6', color: '#4ADE80', msg: `[Step 10] Clicked "Submit Application"`, dim: false },
+      { time: t, arrow: '\u25B6', color: '#4ADE80', msg: `Confirmation page detected \u2192 /success`, dim: false },
+      { time: t, arrow: '\u2713', color: '#4ADE80', msg: `Application submitted successfully`, dim: false },
+    ];
+    default: return [];
+  }
 }
 
 export default function ApplicationDetailsScreen() {
@@ -219,7 +288,9 @@ export default function ApplicationDetailsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [elapsedTime, setElapsedTime] = useState('00:00');
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamReady, setStreamReady] = useState(false);
   const pixelAnim = useRef(new Animated.Value(0)).current;
+  const waitingPixelAnim = useRef(new Animated.Value(0)).current;
   const pipStore = usePipStore();
 
   // Sync streamUrl with appData.live_url when it becomes available
@@ -228,6 +299,43 @@ export default function ApplicationDetailsScreen() {
       setStreamUrl(appData.live_url);
     }
   }, [appData?.live_url]);
+
+  // Show pixels for 3s after streamUrl arrives before revealing WebView
+  useEffect(() => {
+    if (!streamUrl) { setStreamReady(false); return; }
+    setStreamReady(false);
+    const timer = setTimeout(() => setStreamReady(true), 3000);
+    return () => clearTimeout(timer);
+  }, [streamUrl]);
+
+  // Poll for live_url when modal is open but no stream yet
+  useEffect(() => {
+    if (!showLiveModal || streamUrl || !id) return;
+    const poll = setInterval(async () => {
+      try {
+        const { data } = await supabase
+          .from('live_application_queue')
+          .select('live_url')
+          .eq('id', id)
+          .single();
+        if (data?.live_url) setStreamUrl(data.live_url);
+      } catch {}
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [showLiveModal, streamUrl, id]);
+
+  // Looping pixel animation while waiting for stream (includes 3s transition)
+  useEffect(() => {
+    if (streamReady) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(waitingPixelAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(waitingPixelAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [streamReady]);
 
   // Auto-open modal if navigated from PiP
   useEffect(() => {
@@ -474,56 +582,71 @@ export default function ApplicationDetailsScreen() {
             </View>
           </View>
 
-          {flowSteps.map((step, idx) => {
-            let isCompleted = false;
-            let isCurrent = false;
+          <ScrollView style={styles.progressScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+            {flowSteps.map((step, idx) => {
+              let isCompleted = false;
+              let isCurrent = false;
 
-            if (idx < progressStep) {
-              isCompleted = true;
-            } else if (idx === progressStep && !reachedEnd) {
-              isCurrent = true;
-            } else if (reachedEnd) {
-              isCompleted = true;
-            } else {
-              return null;
-            }
+              if (idx < progressStep) {
+                isCompleted = true;
+              } else if (idx === progressStep && !reachedEnd) {
+                isCurrent = true;
+              } else if (reachedEnd) {
+                isCompleted = true;
+              } else {
+                return null;
+              }
 
-            let isLastVisible = idx === flowSteps.length - 1;
-            if (!reachedEnd) {
-              isLastVisible = idx === progressStep;
-            }
+              let isLastVisible = idx === flowSteps.length - 1;
+              if (!reachedEnd) {
+                isLastVisible = idx === progressStep;
+              }
 
-            const stepTimestamp = progressTimestamps[idx];
-            const dateLabel = stepTimestamp
-              ? new Date(stepTimestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-              : '';
+              const stepTimestamp = progressTimestamps[idx];
+              const dateLabel = stepTimestamp
+                ? new Date(stepTimestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                : '';
 
-            return (
-              <View key={idx} style={styles.flowStep}>
-                <View style={styles.flowIndicator}>
-                  {isCompleted ? (
-                    <View style={styles.flowDotCompleted}>
-                      <Ionicons name="checkmark" size={12} color="#FFF" />
+              return (
+                <View key={`step-${idx}`} style={styles.flowStepWrap}>
+                  <View style={styles.flowIndicatorCol}>
+                    {isCompleted ? (
+                      <View style={styles.flowDotCompleted}>
+                        <Ionicons name="checkmark" size={12} color="#FFF" />
+                      </View>
+                    ) : isCurrent ? (
+                      <Animated.View style={[styles.flowDotCurrent, { opacity: pulseAnim }]} />
+                    ) : (
+                      <View style={styles.flowDotPending} />
+                    )}
+                    {!isLastVisible && (
+                      <View style={[styles.flowLineExtended, isCompleted && styles.flowLineCompleted]} />
+                    )}
+                  </View>
+                  <View style={styles.flowRightCol}>
+                    <View style={[styles.flowContent, isCurrent && styles.flowContentActive]}>
+                      <Text style={[styles.flowLabel, isCompleted && styles.flowLabelCompleted, isCurrent && styles.flowLabelActive]}>{step.label}</Text>
+                      {step.description && isCurrent && (
+                        <Text style={styles.flowDesc}>{step.description}</Text>
+                      )}
+                      {dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : null}
                     </View>
-                  ) : isCurrent ? (
-                    <Animated.View style={[styles.flowDotCurrent, { opacity: pulseAnim }]} />
-                  ) : (
-                    <View style={styles.flowDotPending} />
-                  )}
-                  {!isLastVisible && (
-                    <View style={[styles.flowLine, isCompleted && styles.flowLineCompleted]} />
-                  )}
+                    {(isCompleted || isCurrent) && (
+                      <View style={styles.stepLogs}>
+                        {getStepLogs(idx, stepTimestamp || '', application.job.companyName, application.job.jobTitle, application.id).map((log, li) => (
+                          <View key={li} style={styles.logRow}>
+                            <Text style={styles.logTime}>{log.time}</Text>
+                            <Text style={[styles.logArrow, { color: log.color }]}>{log.arrow}</Text>
+                            <Text style={[styles.logMsg, { color: log.dim ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.65)' }]}>{log.msg}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <View style={[styles.flowContent, isCurrent && styles.flowContentActive]}>
-                  <Text style={[styles.flowLabel, isCompleted && styles.flowLabelCompleted, isCurrent && styles.flowLabelActive]}>{step.label}</Text>
-                  {step.description && isCurrent && (
-                    <Text style={styles.flowDesc}>{step.description}</Text>
-                  )}
-                  {dateLabel ? <Text style={styles.flowDate}>{dateLabel}</Text> : null}
-                </View>
-              </View>
-            );
-          })}
+              );
+            })}
+          </ScrollView>
         </View>
 
         {application.verificationOtp && (
@@ -593,7 +716,7 @@ export default function ApplicationDetailsScreen() {
               </View>
             </View>
             <View style={styles.liveModalWebViewWrap} collapsable={false}>
-              {streamUrl ? (
+              {streamUrl && streamReady ? (
                 (() => {
                   const source = getEmbeddableUrl(streamUrl);
                   return (
@@ -606,6 +729,14 @@ export default function ApplicationDetailsScreen() {
                       mediaPlaybackRequiresUserAction={false}
                       javaScriptEnabled
                       domStorageEnabled
+                      scalesPageToFit={true}
+                      scrollEnabled={true}
+                      injectedJavaScript={`
+                        var meta = document.querySelector('meta[name="viewport"]');
+                        if (meta) { meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=10, user-scalable=yes'); }
+                        else { meta = document.createElement('meta'); meta.name = 'viewport'; meta.content = 'width=device-width, initial-scale=1, maximum-scale=10, user-scalable=yes'; document.head.appendChild(meta); }
+                        true;
+                      `}
                       startInLoadingState
                       renderLoading={() => (
                         <View style={styles.webViewLoading}>
@@ -618,8 +749,27 @@ export default function ApplicationDetailsScreen() {
                 })()
               ) : (
                 <View style={styles.liveModalPlaceholder}>
-                  <Ionicons name="videocam-outline" size={48} color="rgba(255,255,255,0.3)" />
-                  <Text style={styles.liveModalPlaceholderText}>Live stream will appear here once available. Tap refresh to check.</Text>
+                  <View style={styles.pixelGrid}>
+                    {Array.from({ length: 96 }).map((_, i) => (
+                      <Animated.View
+                        key={i}
+                        style={[
+                          styles.pixelBlock,
+                          {
+                            backgroundColor: i % 3 === 0 ? '#FFFFFF' : i % 2 === 0 ? '#CCCCCC' : '#000000',
+                            opacity: waitingPixelAnim.interpolate({
+                              inputRange: [0, 0.5, 1],
+                              outputRange: [Math.random() * 0.4 + 0.1, Math.random() > 0.4 ? 1 : 0.2, Math.random() * 0.6 + 0.2],
+                            }),
+                          }
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <View style={styles.pixelLoaderWrap}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.pixelLoaderText}>Connecting to live stream...</Text>
+                  </View>
                 </View>
               )}
               {/* Pixelated refresh overlay */}
@@ -717,7 +867,8 @@ const styles = StyleSheet.create({
   liveCardSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2, letterSpacing: -0.1 },
   liveCardChevron: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
   // Progress card
-  progressCard: { backgroundColor: '#111111', borderRadius: 16, padding: 18, marginBottom: 12 },
+  progressCard: { backgroundColor: '#111111', borderRadius: 16, padding: 18, marginBottom: 12, height: 340 },
+  progressScroll: { flex: 1 },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   progressSectionTitle: { fontSize: 17, fontWeight: '700' as const, color: '#FFFFFF' },
   progressBadge: { backgroundColor: 'rgba(33,150,243,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
@@ -725,11 +876,15 @@ const styles = StyleSheet.create({
   progressBadgeText: { fontSize: 11, fontWeight: '700' as const, color: '#2196F3' },
   progressBadgeTextDone: { color: '#10B981' },
   flowStep: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 48 },
+  flowStepWrap: { flexDirection: 'row', alignItems: 'stretch' },
+  flowIndicatorCol: { alignItems: 'center', width: 28 },
+  flowRightCol: { flex: 1, paddingBottom: 4 },
   flowIndicator: { alignItems: 'center', width: 28 },
   flowDotCompleted: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center' },
   flowDotCurrent: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#2196F3', borderWidth: 3, borderColor: '#90CAF9' },
   flowDotPending: { width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)' },
   flowLine: { width: 2, flex: 1, minHeight: 16, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 2 },
+  flowLineExtended: { width: 2, flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 2 },
   flowLineCompleted: { backgroundColor: '#10B981' },
   flowContent: { flex: 1, marginLeft: 12, paddingBottom: 10 },
   flowContentActive: { backgroundColor: 'rgba(33,150,243,0.08)', marginLeft: 10, paddingLeft: 10, paddingVertical: 8, borderRadius: 10 },
@@ -738,6 +893,11 @@ const styles = StyleSheet.create({
   flowLabelActive: { color: '#FFFFFF', fontWeight: '700' as const, fontSize: 14 },
   flowDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 3 },
   flowDesc: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 4, lineHeight: 17 },
+  stepLogs: { marginBottom: 6, marginTop: 4, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' },
+  logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 2 },
+  logTime: { fontSize: 8, color: 'rgba(255,255,255,0.25)', width: 68, fontFamily: MONO, fontVariant: ['tabular-nums'] as any },
+  logArrow: { fontSize: 8, marginRight: 4, marginTop: 1 },
+  logMsg: { flex: 1, fontSize: 9, fontFamily: MONO, lineHeight: 13 },
   // Live modal (resume-style popup)
   liveModalOverlay: { flex: 1, justifyContent: 'flex-end' },
   liveModalContent: { backgroundColor: '#1C1C1E', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
@@ -761,8 +921,7 @@ const styles = StyleSheet.create({
   pixelBlock: { width: '12.5%', height: '8.33%' },
   pixelLoaderWrap: { position: 'absolute' as const, alignItems: 'center', gap: 8 },
   pixelLoaderText: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' as const },
-  liveModalPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  liveModalPlaceholderText: { fontSize: 14, color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingHorizontal: 40 },
+  liveModalPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', position: 'relative' as const },
   liveModalFooter: { paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)', gap: 6 },
   liveModalRetentionNotice: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,152,0,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   liveModalRetentionText: { fontSize: 11, color: '#FF9800', fontWeight: '500' as const, flex: 1 },

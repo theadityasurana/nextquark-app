@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, Animated, Platform, BackHandler } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -23,7 +23,7 @@ import StepComplete from '@/components/onboarding/StepComplete';
 const TOTAL_PROGRESS_STEPS = 11;
 
 export default function OnboardingScreen() {
-  const { onboardingData, completeOnboarding, updateOnboardingData, deleteAccount } = useAuth();
+  const { onboardingData, completeOnboarding, updateOnboardingData } = useAuth();
   const [currentStep, setCurrentStep] = useState(() => {
     const saved = onboardingData?.onboardingStep;
     if (saved && saved >= 1 && saved <= 11) return saved;
@@ -79,10 +79,9 @@ export default function OnboardingScreen() {
     });
   }, [currentStep, data, animateTransition, completeOnboarding, updateOnboardingData]);
 
-  const handleBack = useCallback(() => {
+  const handleBack = useCallback(async () => {
     if (Platform.OS !== 'web') Haptics.selectionAsync();
     if (currentStep === 1) {
-      deleteAccount();
       router.replace('/welcome');
       return;
     }
@@ -91,7 +90,17 @@ export default function OnboardingScreen() {
       setCurrentStep(prevStep);
       updateOnboardingData({ ...data, onboardingStep: prevStep });
     });
-  }, [currentStep, animateTransition, deleteAccount]);
+  }, [currentStep, animateTransition, data, updateOnboardingData]);
+
+  // Handle Android hardware back button
+  useEffect(() => {
+    const onHardwareBack = () => {
+      handleBack();
+      return true; // prevent default behavior
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, [handleBack]);
 
   const progressStep = Math.min(currentStep, TOTAL_PROGRESS_STEPS);
   const showProgress = currentStep <= 12;

@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "785222584965",
+    "project_id": "nextquark-1",
+    "storage_bucket": "nextquark-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:785222584965:android:c6a6da576a0f67a7b477ec",
+        "android_client_info": {
+          "package_name": "app.rork.hireswipe_v3_clone_ceuofke"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "785222584965-cna0f6ojba8h41l28c8lpa0vfc2kt208.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.rork.hireswipe_v3_clone_ceuofke",
+            "certificate_hash": "893fd2ad714cf7f034819b43f45e5b9f53712648"
+          }
+        },
+        {
+          "client_id": "785222584965-jro7m0f472tgns8601m8kpop0lf1epd5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.rork.hireswipe_v3_clone_ceuofke",
+            "certificate_hash": "3b41d1decf6906fd874c1605680a83de4cd91193"
+          }
+        },
+        {
+          "client_id": "785222584965-29ja5icef490gfc45qd5kjis2hjrdkpq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOxmI-ghw0ezrDzwvSvtyF8YHxssUfITw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "785222584965-29ja5icef490gfc45qd5kjis2hjrdkpq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "785222584965-tcpko2baut7ousr2rbju31ms6vurgllk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "app.nextquark.hireswipe"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

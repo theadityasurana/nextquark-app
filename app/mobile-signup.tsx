@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   phoneInput: {
     flex: 1, height: 54, borderRadius: 14, paddingHorizontal: 16,
     backgroundColor: '#F5F5F5', borderWidth: 1.5, borderColor: '#E0E0E0',
-    color: '#111111', fontSize: 16,
+    color: '#111111', fontSize: 16, overflow: 'hidden',
   },
   bottomSection: { flex: 1, justifyContent: 'flex-end', gap: 16, paddingTop: 32 },
   continueButton: {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet, Platform } from 'react-native';
@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { lightColors, darkColors } from '@/constants/colors';
 import { useQuery } from '@tanstack/react-query';
-import { fetchUserApplications, fetchJobsFromSupabase } from '@/lib/jobs';
+import { fetchUserApplications } from '@/lib/jobs';
 import { initUnreadMailListener, cleanupUnreadMailListener, subscribeUnreadCount } from '@/lib/unreadMail';
 import { CommonActions } from '@react-navigation/native';
 
@@ -70,41 +70,7 @@ export default function TabLayout() {
   const isProfileIncomplete = (userProfile?.profileCompletion || 0) < 100;
   const favoriteCompaniesCount = userProfile?.favoriteCompanies?.length || 0;
 
-  const { data: supabaseJobs } = useQuery({
-    queryKey: ['supabase-jobs'],
-    queryFn: fetchJobsFromSupabase,
-    staleTime: 1000 * 60 * 5,
-  });
 
-  const forYouCount = useMemo(() => {
-    const allJobs = supabaseJobs || [];
-    let filtered = allJobs;
-    if (swipedJobIds.length > 0) {
-      const swipedSet = new Set(swipedJobIds);
-      filtered = filtered.filter(job => !swipedSet.has(job.id));
-    }
-    // India filter
-    filtered = filtered.filter(job => {
-      const keyword = 'india';
-      return job.jobTitle.toLowerCase().includes(keyword) ||
-        job.companyName.toLowerCase().includes(keyword) ||
-        job.location.toLowerCase().includes(keyword) ||
-        job.description.toLowerCase().includes(keyword) ||
-        job.skills.some((skill: string) => skill.toLowerCase().includes(keyword));
-    });
-    // Desired roles filter
-    if (userProfile?.desiredRoles && userProfile.desiredRoles.length > 0) {
-      filtered = filtered.filter(job =>
-        userProfile.desiredRoles!.some((role: string) => {
-          const roleLower = role.toLowerCase();
-          return job.jobTitle.toLowerCase().includes(roleLower) ||
-            job.description.toLowerCase().includes(roleLower) ||
-            job.skills.some((skill: string) => skill.toLowerCase().includes(roleLower));
-        })
-      );
-    }
-    return filtered.length;
-  }, [supabaseJobs, swipedJobIds, userProfile]);
 
   const resetStackOnTabPress = ({ navigation }: any) => ({
     tabPress: (e: any) => {
@@ -183,7 +149,7 @@ export default function TabLayout() {
           title: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon name="briefcase" color={color} focused={focused}
-              badgeCount={forYouCount} />
+              />
           ),
         }}
         listeners={resetStackOnTabPress}
